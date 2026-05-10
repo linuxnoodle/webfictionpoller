@@ -42,7 +42,9 @@ build_container
 description
 
 msg_info "Installing Docker"
-curl -fsSL https://get.docker.com | sh
+if ! command -v docker &>/dev/null; then
+  curl -fsSL https://get.docker.com | sh
+fi
 systemctl enable -q --now docker
 msg_ok "Installed Docker"
 
