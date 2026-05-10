@@ -28,6 +28,20 @@ Single Go binary, SQLite database, dark-themed web UI. Runs in Docker.
 
 ## quick start
 
+### Proxmox VE
+
+The `proxmoxve.sh` script sets everything up in an LXC container: installs Docker, pulls the app image plus FlareSolverr, writes a docker-compose.yml, and starts the containers. The app runs on port 8080.
+
+In the Proxmox VE shell:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/linuxnoodle/webfictionpoller/refs/heads/master/proxmoxve.sh)"
+```
+
+It assigns 2 CPU cores, 2GB RAM, and 8GB disk by default. Data ends up in `/opt/webfictionpoller/data/` inside the container.
+
+To update later, run the same script again. It detects the existing install, pulls fresh images, and restarts.
+
 ### docker compose
 
 ```bash
