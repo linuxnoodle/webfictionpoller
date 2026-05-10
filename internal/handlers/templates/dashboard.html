@@ -1,0 +1,222 @@
+{{define "dashboard.html"}}
+<!DOCTYPE html>
+<html lang="en" class="bg-neutral-950 text-neutral-200">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebFiction Tracker</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        .preview-content p { margin-bottom: 0.5em; }
+        .preview-content img { max-width: 100%; }
+        .preview-content { max-height: 40vh; overflow-y: auto; }
+    </style>
+    <script>
+    var openPreviewId = null;
+    function togglePreview(id) {
+        if (openPreviewId !== null && openPreviewId !== id) {
+            var prev = document.getElementById('preview-' + openPreviewId);
+            if (prev) prev.classList.add('hidden');
+        }
+        var el = document.getElementById('preview-' + id);
+        if (el) {
+            var opening = el.classList.contains('hidden');
+            el.classList.toggle('hidden');
+            if (opening) {
+                htmx.process(el);
+                openPreviewId = id;
+            } else {
+                openPreviewId = null;
+            }
+        }
+    }
+    </script>
+</head>
+<body class="min-h-screen bg-neutral-950">
+    {{template "nav" .}}
+    <main class="max-w-6xl mx-auto px-4 py-6">
+    <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '' }" x-init="$watch('view', v => localStorage.setItem('dashView', v))">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-4">
+                <h1 class="text-2xl font-bold text-neutral-100">Dashboard</h1>
+                <div class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
+                    <button @click="view = 'time'"
+                            :class="view === 'time' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                            class="px-3 py-1.5 text-sm">Time</button>
+                    <button @click="view = 'series'"
+                            :class="view === 'series' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                            class="px-3 py-1.5 text-sm">Series</button>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                {{if .Stats}}
+                <div class="flex gap-4 text-sm text-neutral-500">
+                    <span>{{.Stats.TotalSeries}} series</span>
+                    <span>{{.Stats.ActiveSeries}} active</span>
+                    <span class="text-neutral-300">{{.Stats.UnreadChapter}} unread</span>
+                </div>
+                {{end}}
+                <button hx-post="/api/read-all" hx-swap="none" hx-confirm="Mark all chapters as read?"
+                        class="bg-neutral-700 hover:bg-neutral-600 text-neutral-300 px-3 py-1 rounded text-sm">Mark All Read</button>
+                <input type="text" x-model="search" placeholder="Filter..."
+                       class="bg-neutral-800 border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-neutral-500" />
+            </div>
+        </div>
+
+        {{if and (not .Groups) (not .TimeView)}}
+        <div class="text-neutral-600 text-center py-12">
+            <p class="text-lg">No chapters yet.</p>
+            <a href="/series/add" class="text-neutral-400 hover:text-neutral-200 mt-2 inline-block">Add a series to track</a>
+        </div>
+        {{end}}
+
+        <!-- TIME VIEW -->
+        <div x-show="view === 'time'">
+            {{range .TimeGroups}}
+            <div class="mt-4"
+                 x-data="{ searchText: `{{jsstr (printf "%s" "")}}{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}` }"
+                 x-show="!search || searchText.toLowerCase().includes(search.toLowerCase())">
+                <h3 class="text-sm font-semibold text-neutral-500 uppercase tracking-wider px-4 py-2 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">{{.Date}}</h3>
+                {{range .Chapters}}
+                <div class="flex items-center justify-between px-4 py-2.5 rounded hover:bg-neutral-900/50 cursor-pointer"
+                     x-data="{ chText: `{{jsstr .SeriesTitle}} {{jsstr .Title}}` }"
+                     x-show="!search || chText.toLowerCase().includes(search.toLowerCase())"
+                     onclick="togglePreview({{.ID}})">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                        {{if .IsRead}}
+                        <div class="flex-1 min-w-0 opacity-40">
+                            <div class="flex items-center gap-2">
+                                <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0" onerror="this.style.display='none'">
+                                <span class="text-xs text-neutral-600 bg-neutral-800 px-2 py-0.5 rounded whitespace-nowrap">{{.SeriesTitle}}</span>
+                                <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate" onclick="event.stopPropagation()">{{.Title}}</a>
+                            </div>
+                        </div>
+                        {{else}}
+                        <div class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0" onerror="this.style.display='none'">
+                                <span class="text-xs text-neutral-400 bg-neutral-800 px-2 py-0.5 rounded whitespace-nowrap">{{.SeriesTitle}}</span>
+                                <span class="text-sm text-neutral-200 truncate">{{.Title}}</span>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <div class="flex items-center gap-0.5"
+                             x-data="{ rating: {{f64f .SeriesRating}}, sid: {{.SeriesID}} }"
+                             onclick="event.stopPropagation()">
+                            <button @click="rating = Math.max(0, Math.round((rating - 0.1) * 10) / 10); htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:rating}, swap:'none'})"
+                                    class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
+                            <input type="number" min="0" max="10" step="0.1" x-model.number="rating"
+                                   @change="rating = Math.round(Math.max(0, Math.min(10, rating)) * 10) / 10; htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:rating}, swap:'none'})"
+                                   class="w-10 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400 py-0.5 focus:outline-none focus:border-neutral-500" />
+                            <button @click="rating = Math.min(10, Math.round((rating + 0.1) * 10) / 10); htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:rating}, swap:'none'})"
+                                    class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
+                        </div>
+                        <span class="text-xs text-neutral-600">{{.PublishedAt.Format "15:04"}}</span>
+                        {{if .IsRead}}
+                        <a href="{{.URL}}" target="_blank" rel="noopener" class="text-xs text-neutral-600 hover:text-neutral-400" onclick="event.stopPropagation()">open</a>
+                        {{else}}
+                        <button onclick="event.stopPropagation(); window.open('{{.URL}}', '_blank'); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
+                                class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
+                        {{end}}
+                    </div>
+                </div>
+                <div id="preview-{{.ID}}" class="hidden">
+                    <div class="mx-4 mb-2 bg-neutral-900 border border-neutral-800 rounded-lg p-4"
+                         hx-get="/api/chapters/{{.ID}}/preview" hx-trigger="intersect once" hx-swap="innerHTML">
+                        <div class="text-neutral-500 text-sm animate-pulse">Loading preview...</div>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+
+            {{if .HasMoreTime}}
+            <div hx-get="/api/chapters/time?page={{add .TimePage 1}}" hx-trigger="intersect once" hx-swap="outerHTML"
+                 class="py-4 text-center text-neutral-600 text-sm">
+                Loading more...
+            </div>
+            {{end}}
+        </div>
+
+        <!-- SERIES VIEW -->
+        <div x-show="view === 'series'">
+            {{range .Groups}}
+            <div class="mb-6 bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden"
+                 x-data="{ stext: `{{jsstr .Series.Title}}` }"
+                 x-show="!search || stext.toLowerCase().includes(search.toLowerCase())">
+                <div class="flex items-center justify-between px-4 py-3 bg-neutral-800/40 border-b border-neutral-800">
+                    <div class="flex items-center gap-2">
+                        <img src="{{faviconURL .Series.ProviderName}}" alt="" class="w-4 h-4 flex-shrink-0" onerror="this.style.display='none'">
+                        <div>
+                            <h2 class="text-base font-semibold text-neutral-200">{{.Series.Title}}</h2>
+                            <span class="text-xs text-neutral-500">by {{.Series.Author}} &middot; {{.Series.ProviderName}}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-0.5"
+                             x-data="{ rating: {{f64f .Series.Rating}}, sid: {{.Series.ID}} }">
+                            <button @click="rating = Math.max(0, Math.round((rating - 0.1) * 10) / 10); htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:rating}, swap:'none'})"
+                                    class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
+                            <input type="number" min="0" max="10" step="0.1" x-model.number="rating"
+                                   @change="rating = Math.round(Math.max(0, Math.min(10, rating)) * 10) / 10; htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:rating}, swap:'none'})"
+                                   class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-sm text-neutral-300 py-0.5 focus:outline-none focus:border-neutral-500" />
+                            <button @click="rating = Math.min(10, Math.round((rating + 0.1) * 10) / 10); htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:rating}, swap:'none'})"
+                                    class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
+                        </div>
+                        <a href="{{.Series.SourceURL}}" target="_blank" class="text-xs text-neutral-500 hover:text-neutral-300">Source</a>
+                        <button hx-post="/api/series/{{.Series.ID}}/read-all" hx-swap="none"
+                                class="text-xs bg-neutral-700 hover:bg-neutral-600 text-neutral-300 px-2 py-1 rounded">Mark All Read</button>
+                    </div>
+                </div>
+                <div class="divide-y divide-neutral-800/50">
+                    {{range .Chapters}}
+                    <div class="cursor-pointer hover:bg-neutral-800/30"
+                         onclick="togglePreview({{.ID}})">
+                        {{if .IsRead}}
+                        <div class="flex items-center justify-between px-4 py-2 opacity-40">
+                            <div class="flex items-center gap-2 flex-1 min-w-0">
+                                <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-600 hover:text-neutral-400 truncate" onclick="event.stopPropagation()">{{.Title}}</a>
+                            </div>
+                            <div class="flex items-center gap-3 flex-shrink-0 ml-3">
+                                <span class="text-xs text-neutral-700">{{.PublishedAt.Format "Jan 02"}}</span>
+                                <span class="text-xs text-neutral-700">read</span>
+                            </div>
+                        </div>
+                        {{else}}
+                        <div class="flex items-center justify-between px-4 py-2">
+                            <div class="flex items-center gap-2 flex-1 min-w-0">
+                                <div class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
+                                <span class="text-sm text-neutral-200 truncate">{{.Title}}</span>
+                            </div>
+                            <div class="flex items-center gap-3 flex-shrink-0 ml-3">
+                                <span class="text-xs text-neutral-600">{{.PublishedAt.Format "Jan 02"}}</span>
+                                <button onclick="event.stopPropagation(); window.open('{{.URL}}', '_blank'); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
+                                        class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                    <div id="preview-{{.ID}}" class="hidden">
+                        <div class="mx-4 my-2 bg-neutral-900 border border-neutral-800 rounded-lg p-4"
+                             hx-get="/api/chapters/{{.ID}}/preview" hx-trigger="intersect once" hx-swap="innerHTML">
+                            <div class="text-neutral-500 text-sm animate-pulse">Loading preview...</div>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+    </main>
+</body>
+</html>
+{{end}}

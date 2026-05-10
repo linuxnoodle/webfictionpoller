@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_PATH=/data/data.db
+      - ADDR=:8080
+      - POLL_INTERVAL=15m
+      - FLARESOLVERR_URL=http://flaresolverr:8191
+      - LOG_DIR=/data/logs
+    volumes:
+      - ./data:/data
+    depends_on:
+      - flaresolverr
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    ports:
+      - "8191:8191"
+    environment:
+      - LOG_LEVEL=info
+    restart: unless-stopped

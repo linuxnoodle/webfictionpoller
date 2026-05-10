@@ -1,0 +1,12 @@
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+*.log
+*.exe
+*.dll
+*.so
+*.dylib
+webfiction_poller
+/tmp/

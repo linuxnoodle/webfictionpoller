@@ -1,0 +1,31 @@
+{{define "nav"}}
+<nav class="bg-neutral-800 border-b border-neutral-700 px-6 py-3 flex items-center justify-between">
+    <a href="/" class="text-xl font-bold text-neutral-200 hover:text-white">WebFiction Poller</a>
+    <div class="flex items-center gap-2">
+        <a href="/series" class="text-neutral-400 hover:text-neutral-200 px-2 py-1 text-sm">Series</a>
+        <a href="/series/add" title="Add series"
+           class="text-neutral-300 hover:text-white bg-neutral-700 hover:bg-neutral-600 w-8 h-8 flex items-center justify-center rounded font-bold text-lg leading-none">+</a>
+        <button hx-post="/api/poll" hx-swap="none" title="Poll now"
+                class="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 w-8 h-8 flex items-center justify-center rounded">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+        </button>
+        <div class="relative" x-data="{ open: false }">
+            <button @click="open = !open" @click.outside="open = false"
+                    class="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 w-8 h-8 flex items-center justify-center rounded">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+            <div x-show="open" x-transition
+                 @click="open = false"
+                 class="absolute right-0 mt-2 w-48 bg-neutral-800 border border-neutral-700 rounded-lg shadow-lg py-1 z-50">
+                <a href="/series/import" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Import OPML</a>
+                <a href="/series/export" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Export OPML</a>
+                <div class="border-t border-neutral-700 my-1"></div>
+                <a href="/admin/providers" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Providers</a>
+                <a href="/admin/logs" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Logs</a>
+                <div class="border-t border-neutral-700 my-1"></div>
+                <a href="/logout" class="block px-4 py-2 text-sm text-red-400 hover:bg-neutral-700">Logout</a>
+            </div>
+        </div>
+    </div>
+</nav>
+{{end}}

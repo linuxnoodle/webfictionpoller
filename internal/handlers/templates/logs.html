@@ -1,0 +1,71 @@
+{{define "logs.html"}}
+<!DOCTYPE html>
+<html lang="en" class="bg-neutral-950 text-neutral-200">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs - WebFiction Tracker</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-neutral-950">
+    {{template "nav" .}}
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold text-neutral-100">Logs</h1>
+            <div class="flex items-center gap-3">
+                <select id="log-filter" onchange="filterLogs()" class="bg-neutral-800 border border-neutral-700 rounded px-3 py-1.5 text-sm text-neutral-300 focus:outline-none">
+                    <option value="all">All</option>
+                    <option value="error">Errors</option>
+                    <option value="info">Info</option>
+                </select>
+                <button onclick="loadLogs()" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-300 px-3 py-1.5 rounded text-sm">Refresh</button>
+            </div>
+        </div>
+        <div id="log-container" class="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+            <div id="log-lines" class="font-mono text-xs leading-5 max-h-[75vh] overflow-y-auto p-4 space-y-0.5">
+                <div class="text-neutral-500">Loading logs...</div>
+            </div>
+        </div>
+    </main>
+    <script>
+    function loadLogs() {
+        var filter = document.getElementById('log-filter').value;
+        fetch('/api/logs?lines=500')
+            .then(r => r.json())
+            .then(data => {
+                var container = document.getElementById('log-lines');
+                var lines = data.lines || [];
+                if (filter !== 'all') {
+                    lines = lines.filter(function(l) {
+                        return l.toLowerCase().includes('[' + filter + ']');
+                    });
+                }
+                if (lines.length === 0) {
+                    container.innerHTML = '<div class="text-neutral-600">No log entries found.</div>';
+                    return;
+                }
+                container.innerHTML = lines.map(function(line) {
+                    var cls = 'text-neutral-400';
+                    if (line.indexOf('[ERROR]') !== -1) cls = 'text-red-400';
+                    else if (line.indexOf('[INFO]') !== -1) cls = 'text-neutral-300';
+                    return '<div class="' + cls + ' hover:bg-neutral-800/50 px-1">' + escapeHtml(line) + '</div>';
+                }).join('');
+                container.scrollTop = 0;
+            })
+            .catch(function(err) {
+                document.getElementById('log-lines').innerHTML = '<div class="text-red-400">Failed to load logs: ' + err + '</div>';
+            });
+    }
+    function filterLogs() { loadLogs(); }
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+    loadLogs();
+    </script>
+</body>
+</html>
+{{end}}

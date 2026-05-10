@@ -1,0 +1,82 @@
+package handlers
+
+import (
+	"html/template"
+	"io/fs"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/linuxnoodle/webfictionpoller/internal/models"
+)
+
+var tmpl *template.Template
+
+func InitTemplates() error {
+	sub, err := fs.Sub(TemplateFS, "templates")
+	if err != nil {
+		return err
+	}
+	tmpl = template.Must(template.New("").Funcs(template.FuncMap{
+		"f64f": func(f float64) string {
+			return strconv.FormatFloat(f, 'f', 1, 64)
+		},
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"faviconURL": func(providerName string) string {
+			return models.ProviderFavicon(providerName)
+		},
+		"jsstr": func(s string) string {
+			return strings.ReplaceAll(s, `\`, `\\`)
+		},
+	}).ParseFS(sub, "*.html"))
+	return nil
+}
+
+func RenderLoginPage(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func RenderSetupPage(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, "setup.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func renderTemplate(w http.ResponseWriter, name string, data interface{}) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, name+".html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func groupByDay(chapters []models.ChapterWithSeries) []models.DayGroup {
+	var groups []models.DayGroup
+	var prevKey string
+
+	now := time.Now()
+	yesterday := now.AddDate(0, 0, -1)
+
+	for _, ch := range chapters {
+		key := ch.PublishedAt.Format("2006-01-02")
+
+		if key != prevKey {
+			label := ch.PublishedAt.Format("January 02, 2006")
+			if key == now.Format("2006-01-02") {
+				label = "Today"
+			} else if key == yesterday.Format("2006-01-02") {
+				label = "Yesterday"
+			}
+			groups = append(groups, models.DayGroup{Date: label, Chapters: []models.ChapterWithSeries{}})
+			prevKey = key
+		}
+		groups[len(groups)-1].Chapters = append(groups[len(groups)-1].Chapters, ch)
+	}
+	return groups
+}

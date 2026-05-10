@@ -1,0 +1,39 @@
+{{define "add_series.html"}}
+<!DOCTYPE html>
+<html lang="en" class="bg-neutral-950 text-neutral-200">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebFiction Tracker</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-neutral-950">
+    {{template "nav" .}}
+    <main class="max-w-6xl mx-auto px-4 py-6">
+    <div class="max-w-xl mx-auto">
+        <h1 class="text-2xl font-bold mb-6 text-neutral-100">Add Series</h1>
+        <form hx-post="/series/add" hx-swap="none" class="space-y-4">
+            <div>
+                <label class="block text-sm text-neutral-500 mb-1">Series URL</label>
+                <input type="url" name="url" required placeholder="https://www.royalroad.com/fiction/..."
+                       class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 focus:outline-none focus:border-neutral-500" />
+            </div>
+            <div>
+                <p class="text-xs text-neutral-600">Supported providers:</p>
+                <div class="flex flex-wrap gap-2 mt-1">
+                    {{range $name, $p := .Providers}}
+                    <span class="bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded text-xs">{{$name}}</span>
+                    {{end}}
+                </div>
+            </div>
+            <button type="submit" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-4 py-2 rounded">
+                Add Series
+            </button>
+        </form>
+    </div>
+    </main>
+</body>
+</html>
+{{end}}
