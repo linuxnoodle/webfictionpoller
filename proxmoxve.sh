@@ -28,22 +28,12 @@ function update_script() {
     exit
   fi
 
-  COMPOSE_CMD="docker compose"
-  if ! command -v docker &>/dev/null; then
-    msg_error "Docker is not installed!"
-    exit
-  fi
-
-  msg_info "Pulling latest images"
-  cd /opt/webfictionpoller
-  $COMPOSE_CMD pull
-  msg_ok "Pulled latest images"
-
-  msg_info "Restarting ${APP}"
-  $COMPOSE_CMD up -d --remove-orphans
-  msg_ok "Restarted ${APP}"
-
-  msg_ok "Updated Successfully!"
+  msg_info "Updating ${APP} (git pull + rebuild)"
+  cd /opt/webfictionpoller/src
+  git pull -q
+  docker compose -f /opt/webfictionpoller/docker-compose.yml build --pull app
+  docker compose -f /opt/webfictionpoller/docker-compose.yml up -d --remove-orphans
+  msg_ok "Updated ${APP}"
   exit
 }
 
@@ -56,12 +46,16 @@ curl -fsSL https://get.docker.com | sh
 systemctl enable -q --now docker
 msg_ok "Installed Docker"
 
+msg_info "Cloning ${APP} repository"
+git clone -q https://github.com/linuxnoodle/webfictionpoller.git /opt/webfictionpoller/src
+msg_ok "Cloned repository"
+
 msg_info "Setting up ${APP}"
 mkdir -p /opt/webfictionpoller/data
 cat <<'EOF' > /opt/webfictionpoller/docker-compose.yml
 services:
   app:
-    image: ghcr.io/linuxnoodle/webfictionpoller:latest
+    build: /opt/webfictionpoller/src
     ports:
       - "8080:8080"
     environment:
@@ -84,10 +78,14 @@ services:
 EOF
 msg_ok "Created docker-compose.yml"
 
-msg_info "Pulling container images"
+msg_info "Building ${APP} container (this takes a minute)"
 cd /opt/webfictionpoller
-docker compose pull
-msg_ok "Pulled images"
+docker compose build
+msg_ok "Built container"
+
+msg_info "Pulling FlareSolverr image"
+docker compose pull flaresolverr
+msg_ok "Pulled FlareSolverr"
 
 msg_info "Starting ${APP}"
 docker compose up -d
