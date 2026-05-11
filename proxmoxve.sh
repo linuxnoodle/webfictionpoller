@@ -28,12 +28,17 @@ function update_script() {
     exit
   fi
 
-  msg_info "Updating ${APP}"
+  msg_info "Updating ${APP} (pulling latest source)"
   cd /opt/webfictionpoller/src
-  git pull -q
+  if ! git pull -q 2>/dev/null; then
+    msg_error "Failed to pull updates. Check network connectivity."
+    exit 1
+  fi
+
+  msg_info "Rebuilding ${APP} container"
   docker compose -f /opt/webfictionpoller/docker-compose.yml build --pull app
   docker compose -f /opt/webfictionpoller/docker-compose.yml up -d --remove-orphans
-  msg_ok "Updated ${APP}"
+  msg_ok "Updated ${APP} successfully"
   exit
 }
 
@@ -82,6 +87,36 @@ services:
 DCEOF"
 msg_ok "Created docker-compose.yml"
 
+msg_info "Installing update helper"
+pct exec "$CTID" -- bash -c 'cat > /usr/local/bin/update_webfictionpoller << '\''UPDEOF'\''
+#!/usr/bin/env bash
+set -e
+INSTALL_DIR="/opt/webfictionpoller"
+
+if [[ ! -f "$INSTALL_DIR/docker-compose.yml" ]]; then
+  echo "Error: WebFictionPoller not found at $INSTALL_DIR"
+  exit 1
+fi
+
+echo "Pulling latest source..."
+cd "$INSTALL_DIR/src"
+if ! git pull -q 2>/dev/null; then
+  echo "Error: Failed to pull updates. Check network connectivity."
+  exit 1
+fi
+
+echo "Rebuilding container..."
+docker compose -f "$INSTALL_DIR/docker-compose.yml" build --pull app
+docker compose -f "$INSTALL_DIR/docker-compose.yml" up -d --remove-orphans
+
+echo "Removing old images..."
+docker image prune -f 2>/dev/null || true
+
+echo "Update complete!"
+UPDEOF
+chmod +x /usr/local/bin/update_webfictionpoller'
+msg_ok "Installed update helper"
+
 msg_info "Building ${APP} container (this takes a minute)"
 pct exec "$CTID" -- docker compose -f "$INSTALL_DIR/docker-compose.yml" build
 msg_ok "Built container"
@@ -95,6 +130,8 @@ pct exec "$CTID" -- docker compose -f "$INSTALL_DIR/docker-compose.yml" up -d
 msg_ok "Started ${APP}"
 
 msg_ok "Completed Successfully!\n"
-echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
+echo -e "${INFO}${YW} To update later, run one of:${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}pct exec $CTID -- update_webfictionpoller${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}pct enter $CTID && update_webfictionpoller${CL}"
 echo -e "${INFO}${YW} Access it using the following URL:${CL}"
 echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8080${CL}"
