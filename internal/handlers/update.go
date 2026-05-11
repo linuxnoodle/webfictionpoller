@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bufio"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -176,120 +177,117 @@ func (h *Handler) runSelfUpdate() {
 		"/app/docker-compose.yaml",
 	}
 	for _, candidate := range candidates {
-		uc.appendLog("  checking " + candidate)
 		if _, err := os.Stat(candidate); err == nil {
 			composeFile = candidate
 			break
-		} else {
-			uc.appendLog("  not found: " + err.Error())
 		}
 	}
 	if composeFile == "" {
 		wd, _ := os.Getwd()
 		uc.appendLog("ERROR: docker-compose.yml not found")
 		uc.appendLog("  working dir: " + wd)
-		uc.appendLog("  env COMPOSE_FILE: " + os.Getenv("COMPOSE_FILE"))
-		de, _ := os.ReadDir("/")
-		var entries []string
-		for _, e := range de {
-			entries = append(entries, e.Name())
-		}
-		uc.appendLog("  / contents: " + strings.Join(entries, ", "))
+		uc.appendLog("  hint: ensure docker-compose.yml is mounted into the container")
 		logging.Error("self-update: docker-compose.yml not found")
 		return
 	}
-	uc.appendLog("  found: " + composeFile)
 
 	installDir := strings.TrimSuffix(composeFile, "/docker-compose.yml")
 	installDir = strings.TrimSuffix(installDir, "/docker-compose.yaml")
-	uc.appendLog("  install dir: " + installDir)
 
 	if _, err := exec.LookPath("git"); err != nil {
-		uc.appendLog("ERROR: git not found in PATH")
+		uc.appendLog("ERROR: git not installed in container")
+		uc.appendLog("  hint: add 'git' to Dockerfile apk add")
 		logging.Error("self-update: git not found: %v", err)
 		return
 	}
 	if _, err := exec.LookPath("docker"); err != nil {
-		uc.appendLog("ERROR: docker not found in PATH")
+		uc.appendLog("ERROR: docker CLI not installed in container")
+		uc.appendLog("  hint: add 'docker-cli' to Dockerfile apk add and mount /var/run/docker.sock")
 		logging.Error("self-update: docker not found: %v", err)
 		return
 	}
 
-	steps := []struct {
-		name string
-		cmd  string
-		args []string
-		dir  string
-	}{
-		{"git pull", "git", []string{"pull", "-q"}, installDir},
-		{"get commit", "git", []string{"rev-parse", "HEAD"}, installDir},
-		{"docker compose build", "docker", []string{"compose", "-f", composeFile, "build", "app"}, ""},
-		{"docker compose up", "docker", []string{"compose", "-f", composeFile, "up", "-d", "--remove-orphans"}, ""},
+	uc.appendLog("[1/4] Fetching latest code...")
+	logging.Info("self-update: git pull")
+
+	cmd := exec.Command("git", "pull")
+	cmd.Dir = installDir
+	if err := uc.streamCmd(cmd); err != nil {
+		uc.appendLog("ERROR: git pull failed: " + err.Error())
+		logging.Error("self-update: git pull failed: %v", err)
+		return
 	}
 
-	var commit string
-	for _, step := range steps {
-		uc.appendLog("> " + step.name)
-		logging.Info("self-update: %s", step.name)
+	out, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		uc.appendLog("ERROR: could not determine commit hash")
+		logging.Error("self-update: git rev-parse failed: %v", err)
+		return
+	}
+	commit := strings.TrimSpace(string(out))
+	short := commit
+	if len(short) > 7 {
+		short = short[:7]
+	}
+	uc.appendLog("  commit: " + short)
+	logging.Info("self-update: building commit %s", short)
 
-		cmd := exec.Command(step.cmd, step.args...)
-		if step.dir != "" {
-			cmd.Dir = step.dir
-		}
-		out, err := cmd.CombinedOutput()
-		if len(out) > 0 {
-			if step.name == "get commit" {
-				commit = strings.TrimSpace(string(out))
-			}
-			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-			for _, l := range lines {
-				if l != "" {
-					uc.appendLog("  " + l)
-				}
-			}
-		}
-		if err != nil {
-			uc.appendLog("ERROR: " + err.Error())
-			logging.Error("self-update failed at '%s': %v", step.name, err)
-			return
-		}
+	uc.appendLog("[2/4] Building Docker image (this may take a few minutes)...")
+	logging.Info("self-update: docker compose build")
+
+	cmd = exec.Command("docker", "compose", "-f", composeFile, "build", "--build-arg", "VERSION_COMMIT="+commit, "app")
+	if err := uc.streamCmd(cmd); err != nil {
+		uc.appendLog("ERROR: docker build failed: " + err.Error())
+		logging.Error("self-update: docker build failed: %v", err)
+		return
 	}
 
-	if commit != "" {
-		uc.appendLog("> docker compose rebuild with commit " + commit[:7])
-		cmd := exec.Command("docker", "compose", "-f", composeFile, "build", "--build-arg", "VERSION_COMMIT="+commit, "app")
-		out, err := cmd.CombinedOutput()
-		if len(out) > 0 {
-			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-			for _, l := range lines {
-				if l != "" {
-					uc.appendLog("  " + l)
-				}
-			}
-		}
-		if err != nil {
-			uc.appendLog("ERROR: " + err.Error())
-			logging.Error("self-update failed at rebuild: %v", err)
-			return
-		}
+	uc.appendLog("[3/4] Restarting container...")
+	logging.Info("self-update: docker compose up")
 
-		cmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--remove-orphans")
-		out, err = cmd.CombinedOutput()
-		if len(out) > 0 {
-			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-			for _, l := range lines {
-				if l != "" {
-					uc.appendLog("  " + l)
-				}
-			}
-		}
-		if err != nil {
-			uc.appendLog("ERROR: " + err.Error())
-			logging.Error("self-update failed at up: %v", err)
-			return
-		}
+	cmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--remove-orphans")
+	if err := uc.streamCmd(cmd); err != nil {
+		uc.appendLog("ERROR: docker up failed: " + err.Error())
+		logging.Error("self-update: docker up failed: %v", err)
+		return
 	}
 
-	uc.appendLog("Update complete!")
+	uc.appendLog("[4/4] Cleaning up old images...")
+	exec.Command("docker", "image", "prune", "-f").Run()
+
+	uc.appendLog("Update complete! The page will reconnect once the new container is ready.")
 	logging.Info("self-update completed successfully")
+}
+
+func (uc *UpdateChecker) streamCmd(cmd *exec.Cmd) error {
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	sc := bufio.NewScanner(stdout)
+	for sc.Scan() {
+		line := sc.Text()
+		if line != "" {
+			uc.appendLog("  " + line)
+		}
+	}
+
+	scErr := bufio.NewScanner(stderr)
+	for scErr.Scan() {
+		line := scErr.Text()
+		if line != "" && !strings.Contains(line, "CACHED") && !strings.Contains(line, "transferring") {
+			uc.appendLog("  " + line)
+		}
+	}
+
+	return cmd.Wait()
 }
