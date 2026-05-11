@@ -218,6 +218,7 @@ func (s *Store) GetRatingDistribution() ([]models.RatingBucket, error) {
 	rows, err := s.db.Query(`
 		SELECT ROUND(rating, 1), COUNT(*)
 		FROM series
+		WHERE rating >= 0
 		GROUP BY ROUND(rating, 1)
 		ORDER BY ROUND(rating, 1) ASC
 	`)

@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS series (
     author TEXT DEFAULT '',
     source_url TEXT NOT NULL UNIQUE,
     provider_name TEXT NOT NULL,
-    rating REAL DEFAULT 5.0 CHECK(rating >= 0 AND rating <= 10),
+    rating REAL DEFAULT -1.0 CHECK(rating >= -1 AND rating <= 10),
     status TEXT DEFAULT 'active' CHECK(status IN ('active', 'dropped', 'hiatus', 'binge')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -63,7 +63,6 @@ CREATE INDEX IF NOT EXISTS idx_chapters_published_at ON chapters(published_at);
 
 var migrations = []string{
 	"ALTER TABLE chapters ADD COLUMN preview_html TEXT DEFAULT ''",
-	"UPDATE series SET rating = 5.0 WHERE rating = 0",
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {
@@ -83,5 +82,50 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		db.Exec(m)
 	}
 
+	migrateRatingsToUnscored(db)
+
 	return db, nil
+}
+
+func migrateRatingsToUnscored(db *sql.DB) {
+	_, err := db.Exec("UPDATE series SET rating = -1 WHERE rating != -1")
+	if err == nil {
+		return
+	}
+
+	db.Exec("PRAGMA foreign_keys = OFF")
+	defer db.Exec("PRAGMA foreign_keys = ON")
+
+	db.Exec(`CREATE TABLE IF NOT EXISTS series_new (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		title TEXT NOT NULL,
+		author TEXT DEFAULT '',
+		source_url TEXT NOT NULL UNIQUE,
+		provider_name TEXT NOT NULL,
+		rating REAL DEFAULT -1.0 CHECK(rating >= -1 AND rating <= 10),
+		status TEXT DEFAULT 'active' CHECK(status IN ('active', 'dropped', 'hiatus', 'binge')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec(`INSERT INTO series_new (id, title, author, source_url, provider_name, rating, status, created_at)
+		SELECT id, title, author, source_url, provider_name, -1, status, created_at FROM series`)
+	db.Exec(`DROP TABLE chapters`)
+	db.Exec(`DROP TABLE series`)
+	db.Exec(`ALTER TABLE series_new RENAME TO series`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS chapters (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		series_id INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		url TEXT NOT NULL,
+		published_at DATETIME,
+		is_read BOOLEAN DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		preview_html TEXT DEFAULT '',
+		FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE,
+		UNIQUE(series_id, url)
+	)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_chapters_series_id ON chapters(series_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_chapters_is_read ON chapters(is_read)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_chapters_published_at ON chapters(published_at)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_series_provider ON series(provider_name)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_series_status ON series(status)`)
 }

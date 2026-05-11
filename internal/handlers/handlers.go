@@ -214,7 +214,7 @@ func (h *Handler) AddSeries(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "fetching metadata: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			meta.Rating = 0
+			meta.Rating = models.UnratedRating
 			meta.Status = "active"
 			id, err := h.store.AddSeries(meta)
 			if err != nil {
@@ -289,8 +289,8 @@ func (h *Handler) UpdateSeriesRating(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rating, err := strconv.ParseFloat(r.FormValue("rating"), 64)
-	if err != nil || rating < 0 || rating > 10 {
-		http.Error(w, "rating must be 0-10", http.StatusBadRequest)
+	if err != nil || rating < -1 || rating > 10 {
+		http.Error(w, "rating must be -1 to 10", http.StatusBadRequest)
 		return
 	}
 	if err := h.store.UpdateSeriesRating(id, rating); err != nil {
@@ -462,7 +462,7 @@ func (h *Handler) ImportOPML(w http.ResponseWriter, r *http.Request) {
 			SourceURL:    threadURL,
 			ProviderName: provider.Name(),
 			Status:       "active",
-			Rating:       0,
+			Rating:       models.UnratedRating,
 		}
 
 		id, err := h.store.AddSeries(series)

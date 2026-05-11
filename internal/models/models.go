@@ -2,6 +2,8 @@ package models
 
 import "time"
 
+const UnratedRating = -1.0
+
 type Series struct {
 	ID           int64     `json:"id"`
 	Title        string    `json:"title"`
