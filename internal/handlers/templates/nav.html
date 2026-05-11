@@ -59,6 +59,7 @@ function ratingUp(btn) {
     inp._ratingSave(r);
 }
 document.addEventListener('error', function(e) { if (e.target.tagName === 'IMG') e.target.style.display = 'none'; }, true);
+document.addEventListener('htmx:afterSettle', function() { _ratingEls = {}; });
 </script>
 <nav class="bg-neutral-800 border-b border-neutral-700 px-4 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-bold text-neutral-200 hover:text-white">WebFiction Poller</a>

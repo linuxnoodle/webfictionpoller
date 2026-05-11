@@ -73,6 +73,8 @@ func main() {
 		log.Fatalf("failed to load templates: %v", err)
 	}
 
+	faviconCache := handlers.NewFaviconCache()
+
 	h := handlers.NewHandler(store, pool, logDir)
 
 	r := chi.NewRouter()
@@ -91,6 +93,8 @@ func main() {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		w.Write(static.CSS)
 	})
+
+	r.Handle("GET /static/favicons/{provider}", faviconCache)
 
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware(sessionManager, db))
