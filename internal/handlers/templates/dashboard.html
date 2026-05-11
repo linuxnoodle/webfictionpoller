@@ -40,7 +40,7 @@
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
     <main class="max-w-6xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
-    <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published' }" x-init="$watch('view', v => localStorage.setItem('dashView', v)); $watch('sortBy', v => localStorage.setItem('dashSort', v))">
+    <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published' }" x-init="$watch('view', v => localStorage.setItem('dashView', v)); $watch('sortBy', v => localStorage.setItem('dashSort', v)); $watch('search', function(q) { var rows = document.querySelectorAll('[data-st]'); q = q.toLowerCase(); for (var i = 0; i < rows.length; i++) { rows[i].style.display = !q || rows[i].dataset.st.toLowerCase().indexOf(q) >= 0 ? '' : 'none'; } })">
         <div class="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between mb-4 sm:mb-6">
             <div class="flex flex-wrap items-center gap-2 sm:gap-4">
                 <h1 class="text-xl sm:text-2xl font-bold text-neutral-100">Dashboard</h1>
@@ -88,19 +88,16 @@
              x-init="$watch('sortBy', () => { window.location.href = '/?sort=' + sortBy })">
             {{range .TimeGroups}}
             <div class="mt-4"
-                 x-data="{ searchText: `{{jsstr (printf "%s" "")}}{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}` }"
-                 x-show="!search || searchText.toLowerCase().includes(search.toLowerCase())">
+                 data-st="{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}">
                 <h3 class="text-sm font-semibold text-neutral-500 uppercase tracking-wider px-2 sm:px-4 py-2 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">{{.Date}}</h3>
                 {{range .Chapters}}
                 <div class="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded hover:bg-neutral-900/50 cursor-pointer"
-                     x-data="{ chText: `{{jsstr .SeriesTitle}} {{jsstr .Title}}` }"
-                     x-show="!search || chText.toLowerCase().includes(search.toLowerCase())"
                      onclick="togglePreview({{.ID}})">
                     <div class="flex items-center gap-1.5 sm:gap-3 flex-1 min-w-0">
                         {{if .IsRead}}
                         <div class="flex-1 min-w-0 overflow-hidden opacity-40">
                             <div class="flex items-center gap-1 sm:gap-2 min-w-0">
-                                <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0" onerror="this.style.display='none'">
+                                <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
                                 <span class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
                                 <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
                             </div>
@@ -109,7 +106,7 @@
                         <div class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
                         <div class="flex-1 min-w-0 overflow-hidden">
                             <div class="flex items-center gap-1 sm:gap-2 min-w-0">
-                                <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0" onerror="this.style.display='none'">
+                                <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
                                 <span class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
                                 <span class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
                             </div>
@@ -160,12 +157,11 @@
         <div x-show="view === 'series'">
             {{range .Groups}}
             <div class="mb-4 sm:mb-6 bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden"
-                 x-data="{ stext: `{{jsstr .Series.Title}}` }"
-                 x-show="!search || stext.toLowerCase().includes(search.toLowerCase())">
+                 data-st="{{jsstr .Series.Title}}">
                 <div class="px-3 sm:px-4 py-3 bg-neutral-800/40 border-b border-neutral-800">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2 min-w-0 overflow-hidden">
-                            <img src="{{faviconURL .Series.ProviderName}}" alt="" class="w-4 h-4 flex-shrink-0" onerror="this.style.display='none'">
+                            <img src="{{faviconURL .Series.ProviderName}}" alt="" class="w-4 h-4 flex-shrink-0">
                             <div class="min-w-0 overflow-hidden">
                                 <h2 class="text-sm sm:text-base font-semibold text-neutral-200 truncate">{{.Series.Title}}</h2>
                                 <span class="text-xs text-neutral-500">by {{.Series.Author}} &middot; {{.Series.ProviderName}}</span>

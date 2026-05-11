@@ -31,10 +31,13 @@ func InitTemplates() error {
 				return `ratingInput($el); $el.type='text'; $el.value='U'; $el.dataset.u='1'`
 			}
 			s := strconv.FormatFloat(f, 'f', 1, 64)
-			return fmt.Sprintf("ratingInput($el); $el.type='number'; $el.value='%s'; $el.dataset.u='0'", s)
+			return fmt.Sprintf("ratingInput($el); $el.type='number'; $el.value='%s'; $el.dataset.u='0'; ratingApplyStyle($el, %s)", s, s)
 		},
 		"ratingSave": func(sidVar string) string {
 			return fmt.Sprintf(`$nextTick(()=>{ var i=$el.querySelector('input'); i.dataset.sid=%s; i._ratingSave=function(r){ratingSync(i,r);htmx.ajax('POST','/api/series/'+%s+'/rating',{values:{rating:r},swap:'none'})} })`, sidVar, sidVar)
+		},
+		"ratingHue": func(i int) float64 {
+			return float64(i) * 1.2
 		},
 		"add": func(a, b int) int {
 			return a + b

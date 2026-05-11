@@ -1,5 +1,20 @@
 {{define "nav"}}
 <script>
+function ratingColor(v) {
+    if (v < 0) return 'hsl(0,0%,50%)';
+    var h = (v / 10) * 120;
+    return 'hsl(' + h + ',65%,50%)';
+}
+function ratingApplyStyle(inp, r) {
+    var c = ratingColor(r);
+    inp.style.color = r < 0 ? '' : c;
+    inp.style.borderColor = r < 0 ? '' : c;
+    inp.style.backgroundColor = r < 0 ? '' : c.replace('50%)', '12%)');
+    var btns = inp.parentElement.querySelectorAll('button');
+    btns.forEach(function(b) {
+        b.style.color = r < 0 ? '' : c;
+    });
+}
 function ratingInput(el) {
     el.addEventListener('focus', function() { if (this.dataset.u === '1') { this.value = ''; this.type = 'number'; } });
     el.addEventListener('blur', function() {
@@ -13,12 +28,16 @@ function ratingInput(el) {
     });
     el.addEventListener('keydown', function(e) { if (e.key === 'Enter') this.blur(); });
 }
+var _ratingEls = {};
 function ratingSync(src, r) {
     var sid = src.dataset.sid;
-    document.querySelectorAll('input[data-sid="'+sid+'"]').forEach(function(inp) {
+    var els = _ratingEls[sid];
+    if (!els) { els = document.querySelectorAll('input[data-sid="'+sid+'"]'); _ratingEls[sid] = els; }
+    els.forEach(function(inp) {
         if (inp === src) return;
         if (r < 0) { inp.dataset.u = '1'; inp.type = 'text'; inp.value = 'U'; }
         else { inp.dataset.u = '0'; inp.type = 'number'; inp.value = r.toFixed(1); }
+        ratingApplyStyle(inp, r);
     });
 }
 function ratingDown(btn) {
@@ -27,6 +46,7 @@ function ratingDown(btn) {
     r = r <= 0 ? -1 : Math.round((r - 0.1) * 10) / 10;
     if (r < 0) { inp.dataset.u = '1'; inp.type = 'text'; inp.value = 'U'; }
     else { inp.dataset.u = '0'; inp.type = 'number'; inp.value = r.toFixed(1); }
+    ratingApplyStyle(inp, r);
     inp._ratingSave(r);
 }
 function ratingUp(btn) {
@@ -34,8 +54,10 @@ function ratingUp(btn) {
     var r = inp.dataset.u === '1' ? 0 : parseFloat(inp.value) || 0;
     r = Math.min(10, Math.round((r + 0.1) * 10) / 10);
     inp.dataset.u = '0'; inp.type = 'number'; inp.value = r.toFixed(1);
+    ratingApplyStyle(inp, r);
     inp._ratingSave(r);
 }
+document.addEventListener('error', function(e) { if (e.target.tagName === 'IMG') e.target.style.display = 'none'; }, true);
 </script>
 <nav class="bg-neutral-800 border-b border-neutral-700 px-4 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-bold text-neutral-200 hover:text-white">WebFiction Poller</a>

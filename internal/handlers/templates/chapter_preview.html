@@ -1,6 +1,6 @@
 {{define "chapter_preview"}}
 <div class="flex items-start gap-2 sm:gap-3 mb-3 pb-3 border-b border-neutral-700">
-    {{if .FaviconURL}}<img src="{{.FaviconURL}}" alt="" class="w-4 h-4 mt-1 flex-shrink-0 hidden sm:block" onerror="this.style.display='none'">{{end}}
+    {{if .FaviconURL}}<img src="{{.FaviconURL}}" alt="" class="w-4 h-4 mt-1 flex-shrink-0 hidden sm:block">{{end}}
     <div class="min-w-0 flex-1">
         <h4 class="text-sm sm:text-base font-semibold text-neutral-100 leading-tight">{{.Chapter.Title}}</h4>
         <div class="flex items-center gap-2 mt-1">
