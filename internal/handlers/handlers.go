@@ -26,13 +26,18 @@ func NewHandler(store *Store, pool *worker.WorkerPool, logDir string) *Handler {
 }
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	sortBy := r.URL.Query().Get("sort")
+	if sortBy != "received" {
+		sortBy = "published"
+	}
+
 	seriesView, err := h.store.GetSeriesView()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	timeChapters, err := h.store.GetTimeView(0, 50)
+	timeChapters, err := h.store.GetTimeView(0, 50, sortBy)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -47,10 +52,11 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, "dashboard", map[string]interface{}{
 		"Groups":      seriesView,
 		"TimeView":    timeChapters,
-		"TimeGroups":  groupByDay(timeChapters),
+		"TimeGroups":  groupByDay(timeChapters, sortBy),
 		"Stats":       stats,
 		"TimePage":    0,
 		"HasMoreTime": len(timeChapters) == 50,
+		"SortBy":      sortBy,
 	})
 }
 
@@ -59,17 +65,22 @@ func (h *Handler) TimePagePartial(w http.ResponseWriter, r *http.Request) {
 	if page < 1 {
 		page = 1
 	}
+	sortBy := r.URL.Query().Get("sort")
+	if sortBy != "received" {
+		sortBy = "published"
+	}
 
-	chapters, err := h.store.GetTimeView(page, 50)
+	chapters, err := h.store.GetTimeView(page, 50, sortBy)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	data := map[string]interface{}{
-		"TimeGroups":  groupByDay(chapters),
+		"TimeGroups":  groupByDay(chapters, sortBy),
 		"TimePage":    page,
 		"HasMoreTime": len(chapters) == 50,
+		"SortBy":      sortBy,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

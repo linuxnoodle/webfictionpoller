@@ -52,17 +52,21 @@ func (s *Store) GetSeriesView() ([]models.SeriesWithChapters, error) {
 	return result, nil
 }
 
-func (s *Store) GetTimeView(page, pageSize int) ([]models.ChapterWithSeries, error) {
+func (s *Store) GetTimeView(page, pageSize int, sortBy string) ([]models.ChapterWithSeries, error) {
+	orderCol := "c.published_at"
+	if sortBy == "received" {
+		orderCol = "c.created_at"
+	}
 	offset := page * pageSize
-	rows, err := s.db.Query(`
+	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT c.id, c.series_id, c.title, c.url, c.published_at, c.is_read, c.created_at,
 		       s.title, s.author, s.provider_name, s.rating, s.source_url
 		FROM chapters c
 		JOIN series s ON c.series_id = s.id
 		WHERE s.status IN ('active', 'binge')
-		ORDER BY c.published_at DESC
+		ORDER BY %s DESC
 		LIMIT ? OFFSET ?
-	`, pageSize, offset)
+	`, orderCol), pageSize, offset)
 	if err != nil {
 		return nil, err
 	}

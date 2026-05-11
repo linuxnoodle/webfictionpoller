@@ -40,7 +40,7 @@
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
     <main class="max-w-6xl mx-auto px-4 py-6">
-    <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '' }" x-init="$watch('view', v => localStorage.setItem('dashView', v))">
+    <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published' }" x-init="$watch('view', v => localStorage.setItem('dashView', v)); $watch('sortBy', v => localStorage.setItem('dashSort', v))">
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-4">
                 <h1 class="text-2xl font-bold text-neutral-100">Dashboard</h1>
@@ -51,6 +51,14 @@
                     <button @click="view = 'series'"
                             :class="view === 'series' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
                             class="px-3 py-1.5 text-sm">Series</button>
+                </div>
+                <div x-show="view === 'time'" class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
+                    <button @click="sortBy = 'published'"
+                            :class="sortBy === 'published' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                            class="px-2 py-1.5 text-xs">published</button>
+                    <button @click="sortBy = 'received'"
+                            :class="sortBy === 'received' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                            class="px-2 py-1.5 text-xs">received</button>
                 </div>
             </div>
             <div class="flex items-center gap-4">
@@ -76,7 +84,8 @@
         {{end}}
 
         <!-- TIME VIEW -->
-        <div x-show="view === 'time'">
+        <div x-show="view === 'time'"
+             x-init="$watch('sortBy', () => { window.location.href = '/?sort=' + sortBy })">
             {{range .TimeGroups}}
             <div class="mt-4"
                  x-data="{ searchText: `{{jsstr (printf "%s" "")}}{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}` }"
@@ -119,9 +128,11 @@
                             <button @click="rating = Math.min(10, Math.round((rating + 0.1) * 10) / 10); htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:rating}, swap:'none'})"
                                     class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
                         </div>
-                        <span class="text-xs text-neutral-600">{{.PublishedAt.Format "15:04"}}</span>
+                        <span class="text-xs text-neutral-600 w-10 text-right">{{.PublishedAt.Format "15:04"}}</span>
                         {{if .IsRead}}
-                        <a href="{{.URL}}" target="_blank" rel="noopener" class="text-xs text-neutral-600 hover:text-neutral-400" onclick="event.stopPropagation()">open</a>
+                        <a href="{{.URL}}" target="_blank" rel="noopener"
+                           onclick="event.stopPropagation()"
+                           class="text-xs text-neutral-500 hover:text-neutral-300 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded">open</a>
                         {{else}}
                         <button onclick="event.stopPropagation(); window.open('{{.URL}}', '_blank'); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
                                 class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
@@ -139,7 +150,7 @@
             {{end}}
 
             {{if .HasMoreTime}}
-            <div hx-get="/api/chapters/time?page={{add .TimePage 1}}" hx-trigger="intersect once" hx-swap="outerHTML"
+            <div hx-get="/api/chapters/time?page={{add .TimePage 1}}&sort={{.SortBy}}" hx-trigger="intersect once" hx-swap="outerHTML"
                  class="py-4 text-center text-neutral-600 text-sm">
                 Loading more...
             </div>
@@ -186,8 +197,15 @@
                                 <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-600 hover:text-neutral-400 truncate" onclick="event.stopPropagation()">{{.Title}}</a>
                             </div>
                             <div class="flex items-center gap-3 flex-shrink-0 ml-3">
-                                <span class="text-xs text-neutral-700">{{.PublishedAt.Format "Jan 02"}}</span>
-                                <span class="text-xs text-neutral-700">read</span>
+                                <span class="text-xs text-neutral-700 w-12 text-right">{{.PublishedAt.Format "Jan 02"}}</span>
+                                {{if .IsRead}}
+                                <a href="{{.URL}}" target="_blank" rel="noopener"
+                                   onclick="event.stopPropagation()"
+                                   class="text-xs text-neutral-600 hover:text-neutral-400 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded">open</a>
+                                {{else}}
+                                <button onclick="event.stopPropagation(); window.open('{{.URL}}', '_blank'); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
+                                        class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
+                                {{end}}
                             </div>
                         </div>
                         {{else}}

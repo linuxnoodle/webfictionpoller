@@ -56,7 +56,7 @@ func renderTemplate(w http.ResponseWriter, name string, data interface{}) {
 	}
 }
 
-func groupByDay(chapters []models.ChapterWithSeries) []models.DayGroup {
+func groupByDay(chapters []models.ChapterWithSeries, sortBy string) []models.DayGroup {
 	var groups []models.DayGroup
 	var prevKey string
 
@@ -64,10 +64,14 @@ func groupByDay(chapters []models.ChapterWithSeries) []models.DayGroup {
 	yesterday := now.AddDate(0, 0, -1)
 
 	for _, ch := range chapters {
-		key := ch.PublishedAt.Format("2006-01-02")
+		t := ch.PublishedAt
+		if sortBy == "received" {
+			t = ch.CreatedAt
+		}
+		key := t.Format("2006-01-02")
 
 		if key != prevKey {
-			label := ch.PublishedAt.Format("January 02, 2006")
+			label := t.Format("January 02, 2006")
 			if key == now.Format("2006-01-02") {
 				label = "Today"
 			} else if key == yesterday.Format("2006-01-02") {
