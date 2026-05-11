@@ -45,6 +45,8 @@
             {{else}}
             <button onclick="event.stopPropagation(); window.open('{{.URL}}', '_blank'); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
                     class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
+            <button onclick="event.stopPropagation(); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
+                    class="text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-400 px-2 py-1 rounded">Ignore</button>
             {{end}}
         </div>
     </div>

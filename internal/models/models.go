@@ -89,6 +89,15 @@ type Backup struct {
 
 func ProviderFavicon(name string) string {
 	switch name {
+	case "royalroad", "spacebattles", "sufficientvelocity", "questionablequesting", "fanfictionnet":
+		return "/static/favicons/" + name + ".ico"
+	default:
+		return ""
+	}
+}
+
+func ProviderFaviconSource(name string) string {
+	switch name {
 	case "royalroad":
 		return "https://www.royalroad.com/favicon.ico"
 	case "spacebattles":
@@ -102,4 +111,8 @@ func ProviderFavicon(name string) string {
 	default:
 		return ""
 	}
+}
+
+func ProviderNames() []string {
+	return []string{"royalroad", "spacebattles", "sufficientvelocity", "questionablequesting", "fanfictionnet"}
 }

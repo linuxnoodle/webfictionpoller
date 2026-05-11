@@ -19,11 +19,12 @@ function ratingInput(el) {
     el.addEventListener('focus', function() { if (this.dataset.u === '1') { this.value = ''; this.type = 'number'; } });
     el.addEventListener('blur', function() {
         var raw = this.value.trim();
-        if (raw === '' || raw === 'U' || raw === 'u') { this.dataset.u = '1'; this.type = 'text'; this.value = 'U'; this._ratingSave(-1); return; }
+        if (raw === '' || raw === 'U' || raw === 'u') { this.dataset.u = '1'; this.type = 'text'; this.value = 'U'; ratingApplyStyle(this, -1); this._ratingSave(-1); return; }
         var v = parseFloat(raw);
-        if (isNaN(v)) { this.dataset.u = '1'; this.type = 'text'; this.value = 'U'; this._ratingSave(-1); return; }
+        if (isNaN(v)) { this.dataset.u = '1'; this.type = 'text'; this.value = 'U'; ratingApplyStyle(this, -1); this._ratingSave(-1); return; }
         v = Math.round(Math.max(0, Math.min(10, v)) * 10) / 10;
         this.dataset.u = '0'; this.type = 'number'; this.value = v.toFixed(1);
+        ratingApplyStyle(this, v);
         this._ratingSave(v);
     });
     el.addEventListener('keydown', function(e) { if (e.key === 'Enter') this.blur(); });

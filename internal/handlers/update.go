@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -167,24 +168,52 @@ func (h *Handler) runSelfUpdate() {
 
 	uc.appendLog("Starting self-update...")
 
-	// Find the install dir by looking for docker-compose.yml
 	composeFile := ""
-	for _, candidate := range []string{
+	candidates := []string{
 		"/opt/webfictionpoller/docker-compose.yml",
+		"/opt/webfictionpoller/docker-compose.yaml",
 		"/app/docker-compose.yml",
-	} {
-		if _, err := exec.Command("test", "-f", candidate).CombinedOutput(); err == nil {
+		"/app/docker-compose.yaml",
+	}
+	for _, candidate := range candidates {
+		uc.appendLog("  checking " + candidate)
+		if _, err := os.Stat(candidate); err == nil {
 			composeFile = candidate
 			break
+		} else {
+			uc.appendLog("  not found: " + err.Error())
 		}
 	}
 	if composeFile == "" {
+		wd, _ := os.Getwd()
 		uc.appendLog("ERROR: docker-compose.yml not found")
+		uc.appendLog("  working dir: " + wd)
+		uc.appendLog("  env COMPOSE_FILE: " + os.Getenv("COMPOSE_FILE"))
+		de, _ := os.ReadDir("/")
+		var entries []string
+		for _, e := range de {
+			entries = append(entries, e.Name())
+		}
+		uc.appendLog("  / contents: " + strings.Join(entries, ", "))
 		logging.Error("self-update: docker-compose.yml not found")
 		return
 	}
+	uc.appendLog("  found: " + composeFile)
 
 	installDir := strings.TrimSuffix(composeFile, "/docker-compose.yml")
+	installDir = strings.TrimSuffix(installDir, "/docker-compose.yaml")
+	uc.appendLog("  install dir: " + installDir)
+
+	if _, err := exec.LookPath("git"); err != nil {
+		uc.appendLog("ERROR: git not found in PATH")
+		logging.Error("self-update: git not found: %v", err)
+		return
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		uc.appendLog("ERROR: docker not found in PATH")
+		logging.Error("self-update: docker not found: %v", err)
+		return
+	}
 
 	steps := []struct {
 		name string
