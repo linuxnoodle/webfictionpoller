@@ -50,11 +50,21 @@ func (fc *FaviconCache) prefetch() {
 
 func (fc *FaviconCache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("provider")
+	log.Printf("[favicon] request: path=%s provider=%s", r.URL.Path, name)
 	name = strings.TrimSuffix(name, ".ico")
 	fc.mu.RLock()
 	data, ok := fc.icons[name]
 	fc.mu.RUnlock()
 	if !ok {
+		log.Printf("[favicon] not found: %q (cached: %v)", name, func() []string {
+			fc.mu.RLock()
+			defer fc.mu.RUnlock()
+			var keys []string
+			for k := range fc.icons {
+				keys = append(keys, k)
+			}
+			return keys
+		}())
 		http.NotFound(w, r)
 		return
 	}

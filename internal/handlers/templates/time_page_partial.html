@@ -38,11 +38,12 @@
                 <button onclick="ratingUp(this)"
                         class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
             </div>
-            <span class="text-xs text-neutral-600 w-10 text-right">{{.PublishedAt.Format "15:04"}}</span>
+            <span class="text-xs text-neutral-600 w-10 text-right flex-shrink-0">{{.PublishedAt.Format "15:04"}}</span>
             {{if .IsRead}}
             <a href="{{.URL}}" target="_blank" rel="noopener"
                onclick="event.stopPropagation()"
                class="text-xs text-neutral-500 hover:text-neutral-300 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded">open</a>
+            <span class="invisible text-xs px-2 py-1">Ignore</span>
             {{else}}
             <button onclick="event.stopPropagation(); window.open('{{.URL}}', '_blank'); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
                     class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>

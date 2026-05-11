@@ -94,7 +94,7 @@ func main() {
 		w.Write(static.CSS)
 	})
 
-	r.Handle("GET /static/favicons/{provider}", faviconCache)
+	r.Get("/static/favicons/{provider}", faviconCache.ServeHTTP)
 
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware(sessionManager, db))
