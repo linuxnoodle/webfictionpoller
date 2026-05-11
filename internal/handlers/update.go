@@ -17,7 +17,9 @@ type UpdateChecker struct {
 }
 
 func NewUpdateChecker() *UpdateChecker {
-	return &UpdateChecker{}
+	uc := &UpdateChecker{}
+	go uc.check()
+	return uc
 }
 
 type githubCommitResp struct {
