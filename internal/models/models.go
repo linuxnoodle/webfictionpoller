@@ -63,6 +63,30 @@ type RatingBucket struct {
 	Count  int
 }
 
+type SeriesBackup struct {
+	Title        string          `json:"title"`
+	Author       string          `json:"author"`
+	SourceURL    string          `json:"source_url"`
+	ProviderName string          `json:"provider_name"`
+	Rating       float64         `json:"rating"`
+	Status       string          `json:"status"`
+	Chapters     []ChapterBackup `json:"chapters"`
+}
+
+type ChapterBackup struct {
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	PublishedAt string `json:"published_at"`
+	IsRead      bool   `json:"is_read"`
+}
+
+type Backup struct {
+	Version    int             `json:"version"`
+	ExportedAt string          `json:"exported_at"`
+	Series     []SeriesBackup  `json:"series"`
+	Providers  map[string]string `json:"providers,omitempty"`
+}
+
 func ProviderFavicon(name string) string {
 	switch name {
 	case "royalroad":

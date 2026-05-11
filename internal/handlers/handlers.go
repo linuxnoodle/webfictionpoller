@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"math"
 	"net/http"
 	"strconv"
@@ -527,4 +528,60 @@ func (h *Handler) ExportOPML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/x-opml; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=webfictionpoller.opml")
 	w.Write(data)
+}
+
+func (h *Handler) ExportBackup(w http.ResponseWriter, r *http.Request) {
+	backup, err := h.store.ExportBackup()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data, err := json.MarshalIndent(backup, "", "  ")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", "attachment; filename=webfictionpoller-backup.json")
+	w.Write(data)
+}
+
+func (h *Handler) ImportBackup(w http.ResponseWriter, r *http.Request) {
+	file, _, err := r.FormFile("backup_file")
+	if err != nil {
+		http.Error(w, "backup_file required: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "reading file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var backup models.Backup
+	if err := json.Unmarshal(data, &backup); err != nil {
+		http.Error(w, "invalid backup file: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	imported, skipped, err := h.store.ImportBackup(&backup)
+	if err != nil {
+		http.Error(w, "import error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	logging.Info("[backup-import] complete: %d imported, %d updated/skipped", imported, skipped)
+
+	all, _ := h.store.GetAllActiveSeries()
+	for _, s := range all {
+		if p, ok := h.pool.GetProvider(s.ProviderName); ok {
+			h.pool.Submit(worker.Job{Series: s, Provider: p})
+		}
+	}
+
+	http.Redirect(w, r, "/series", http.StatusSeeOther)
 }

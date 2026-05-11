@@ -40,6 +40,25 @@
                 </button>
             </form>
         </div>
+
+        <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-6 space-y-4 mt-6">
+            <h2 class="text-lg font-semibold text-neutral-200">Restore Backup</h2>
+            <p class="text-sm text-neutral-500">
+                Upload a JSON backup file previously exported from WebFiction Poller.
+                This restores all series with ratings, status, chapters, and read state.
+                Existing series will be updated; new series will be created.
+            </p>
+            <form method="POST" action="/series/backup" enctype="multipart/form-data" class="space-y-4">
+                <div>
+                    <label class="block text-sm text-neutral-500 mb-1">Backup File (JSON)</label>
+                    <input type="file" name="backup_file" accept=".json" required
+                           class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                </div>
+                <button type="submit" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-4 py-2 rounded">
+                    Restore Backup
+                </button>
+            </form>
+        </div>
     </div>
     </main>
 </body>

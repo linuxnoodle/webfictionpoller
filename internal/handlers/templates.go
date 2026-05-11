@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -20,7 +21,17 @@ func InitTemplates() error {
 	}
 	tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 		"f64f": func(f float64) string {
+			if f < 0 {
+				return "-1"
+			}
 			return strconv.FormatFloat(f, 'f', 1, 64)
+		},
+		"ratingInit": func(f float64) string {
+			if f < 0 {
+				return `ratingInput($el); $el.type='text'; $el.value='U'; $el.dataset.u='1'`
+			}
+			s := strconv.FormatFloat(f, 'f', 1, 64)
+			return fmt.Sprintf("ratingInput($el); $el.type='number'; $el.value='%s'; $el.dataset.u='0'", s)
 		},
 		"add": func(a, b int) int {
 			return a + b

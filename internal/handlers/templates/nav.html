@@ -1,4 +1,34 @@
 {{define "nav"}}
+<script>
+function ratingInput(el) {
+    el.addEventListener('focus', function() { if (this.dataset.u === '1') { this.value = ''; this.type = 'number'; } });
+    el.addEventListener('blur', function() {
+        var raw = this.value.trim();
+        if (raw === '' || raw === 'U' || raw === 'u') { this.dataset.u = '1'; this.type = 'text'; this.value = 'U'; this._ratingSave(-1); return; }
+        var v = parseFloat(raw);
+        if (isNaN(v)) { this.dataset.u = '1'; this.type = 'text'; this.value = 'U'; this._ratingSave(-1); return; }
+        v = Math.round(Math.max(0, Math.min(10, v)) * 10) / 10;
+        this.dataset.u = '0'; this.type = 'number'; this.value = v.toFixed(1);
+        this._ratingSave(v);
+    });
+    el.addEventListener('keydown', function(e) { if (e.key === 'Enter') this.blur(); });
+}
+function ratingDown(btn) {
+    var inp = btn.parentElement.querySelector('input');
+    var r = inp.dataset.u === '1' ? 0 : parseFloat(inp.value) || 0;
+    r = r <= 0 ? -1 : Math.round((r - 0.1) * 10) / 10;
+    if (r < 0) { inp.dataset.u = '1'; inp.type = 'text'; inp.value = 'U'; }
+    else { inp.dataset.u = '0'; inp.type = 'number'; inp.value = r.toFixed(1); }
+    inp._ratingSave(r);
+}
+function ratingUp(btn) {
+    var inp = btn.parentElement.querySelector('input');
+    var r = inp.dataset.u === '1' ? 0 : parseFloat(inp.value) || 0;
+    r = Math.min(10, Math.round((r + 0.1) * 10) / 10);
+    inp.dataset.u = '0'; inp.type = 'number'; inp.value = r.toFixed(1);
+    inp._ratingSave(r);
+}
+</script>
 <nav class="bg-neutral-800 border-b border-neutral-700 px-4 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-bold text-neutral-200 hover:text-white">WebFiction Poller</a>
     <div class="hidden sm:flex items-center gap-2">
@@ -26,6 +56,7 @@
                 <div class="border-t border-neutral-700 my-1"></div>
                 <a href="/series/import" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Import OPML</a>
                 <a href="/series/export" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Export OPML</a>
+                <a href="/series/backup" download class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Export Backup</a>
                 <div class="border-t border-neutral-700 my-1"></div>
                 <a href="/admin/providers" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Providers</a>
                 <a href="/admin/logs" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Logs</a>
@@ -52,6 +83,7 @@
     <div class="border-t border-neutral-700 my-1"></div>
     <a href="/series/import" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Import OPML</a>
     <a href="/series/export" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Export OPML</a>
+    <a href="/series/backup" download class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Export Backup</a>
     <a href="/admin/providers" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Providers</a>
     <a href="/admin/logs" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Logs</a>
     <div class="border-t border-neutral-700 my-1"></div>

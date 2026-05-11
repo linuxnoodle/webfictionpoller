@@ -102,6 +102,8 @@ func main() {
 		r.Get("/series/import", h.ImportOPMLPage)
 		r.Post("/series/import", h.ImportOPML)
 		r.Get("/series/export", h.ExportOPML)
+		r.Get("/series/backup", h.ExportBackup)
+		r.Post("/series/backup", h.ImportBackup)
 		r.Get("/admin/providers", h.ProviderConfigPage)
 		r.Post("/admin/providers", h.SaveProviderConfig)
 		r.Get("/admin/logs", h.LogsPage)
