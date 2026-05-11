@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +50,7 @@ func (fc *FaviconCache) prefetch() {
 
 func (fc *FaviconCache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("provider")
+	name = strings.TrimSuffix(name, ".ico")
 	fc.mu.RLock()
 	data, ok := fc.icons[name]
 	fc.mu.RUnlock()

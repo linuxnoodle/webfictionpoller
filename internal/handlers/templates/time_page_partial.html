@@ -8,6 +8,7 @@
          onclick="togglePreview({{.ID}})">
         <div class="flex items-center gap-1.5 sm:gap-3 flex-1 min-w-0">
             {{if .IsRead}}
+            <div class="w-1 flex-shrink-0"></div>
             <div class="flex-1 min-w-0 overflow-hidden opacity-40">
                 <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                     <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block">
