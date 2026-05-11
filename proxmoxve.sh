@@ -28,7 +28,7 @@ function update_script() {
     exit
   fi
 
-  msg_info "Updating ${APP} (git pull + rebuild)"
+  msg_info "Updating ${APP}"
   cd /opt/webfictionpoller/src
   git pull -q
   docker compose -f /opt/webfictionpoller/docker-compose.yml build --pull app
@@ -41,25 +41,27 @@ start
 build_container
 description
 
-msg_info "Installing Docker"
-if ! command -v docker &>/dev/null; then
-  curl -fsSL https://get.docker.com | sh
+INSTALL_DIR="/opt/webfictionpoller"
+
+msg_info "Installing Docker in LXC"
+if ! pct exec "$CTID" -- bash -c "command -v docker &>/dev/null"; then
+  pct exec "$CTID" -- bash -c "curl -fsSL https://get.docker.com | sh"
 fi
-systemctl enable -q --now docker
+pct exec "$CTID" -- systemctl enable -q --now docker
 msg_ok "Installed Docker"
 
-msg_info "Cloning ${APP} repository"
-git clone -q https://github.com/linuxnoodle/webfictionpoller.git /opt/webfictionpoller/src
+msg_info "Cloning ${APP} into LXC"
+pct exec "$CTID" -- bash -c "apt-get update -qq && apt-get install -y -qq git > /dev/null 2>&1"
+pct exec "$CTID" -- git clone -q https://github.com/linuxnoodle/webfictionpoller.git "$INSTALL_DIR/src"
 msg_ok "Cloned repository"
 
-msg_info "Setting up ${APP}"
-mkdir -p /opt/webfictionpoller/data
-cat <<'EOF' > /opt/webfictionpoller/docker-compose.yml
+msg_info "Writing docker-compose.yml"
+pct exec "$CTID" -- bash -c "mkdir -p $INSTALL_DIR/data && cat > $INSTALL_DIR/docker-compose.yml << 'DCEOF'
 services:
   app:
     build: /opt/webfictionpoller/src
     ports:
-      - "8080:8080"
+      - \"8080:8080\"
     environment:
       - DB_PATH=/data/data.db
       - ADDR=:8080
@@ -77,20 +79,19 @@ services:
     environment:
       - LOG_LEVEL=info
     restart: unless-stopped
-EOF
+DCEOF"
 msg_ok "Created docker-compose.yml"
 
 msg_info "Building ${APP} container (this takes a minute)"
-cd /opt/webfictionpoller
-docker compose build
+pct exec "$CTID" -- docker compose -f "$INSTALL_DIR/docker-compose.yml" build
 msg_ok "Built container"
 
-msg_info "Pulling FlareSolverr image"
-docker compose pull flaresolverr
+msg_info "Pulling FlareSolverr"
+pct exec "$CTID" -- docker compose -f "$INSTALL_DIR/docker-compose.yml" pull flaresolverr
 msg_ok "Pulled FlareSolverr"
 
 msg_info "Starting ${APP}"
-docker compose up -d
+pct exec "$CTID" -- docker compose -f "$INSTALL_DIR/docker-compose.yml" up -d
 msg_ok "Started ${APP}"
 
 msg_ok "Completed Successfully!\n"
