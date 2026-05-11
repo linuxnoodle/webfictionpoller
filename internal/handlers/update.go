@@ -187,11 +187,29 @@ func (h *Handler) runSelfUpdate() {
 			wd+"/docker-compose.yaml",
 		)
 		for _, candidate := range candidates {
-			if _, err := os.Stat(candidate); err == nil {
+			_, err := os.Stat(candidate)
+			if err == nil {
 				composeFile = candidate
 				uc.appendLog("  found: " + candidate)
 				break
 			}
+			uc.appendLog("  tried: " + candidate + " -> " + err.Error())
+		}
+		entries, _ := os.ReadDir("/opt")
+		if entries != nil {
+			for _, e := range entries {
+				uc.appendLog("  /opt contains: " + e.Name())
+			}
+		} else {
+			uc.appendLog("  /opt: not readable")
+		}
+		entries2, _ := os.ReadDir("/opt/webfictionpoller")
+		if entries2 != nil {
+			for _, e := range entries2 {
+				uc.appendLog("  /opt/webfictionpoller contains: " + e.Name())
+			}
+		} else {
+			uc.appendLog("  /opt/webfictionpoller: not readable")
 		}
 	}
 	if composeFile == "" {

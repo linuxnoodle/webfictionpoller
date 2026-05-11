@@ -35,6 +35,45 @@
             }
         }
     }
+    function markRead(btn, id, url) {
+        event.stopPropagation();
+        if (url) window.open(url, '_blank');
+        htmx.ajax('POST', '/api/chapters/' + id + '/read', {swap:'none'});
+        var row = btn.closest('[onclick]');
+        if (!row) return;
+        var dot = row.querySelector('.bg-amber-500\\/70');
+        if (dot) { dot.className = 'w-1 flex-shrink-0'; }
+        var content = row.querySelector('.flex-1.min-w-0.overflow-hidden:not(.opacity-40)');
+        if (content) content.classList.add('opacity-40');
+        var title = row.querySelector('span.text-neutral-200');
+        if (title) { title.className = 'text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0'; title.outerHTML = '<a href="'+(url||'')+'" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0" onclick="event.stopPropagation()">'+title.textContent+'</a>'; }
+        var badge = row.querySelector('span.text-neutral-400.bg-neutral-800');
+        if (badge) badge.className = 'text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]';
+        var actions = btn.parentElement;
+        var readBtn = actions.querySelector('button.bg-emerald-900\\/50');
+        var ignoreBtn = actions.querySelector('button.bg-neutral-800.hover\\:bg-neutral-700.text-neutral-400');
+        if (readBtn) readBtn.outerHTML = '<a href="'+(url||'')+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="text-xs text-neutral-500 hover:text-neutral-300 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded">open</a>';
+        if (ignoreBtn) ignoreBtn.outerHTML = '<span class="invisible text-xs px-2 py-1">Ignore</span>';
+    }
+    function markIgnore(btn, id) {
+        event.stopPropagation();
+        htmx.ajax('POST', '/api/chapters/' + id + '/read', {swap:'none'});
+        var row = btn.closest('[onclick]');
+        if (!row) return;
+        var dot = row.querySelector('.bg-amber-500\\/70');
+        if (dot) { dot.className = 'w-1 flex-shrink-0'; }
+        var content = row.querySelector('.flex-1.min-w-0.overflow-hidden:not(.opacity-40)');
+        if (content) content.classList.add('opacity-40');
+        var title = row.querySelector('span.text-neutral-200');
+        if (title) { title.className = 'text-sm text-neutral-500 truncate min-w-0'; }
+        var badge = row.querySelector('span.text-neutral-400.bg-neutral-800');
+        if (badge) badge.className = 'text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]';
+        var actions = btn.parentElement;
+        var readBtn = actions.querySelector('button.bg-emerald-900\\/50');
+        var ignoreBtn = actions;
+        if (readBtn) readBtn.outerHTML = '<a href="#" onclick="event.preventDefault();event.stopPropagation()" class="text-xs text-neutral-500 bg-neutral-800 px-2 py-1 rounded">open</a>';
+        btn.outerHTML = '<span class="invisible text-xs px-2 py-1">Ignore</span>';
+    }
     </script>
 </head>
 <body class="min-h-screen bg-neutral-950">
@@ -132,9 +171,9 @@
                            class="text-xs text-neutral-500 hover:text-neutral-300 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded">open</a>
                         <span class="invisible text-xs px-2 py-1">Ignore</span>
                         {{else}}
-                        <button onclick="event.stopPropagation(); window.open('{{.URL}}', '_blank'); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
+                        <button onclick="markRead(this, {{.ID}}, '{{.URL}}')"
                                 class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
-                        <button onclick="event.stopPropagation(); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
+                        <button onclick="markIgnore(this, {{.ID}})"
                                 class="text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-400 px-2 py-1 rounded">Ignore</button>
                         {{end}}
                     </div>
@@ -223,9 +262,9 @@
                             </div>
                             <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-2 sm:ml-3">
                                 <span class="text-xs text-neutral-600 w-12 text-right flex-shrink-0">{{.PublishedAt.Format "Jan 02"}}</span>
-                                <button onclick="event.stopPropagation(); window.open('{{.URL}}', '_blank'); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
+                                <button onclick="markRead(this, {{.ID}}, '{{.URL}}')"
                                         class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
-                                <button onclick="event.stopPropagation(); htmx.ajax('POST', '/api/chapters/{{.ID}}/read', {swap:'none'}).then(()=>location.reload())"
+                                <button onclick="markIgnore(this, {{.ID}})"
                                         class="text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-400 px-2 py-1 rounded">Ignore</button>
                             </div>
                         </div>

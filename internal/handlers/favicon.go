@@ -19,7 +19,7 @@ type FaviconCache struct {
 
 func NewFaviconCache() *FaviconCache {
 	fc := &FaviconCache{icons: make(map[string][]byte)}
-	go fc.prefetch()
+	fc.prefetch()
 	return fc
 }
 
@@ -49,27 +49,33 @@ func (fc *FaviconCache) prefetch() {
 }
 
 func (fc *FaviconCache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("provider")
-	log.Printf("[favicon] request: path=%s provider=%s", r.URL.Path, name)
-	name = strings.TrimSuffix(name, ".ico")
+	raw := r.PathValue("provider")
+	name := strings.TrimSuffix(raw, ".ico")
+	log.Printf("[favicon] request path=%s raw=%q name=%q", r.URL.Path, raw, name)
 	fc.mu.RLock()
 	data, ok := fc.icons[name]
+	if !ok {
+		data, ok = fc.icons[raw]
+	}
+	var cached []string
+	if !ok {
+		for k := range fc.icons {
+			cached = append(cached, k)
+		}
+	}
 	fc.mu.RUnlock()
 	if !ok {
-		log.Printf("[favicon] not found: %q (cached: %v)", name, func() []string {
-			fc.mu.RLock()
-			defer fc.mu.RUnlock()
-			var keys []string
-			for k := range fc.icons {
-				keys = append(keys, k)
-			}
-			return keys
-		}())
+		log.Printf("[favicon] not found: %q (cached keys: %v)", name, cached)
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "image/x-icon")
+	ct := http.DetectContentType(data)
+	if ct == "application/octet-stream" {
+		ct = "image/x-icon"
+	}
+	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.Header().Set("ETag", "\""+name+"\"")
 	http.ServeContent(w, r, name+".ico", time.Time{}, bytes.NewReader(data))
+	log.Printf("[favicon] served %s (%d bytes, %s)", name, len(data), ct)
 }
