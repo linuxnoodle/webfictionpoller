@@ -35,7 +35,7 @@ function ratingUp(btn) {
         <a href="/series" class="text-neutral-400 hover:text-neutral-200 px-2 py-1 text-sm">Series</a>
         <a href="/series/add" title="Add series"
            class="text-neutral-300 hover:text-white bg-neutral-700 hover:bg-neutral-600 w-8 h-8 flex items-center justify-center rounded font-bold text-lg leading-none">+</a>
-        <button hx-post="/api/poll" hx-swap="none" title="Poll now"
+        <button hx-post="/api/poll" hx-swap="none" hx-on::after-request="location.reload()" title="Poll now"
                 class="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 w-8 h-8 flex items-center justify-center rounded">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
         </button>
@@ -79,7 +79,7 @@ function ratingUp(btn) {
     </a>
     <a href="/series" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Series</a>
     <a href="/series/add" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Add Series</a>
-    <button hx-post="/api/poll" hx-swap="none" class="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Poll Now</button>
+    <button hx-post="/api/poll" hx-swap="none" hx-on::after-request="location.reload()" class="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Poll Now</button>
     <div class="border-t border-neutral-700 my-1"></div>
     <a href="/series/import" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Import OPML</a>
     <a href="/series/export" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Export OPML</a>

@@ -185,40 +185,50 @@ func (h *Handler) runSelfUpdate() {
 	}
 
 	installDir := strings.TrimSuffix(composeFile, "/docker-compose.yml")
-	srcDir := installDir + "/src"
 
 	steps := []struct {
 		name string
 		cmd  string
 		args []string
+		dir  string
 	}{
-		{"git pull", "git", []string{"pull", "-q"}},
-		{"docker compose build", "docker", []string{"compose", "-f", composeFile, "build", "--build-arg", "VERSION_COMMIT=$(git rev-parse HEAD)", "app"}},
-		{"docker compose up", "docker", []string{"compose", "-f", composeFile, "up", "-d", "--remove-orphans"}},
+		{"git pull", "git", []string{"pull", "-q"}, installDir},
+		{"get commit", "git", []string{"rev-parse", "HEAD"}, installDir},
+		{"docker compose build", "docker", []string{"compose", "-f", composeFile, "build", "app"}, ""},
+		{"docker compose up", "docker", []string{"compose", "-f", composeFile, "up", "-d", "--remove-orphans"}, ""},
 	}
 
+	var commit string
 	for _, step := range steps {
 		uc.appendLog("> " + step.name)
 		logging.Info("self-update: %s", step.name)
 
-		var cmd *exec.Cmd
-		if step.name == "git pull" {
-			cmd = exec.Command(step.cmd, step.args...)
-			cmd.Dir = srcDir
-		} else if strings.Contains(step.name, "build") {
-			args := []string{"compose", "-f", composeFile, "build"}
-			out, err := exec.Command("git", []string{"-C", srcDir, "rev-parse", "HEAD"}...).Output()
-			if err != nil {
-				uc.appendLog("ERROR: failed to get git commit: " + err.Error())
-				return
-			}
-			commit := strings.TrimSpace(string(out))
-			args = append(args, "--build-arg", "VERSION_COMMIT="+commit, "app")
-			cmd = exec.Command(step.cmd, args...)
-		} else {
-			cmd = exec.Command(step.cmd, step.args...)
+		cmd := exec.Command(step.cmd, step.args...)
+		if step.dir != "" {
+			cmd.Dir = step.dir
 		}
+		out, err := cmd.CombinedOutput()
+		if len(out) > 0 {
+			if step.name == "get commit" {
+				commit = strings.TrimSpace(string(out))
+			}
+			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+			for _, l := range lines {
+				if l != "" {
+					uc.appendLog("  " + l)
+				}
+			}
+		}
+		if err != nil {
+			uc.appendLog("ERROR: " + err.Error())
+			logging.Error("self-update failed at '%s': %v", step.name, err)
+			return
+		}
+	}
 
+	if commit != "" {
+		uc.appendLog("> docker compose rebuild with commit " + commit[:7])
+		cmd := exec.Command("docker", "compose", "-f", composeFile, "build", "--build-arg", "VERSION_COMMIT="+commit, "app")
 		out, err := cmd.CombinedOutput()
 		if len(out) > 0 {
 			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
@@ -230,7 +240,23 @@ func (h *Handler) runSelfUpdate() {
 		}
 		if err != nil {
 			uc.appendLog("ERROR: " + err.Error())
-			logging.Error("self-update failed at '%s': %v", step.name, err)
+			logging.Error("self-update failed at rebuild: %v", err)
+			return
+		}
+
+		cmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--remove-orphans")
+		out, err = cmd.CombinedOutput()
+		if len(out) > 0 {
+			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+			for _, l := range lines {
+				if l != "" {
+					uc.appendLog("  " + l)
+				}
+			}
+		}
+		if err != nil {
+			uc.appendLog("ERROR: " + err.Error())
+			logging.Error("self-update failed at up: %v", err)
 			return
 		}
 	}
