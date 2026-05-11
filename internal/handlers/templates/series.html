@@ -36,17 +36,17 @@
         {{if .RatingDist}}
         <div class="mb-6 bg-neutral-900 rounded-lg border border-neutral-800 p-4">
             <h2 class="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-3">Rating Distribution</h2>
-            <div class="flex items-end gap-1 h-24">
+            <div class="flex items-end gap-px h-24">
                 {{range $i, $count := .RatingDist}}
-                <div class="flex-1 flex flex-col items-center justify-end h-full">
-                    {{if gt $count 0}}<span class="text-xs text-neutral-500 mb-1">{{$count}}</span>{{end}}
+                <div class="flex-1 flex flex-col items-center justify-end h-full min-w-0">
+                    {{if gt $count 0}}<span class="text-neutral-500 mb-0.5" style="font-size:8px">{{$count}}</span>{{end}}
                     <div class="w-full rounded-t transition-all"
-                         style="height: {{if gt $count 0}}max(4px, calc({{$count}} / {{$.MaxRating}} * 100%)){{else}}2px{{end}}; min-height: 2px; background: hsl({{mul $i 15}}, 60%, 50%);"></div>
+                         style="height: {{if gt $count 0}}max(3px, calc({{$count}} / {{$.MaxRating}} * 100%)){{else}}1px{{end}}; min-height: 1px; background: hsl({{mul $i 4}}, 60%, 50%);"></div>
                 </div>
                 {{end}}
             </div>
-            <div class="flex gap-1 mt-1">
-                {{range $i, $count := .RatingDist}}<span class="flex-1 text-center text-xs text-neutral-600">{{$i}}</span>{{end}}
+            <div class="flex mt-1">
+                {{range $i, $count := .RatingDist}}{{if eq (mod $i 10) 0}}<span class="text-center text-xs text-neutral-600" style="flex:0 0 calc({{$i}} / 100 * 100% + 0.5%)">{{$i}}</span>{{end}}{{end}}
             </div>
         </div>
         {{end}}

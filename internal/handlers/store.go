@@ -216,10 +216,10 @@ func (s *Store) ListSeries() ([]models.Series, error) {
 
 func (s *Store) GetRatingDistribution() ([]models.RatingBucket, error) {
 	rows, err := s.db.Query(`
-		SELECT ROUND(rating, 0), COUNT(*)
+		SELECT ROUND(rating, 1), COUNT(*)
 		FROM series
-		GROUP BY ROUND(rating, 0)
-		ORDER BY ROUND(rating, 0) ASC
+		GROUP BY ROUND(rating, 1)
+		ORDER BY ROUND(rating, 1) ASC
 	`)
 	if err != nil {
 		return nil, err

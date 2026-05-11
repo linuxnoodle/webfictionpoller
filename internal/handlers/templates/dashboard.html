@@ -98,20 +98,20 @@
                      onclick="togglePreview({{.ID}})">
                     <div class="flex items-center gap-1.5 sm:gap-3 flex-1 min-w-0">
                         {{if .IsRead}}
-                        <div class="flex-1 min-w-0 opacity-40">
-                            <div class="flex items-center gap-1 sm:gap-2">
+                        <div class="flex-1 min-w-0 overflow-hidden opacity-40">
+                            <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                                 <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block" onerror="this.style.display='none'">
-                                <span class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap">{{.SeriesTitle}}</span>
-                                <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate" onclick="event.stopPropagation()">{{.Title}}</a>
+                                <span class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                                <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
                             </div>
                         </div>
                         {{else}}
                         <div class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-1 sm:gap-2">
+                        <div class="flex-1 min-w-0 overflow-hidden">
+                            <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                                 <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block" onerror="this.style.display='none'">
-                                <span class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap">{{.SeriesTitle}}</span>
-                                <span class="text-sm text-neutral-200 truncate">{{.Title}}</span>
+                                <span class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                                <span class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
                             </div>
                         </div>
                         {{end}}
@@ -165,9 +165,9 @@
                  x-show="!search || stext.toLowerCase().includes(search.toLowerCase())">
                 <div class="px-3 sm:px-4 py-3 bg-neutral-800/40 border-b border-neutral-800">
                     <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2 min-w-0">
+                        <div class="flex items-center gap-2 min-w-0 overflow-hidden">
                             <img src="{{faviconURL .Series.ProviderName}}" alt="" class="w-4 h-4 flex-shrink-0" onerror="this.style.display='none'">
-                            <div class="min-w-0">
+                            <div class="min-w-0 overflow-hidden">
                                 <h2 class="text-sm sm:text-base font-semibold text-neutral-200 truncate">{{.Series.Title}}</h2>
                                 <span class="text-xs text-neutral-500">by {{.Series.Author}} &middot; {{.Series.ProviderName}}</span>
                             </div>
@@ -206,8 +206,8 @@
                          onclick="togglePreview({{.ID}})">
                         {{if .IsRead}}
                         <div class="flex items-center justify-between px-3 sm:px-4 py-2 opacity-40">
-                            <div class="flex items-center gap-2 flex-1 min-w-0">
-                                <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-600 hover:text-neutral-400 truncate" onclick="event.stopPropagation()">{{.Title}}</a>
+                            <div class="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+                                <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-600 hover:text-neutral-400 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
                             </div>
                             <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-2 sm:ml-3">
                                 <span class="text-xs text-neutral-700 w-12 text-right">{{.PublishedAt.Format "Jan 02"}}</span>
@@ -218,9 +218,9 @@
                         </div>
                         {{else}}
                         <div class="flex items-center justify-between px-3 sm:px-4 py-2">
-                            <div class="flex items-center gap-2 flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
                                 <div class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
-                                <span class="text-sm text-neutral-200 truncate">{{.Title}}</span>
+                                <span class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
                             </div>
                             <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-2 sm:ml-3">
                                 <span class="text-xs text-neutral-600">{{.PublishedAt.Format "Jan 02"}}</span>

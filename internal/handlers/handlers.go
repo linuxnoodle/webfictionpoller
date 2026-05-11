@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -175,11 +176,11 @@ func (h *Handler) SeriesList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	dist := make([]int, 11)
+	dist := make([]int, 101)
 	var maxCount int
 	for _, b := range buckets {
-		idx := int(b.Rating)
-		if idx >= 0 && idx <= 10 {
+		idx := int(math.Round(b.Rating*10))
+		if idx >= 0 && idx <= 100 {
 			dist[idx] = b.Count
 			if b.Count > maxCount {
 				maxCount = b.Count
