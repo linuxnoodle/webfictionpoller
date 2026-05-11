@@ -13,6 +13,14 @@ function ratingInput(el) {
     });
     el.addEventListener('keydown', function(e) { if (e.key === 'Enter') this.blur(); });
 }
+function ratingSync(src, r) {
+    var sid = src.dataset.sid;
+    document.querySelectorAll('input[data-sid="'+sid+'"]').forEach(function(inp) {
+        if (inp === src) return;
+        if (r < 0) { inp.dataset.u = '1'; inp.type = 'text'; inp.value = 'U'; }
+        else { inp.dataset.u = '0'; inp.type = 'number'; inp.value = r.toFixed(1); }
+    });
+}
 function ratingDown(btn) {
     var inp = btn.parentElement.querySelector('input');
     var r = inp.dataset.u === '1' ? 0 : parseFloat(inp.value) || 0;
