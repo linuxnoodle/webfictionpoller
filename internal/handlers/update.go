@@ -3,9 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/version"
 )
 
@@ -14,6 +17,8 @@ type UpdateChecker struct {
 	lastCheck    time.Time
 	latestCommit string
 	checkErr     error
+	updating     bool
+	updateLog    string
 }
 
 func NewUpdateChecker() *UpdateChecker {
@@ -34,6 +39,8 @@ type VersionResponse struct {
 	UpdateAvail    bool   `json:"update_available"`
 	Error          string `json:"error,omitempty"`
 	LastChecked    string `json:"last_checked,omitempty"`
+	Updating       bool   `json:"updating,omitempty"`
+	UpdateLog      string `json:"update_log,omitempty"`
 }
 
 func (uc *UpdateChecker) check() {
@@ -96,6 +103,9 @@ func (uc *UpdateChecker) GetStatus() VersionResponse {
 		resp.UpdateAvail = current != uc.latestCommit && current != "dev"
 	}
 
+	resp.Updating = uc.updating
+	resp.UpdateLog = uc.updateLog
+
 	return resp
 }
 
@@ -121,4 +131,110 @@ func (h *Handler) VersionPage(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, "version", map[string]interface{}{
 		"Version": status,
 	})
+}
+
+func (h *Handler) SelfUpdate(w http.ResponseWriter, r *http.Request) {
+	h.updateChecker.mu.Lock()
+	if h.updateChecker.updating {
+		h.updateChecker.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "update already in progress"})
+		return
+	}
+	h.updateChecker.updating = true
+	h.updateChecker.updateLog = ""
+	h.updateChecker.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"status": "started"})
+
+	go h.runSelfUpdate()
+}
+
+func (uc *UpdateChecker) appendLog(line string) {
+	uc.mu.Lock()
+	uc.updateLog += line + "\n"
+	uc.mu.Unlock()
+}
+
+func (h *Handler) runSelfUpdate() {
+	uc := h.updateChecker
+	defer func() {
+		uc.mu.Lock()
+		uc.updating = false
+		uc.mu.Unlock()
+	}()
+
+	uc.appendLog("Starting self-update...")
+
+	// Find the install dir by looking for docker-compose.yml
+	composeFile := ""
+	for _, candidate := range []string{
+		"/opt/webfictionpoller/docker-compose.yml",
+		"/app/docker-compose.yml",
+	} {
+		if _, err := exec.Command("test", "-f", candidate).CombinedOutput(); err == nil {
+			composeFile = candidate
+			break
+		}
+	}
+	if composeFile == "" {
+		uc.appendLog("ERROR: docker-compose.yml not found")
+		logging.Error("self-update: docker-compose.yml not found")
+		return
+	}
+
+	installDir := strings.TrimSuffix(composeFile, "/docker-compose.yml")
+	srcDir := installDir + "/src"
+
+	steps := []struct {
+		name string
+		cmd  string
+		args []string
+	}{
+		{"git pull", "git", []string{"pull", "-q"}},
+		{"docker compose build", "docker", []string{"compose", "-f", composeFile, "build", "--build-arg", "VERSION_COMMIT=$(git rev-parse HEAD)", "app"}},
+		{"docker compose up", "docker", []string{"compose", "-f", composeFile, "up", "-d", "--remove-orphans"}},
+	}
+
+	for _, step := range steps {
+		uc.appendLog("> " + step.name)
+		logging.Info("self-update: %s", step.name)
+
+		var cmd *exec.Cmd
+		if step.name == "git pull" {
+			cmd = exec.Command(step.cmd, step.args...)
+			cmd.Dir = srcDir
+		} else if strings.Contains(step.name, "build") {
+			args := []string{"compose", "-f", composeFile, "build"}
+			out, err := exec.Command("git", []string{"-C", srcDir, "rev-parse", "HEAD"}...).Output()
+			if err != nil {
+				uc.appendLog("ERROR: failed to get git commit: " + err.Error())
+				return
+			}
+			commit := strings.TrimSpace(string(out))
+			args = append(args, "--build-arg", "VERSION_COMMIT="+commit, "app")
+			cmd = exec.Command(step.cmd, args...)
+		} else {
+			cmd = exec.Command(step.cmd, step.args...)
+		}
+
+		out, err := cmd.CombinedOutput()
+		if len(out) > 0 {
+			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+			for _, l := range lines {
+				if l != "" {
+					uc.appendLog("  " + l)
+				}
+			}
+		}
+		if err != nil {
+			uc.appendLog("ERROR: " + err.Error())
+			logging.Error("self-update failed at '%s': %v", step.name, err)
+			return
+		}
+	}
+
+	uc.appendLog("Update complete!")
+	logging.Info("self-update completed successfully")
 }

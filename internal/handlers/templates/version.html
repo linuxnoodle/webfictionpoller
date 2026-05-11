@@ -8,11 +8,15 @@
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
+    <style>
+        .update-log { font-family: monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+        .update-log .error { color: #f87171; }
+    </style>
 </head>
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
     <main class="max-w-xl mx-auto px-4 py-6"
-          x-data="{ checking: false, data: null }"
+          x-data="{ checking: false, updating: false, data: null, logPoll: null }"
           x-init="fetch('/api/version').then(r=>r.json()).then(d=>data=d)">
         <h1 class="text-2xl font-bold mb-6 text-neutral-100">Version & Updates</h1>
 
@@ -39,15 +43,32 @@
                         </div>
                     </div>
 
-                    <div x-show="data.update_available" class="mt-4 bg-emerald-900/30 border border-emerald-800/50 rounded-lg p-4">
+                    <div x-show="data.update_available && !data.updating" class="mt-4 bg-emerald-900/30 border border-emerald-800/50 rounded-lg p-4">
                         <p class="text-emerald-300 text-sm font-semibold mb-1">Update available!</p>
-                        <p class="text-xs text-neutral-400">A newer version is available on GitHub. To update, run:</p>
-                        <code class="block mt-2 bg-neutral-800 rounded px-3 py-2 text-xs text-neutral-300 font-mono">update_webfictionpoller</code>
-                        <p class="text-xs text-neutral-500 mt-2">Or from the Proxmox host:</p>
-                        <code class="block mt-1 bg-neutral-800 rounded px-3 py-2 text-xs text-neutral-300 font-mono">pct exec &lt;CTID&gt; -- update_webfictionpoller</code>
+                        <p class="text-xs text-neutral-400 mb-3">A newer version is available on GitHub.</p>
+                        <button @click="updating=true; fetch('/api/version/update', {method:'POST'}).then(r=>r.json()).then(d=>{if(d.error){updating=false;alert(d.error)}}); logPoll=setInterval(()=>fetch('/api/version').then(r=>r.json()).then(d=>{data=d; if(!d.updating){clearInterval(logPoll); updating=false}}), 2000)"
+                                class="w-full bg-emerald-700 hover:bg-emerald-600 text-white py-2 rounded text-sm font-semibold">
+                            Update Now
+                        </button>
+                        <details class="mt-2">
+                            <summary class="text-xs text-neutral-500 cursor-pointer">Manual update instructions</summary>
+                            <div class="mt-2 space-y-1">
+                                <p class="text-xs text-neutral-400">Inside the container:</p>
+                                <code class="block bg-neutral-800 rounded px-3 py-2 text-xs text-neutral-300 font-mono">update_webfictionpoller</code>
+                                <p class="text-xs text-neutral-500 mt-1">From the Proxmox host:</p>
+                                <code class="block bg-neutral-800 rounded px-3 py-2 text-xs text-neutral-300 font-mono">pct exec &lt;CTID&gt; -- update_webfictionpoller</code>
+                            </div>
+                        </details>
                     </div>
 
-                    <div x-show="!data.update_available && data.latest_commit" class="mt-4 bg-neutral-800/50 rounded-lg p-3">
+                    <div x-show="data.updating" class="mt-4 bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                        <p class="text-sm text-amber-300 font-semibold mb-2">Updating... (page will reconnect when done)</p>
+                        <div class="bg-neutral-950 rounded p-3 max-h-64 overflow-y-auto">
+                            <pre class="update-log text-neutral-300" x-text="data.update_log || 'Starting...'"></pre>
+                        </div>
+                    </div>
+
+                    <div x-show="!data.update_available && !data.updating && data.latest_commit" class="mt-4 bg-neutral-800/50 rounded-lg p-3">
                         <p class="text-xs text-neutral-400">You are running the latest version.</p>
                     </div>
 
@@ -55,7 +76,8 @@
                         <p class="text-xs text-red-300" x-text="data.error"></p>
                     </div>
 
-                    <button @click="checking=true; fetch('/api/version/check', {method:'POST'}).then(r=>r.json()).then(d=>{data=d;checking=false})"
+                    <button x-show="!updating"
+                            @click="checking=true; fetch('/api/version/check', {method:'POST'}).then(r=>r.json()).then(d=>{data=d;checking=false})"
                             :disabled="checking"
                             class="mt-4 w-full bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 text-neutral-200 py-2 rounded text-sm">
                         <span x-show="!checking">Check for Updates</span>

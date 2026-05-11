@@ -119,6 +119,7 @@ func main() {
 		r.Get("/api/search", h.SearchSeries)
 		r.Get("/api/version", h.VersionAPI)
 		r.Post("/api/version/check", h.VersionCheckNow)
+		r.Post("/api/version/update", h.SelfUpdate)
 		r.Get("/admin/version", h.VersionPage)
 	})
 
