@@ -21,6 +21,7 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 	"github.com/linuxnoodle/webfictionpoller/internal/providers"
+	"github.com/linuxnoodle/webfictionpoller/internal/static"
 	"github.com/linuxnoodle/webfictionpoller/internal/worker"
 )
 
@@ -85,6 +86,12 @@ func main() {
 	r.Post("/setup", setupHandler(db, sessionManager))
 	r.Get("/logout", logoutHandler(sessionManager))
 
+	r.Get("/static/app.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(static.CSS)
+	})
+
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware(sessionManager, db))
 
@@ -110,6 +117,9 @@ func main() {
 		r.Post("/api/series/{id}/delete", h.DeleteSeries)
 		r.Post("/api/poll", h.PollNow)
 		r.Get("/api/search", h.SearchSeries)
+		r.Get("/api/version", h.VersionAPI)
+		r.Post("/api/version/check", h.VersionCheckNow)
+		r.Get("/admin/version", h.VersionPage)
 	})
 
 	interval, err := time.ParseDuration(pollInterval)

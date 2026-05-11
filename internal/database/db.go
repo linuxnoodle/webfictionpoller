@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS series (
     author TEXT DEFAULT '',
     source_url TEXT NOT NULL UNIQUE,
     provider_name TEXT NOT NULL,
-    rating REAL DEFAULT 0 CHECK(rating >= 0 AND rating <= 10),
+    rating REAL DEFAULT 5.0 CHECK(rating >= 0 AND rating <= 10),
     status TEXT DEFAULT 'active' CHECK(status IN ('active', 'dropped', 'hiatus', 'binge')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -63,6 +63,7 @@ CREATE INDEX IF NOT EXISTS idx_chapters_published_at ON chapters(published_at);
 
 var migrations = []string{
 	"ALTER TABLE chapters ADD COLUMN preview_html TEXT DEFAULT ''",
+	"UPDATE series SET rating = 5.0 WHERE rating = 0",
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {

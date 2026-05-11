@@ -1,32 +1,32 @@
 {{define "time_page_partial"}}
 {{range .TimeGroups}}
 <div class="mt-4">
-    <h3 class="text-sm font-semibold text-neutral-500 uppercase tracking-wider px-4 py-2 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">{{.Date}}</h3>
+    <h3 class="text-sm font-semibold text-neutral-500 uppercase tracking-wider px-2 sm:px-4 py-2 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">{{.Date}}</h3>
     {{range .Chapters}}
-    <div class="flex items-center justify-between px-4 py-2.5 rounded hover:bg-neutral-900/50 cursor-pointer"
+    <div class="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded hover:bg-neutral-900/50 cursor-pointer"
          onclick="togglePreview({{.ID}})">
-        <div class="flex items-center gap-3 flex-1 min-w-0">
+        <div class="flex items-center gap-1.5 sm:gap-3 flex-1 min-w-0">
             {{if .IsRead}}
             <div class="flex-1 min-w-0 opacity-40">
-                <div class="flex items-center gap-2">
-                    <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0" onerror="this.style.display='none'">
-                    <span class="text-xs text-neutral-600 bg-neutral-800 px-2 py-0.5 rounded whitespace-nowrap">{{.SeriesTitle}}</span>
+                <div class="flex items-center gap-1 sm:gap-2">
+                    <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block" onerror="this.style.display='none'">
+                    <span class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap">{{.SeriesTitle}}</span>
                     <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate" onclick="event.stopPropagation()">{{.Title}}</a>
                 </div>
             </div>
             {{else}}
             <div class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
             <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
-                    <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0" onerror="this.style.display='none'">
-                    <span class="text-xs text-neutral-400 bg-neutral-800 px-2 py-0.5 rounded whitespace-nowrap">{{.SeriesTitle}}</span>
+                <div class="flex items-center gap-1 sm:gap-2">
+                    <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block" onerror="this.style.display='none'">
+                    <span class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap">{{.SeriesTitle}}</span>
                     <span class="text-sm text-neutral-200 truncate">{{.Title}}</span>
                 </div>
             </div>
             {{end}}
         </div>
-        <div class="flex items-center gap-2 flex-shrink-0 ml-3">
-            <div class="flex items-center gap-0.5"
+        <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-2 sm:ml-3">
+            <div class="hidden sm:flex items-center gap-0.5"
                  x-data="{ rating: {{f64f .SeriesRating}}, sid: {{.SeriesID}} }"
                  onclick="event.stopPropagation()">
                 <button @click="rating = Math.max(0, Math.round((rating - 0.1) * 10) / 10); htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:rating}, swap:'none'})"
@@ -49,7 +49,7 @@
         </div>
     </div>
     <div id="preview-{{.ID}}" class="hidden">
-        <div class="mx-4 mb-2 bg-neutral-900 border border-neutral-800 rounded-lg p-4"
+        <div class="mx-2 sm:mx-4 mb-2 bg-neutral-900 border border-neutral-800 rounded-lg p-3 sm:p-4"
              hx-get="/api/chapters/{{.ID}}/preview" hx-trigger="intersect once" hx-swap="innerHTML">
             <div class="text-neutral-500 text-sm animate-pulse">Loading preview...</div>
         </div>

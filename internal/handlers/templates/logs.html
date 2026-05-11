@@ -7,20 +7,20 @@
     <title>Logs - WebFiction Tracker</title>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
     <main class="max-w-7xl mx-auto px-4 py-6">
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-2">
             <h1 class="text-2xl font-bold text-neutral-100">Logs</h1>
-            <div class="flex items-center gap-3">
-                <select id="log-filter" onchange="filterLogs()" class="bg-neutral-800 border border-neutral-700 rounded px-3 py-1.5 text-sm text-neutral-300 focus:outline-none">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <select id="log-filter" onchange="filterLogs()" class="bg-neutral-800 border border-neutral-700 rounded px-2 sm:px-3 py-1.5 text-sm text-neutral-300 focus:outline-none">
                     <option value="all">All</option>
                     <option value="error">Errors</option>
                     <option value="info">Info</option>
                 </select>
-                <button onclick="loadLogs()" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-300 px-3 py-1.5 rounded text-sm">Refresh</button>
+                <button onclick="loadLogs()" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-300 px-2 sm:px-3 py-1.5 rounded text-sm">Refresh</button>
             </div>
         </div>
         <div id="log-container" class="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">

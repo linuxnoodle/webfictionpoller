@@ -56,6 +56,11 @@ type DayGroup struct {
 	Chapters []ChapterWithSeries
 }
 
+type RatingBucket struct {
+	Rating float64
+	Count  int
+}
+
 func ProviderFavicon(name string) string {
 	switch name {
 	case "royalroad":

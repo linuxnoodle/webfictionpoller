@@ -1,6 +1,9 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        VERSION_COMMIT: ${VERSION_COMMIT:-dev}
     ports:
       - "8080:8080"
     environment:

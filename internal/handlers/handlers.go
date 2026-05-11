@@ -16,13 +16,14 @@ import (
 )
 
 type Handler struct {
-	store  *Store
-	pool   *worker.WorkerPool
-	logDir string
+	store         *Store
+	pool          *worker.WorkerPool
+	logDir        string
+	updateChecker *UpdateChecker
 }
 
 func NewHandler(store *Store, pool *worker.WorkerPool, logDir string) *Handler {
-	return &Handler{store: store, pool: pool, logDir: logDir}
+	return &Handler{store: store, pool: pool, logDir: logDir, updateChecker: NewUpdateChecker()}
 }
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
@@ -169,8 +170,26 @@ func (h *Handler) SeriesList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	buckets, err := h.store.GetRatingDistribution()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	dist := make([]int, 11)
+	var maxCount int
+	for _, b := range buckets {
+		idx := int(b.Rating)
+		if idx >= 0 && idx <= 10 {
+			dist[idx] = b.Count
+			if b.Count > maxCount {
+				maxCount = b.Count
+			}
+		}
+	}
 	renderTemplate(w, "series", map[string]interface{}{
-		"Series": series,
+		"Series":     series,
+		"RatingDist": dist,
+		"MaxRating":  maxCount,
 	})
 }
 

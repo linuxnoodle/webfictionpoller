@@ -1,6 +1,16 @@
+FROM node:alpine AS css
+
+WORKDIR /app
+
+COPY tailwind.config.js input.css ./
+COPY internal/handlers/templates/ ./internal/handlers/templates/
+
+RUN npm init -y && npm install tailwindcss @tailwindcss/typography && \
+    npx tailwindcss -i input.css -o app.css --minify
+
 FROM golang:alpine AS builder
 
-RUN apk add --no-cache gcc musl-dev
+RUN apk add --no-cache gcc musl-dev git
 
 WORKDIR /app
 
@@ -8,8 +18,13 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+COPY --from=css /app/app.css ./internal/static/app.css
 
-RUN CGO_ENABLED=1 GOOS=linux go build -o /webfiction_poller ./cmd/main.go
+ARG VERSION_COMMIT=dev
+RUN CGO_ENABLED=1 GOOS=linux go build \
+    -ldflags "-X github.com/linuxnoodle/webfictionpoller/internal/version.BuildCommit=${VERSION_COMMIT} \
+              -X github.com/linuxnoodle/webfictionpoller/internal/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o /webfiction_poller ./cmd/main.go
 
 FROM alpine:3.19
 

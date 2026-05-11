@@ -10,3 +10,6 @@ data/
 *.dylib
 webfiction_poller
 /tmp/
+node_modules/
+package.json
+package-lock.json

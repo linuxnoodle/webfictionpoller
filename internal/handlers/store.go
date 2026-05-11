@@ -214,6 +214,29 @@ func (s *Store) ListSeries() ([]models.Series, error) {
 	return series, nil
 }
 
+func (s *Store) GetRatingDistribution() ([]models.RatingBucket, error) {
+	rows, err := s.db.Query(`
+		SELECT ROUND(rating, 0), COUNT(*)
+		FROM series
+		GROUP BY ROUND(rating, 0)
+		ORDER BY ROUND(rating, 0) ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var buckets []models.RatingBucket
+	for rows.Next() {
+		var b models.RatingBucket
+		if err := rows.Scan(&b.Rating, &b.Count); err != nil {
+			return nil, err
+		}
+		buckets = append(buckets, b)
+	}
+	return buckets, nil
+}
+
 func (s *Store) UpdateSeriesStatus(id int64, status string) error {
 	_, err := s.db.Exec("UPDATE series SET status = ? WHERE id = ?", status, id)
 	return err

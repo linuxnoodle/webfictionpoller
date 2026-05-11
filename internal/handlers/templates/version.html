@@ -1,0 +1,70 @@
+{{define "version.html"}}
+<!DOCTYPE html>
+<html lang="en" class="bg-neutral-950 text-neutral-200">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Version - WebFiction Tracker</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="min-h-screen bg-neutral-950">
+    {{template "nav" .}}
+    <main class="max-w-xl mx-auto px-4 py-6"
+          x-data="{ checking: false, data: null }"
+          x-init="fetch('/api/version').then(r=>r.json()).then(d=>data=d)">
+        <h1 class="text-2xl font-bold mb-6 text-neutral-100">Version & Updates</h1>
+
+        <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-6 space-y-4">
+            <template x-if="data">
+                <div>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-500">Installed version</span>
+                            <span class="text-sm font-mono text-neutral-200" x-text="data.current_short"></span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-500">Full commit</span>
+                            <span class="text-xs font-mono text-neutral-400" x-text="data.current_commit"></span>
+                        </div>
+                        <div class="border-t border-neutral-800 my-2"></div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-500">Latest version</span>
+                            <span class="text-sm font-mono" :class="data.update_available ? 'text-emerald-300' : 'text-neutral-200'" x-text="data.latest_short || 'Checking...'"></span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-500">Last checked</span>
+                            <span class="text-xs text-neutral-400" x-text="data.last_checked ? new Date(data.last_checked).toLocaleString() : 'Never'"></span>
+                        </div>
+                    </div>
+
+                    <div x-show="data.update_available" class="mt-4 bg-emerald-900/30 border border-emerald-800/50 rounded-lg p-4">
+                        <p class="text-emerald-300 text-sm font-semibold mb-1">Update available!</p>
+                        <p class="text-xs text-neutral-400">A newer version is available on GitHub. To update, run:</p>
+                        <code class="block mt-2 bg-neutral-800 rounded px-3 py-2 text-xs text-neutral-300 font-mono">update_webfictionpoller</code>
+                        <p class="text-xs text-neutral-500 mt-2">Or from the Proxmox host:</p>
+                        <code class="block mt-1 bg-neutral-800 rounded px-3 py-2 text-xs text-neutral-300 font-mono">pct exec &lt;CTID&gt; -- update_webfictionpoller</code>
+                    </div>
+
+                    <div x-show="!data.update_available && data.latest_commit" class="mt-4 bg-neutral-800/50 rounded-lg p-3">
+                        <p class="text-xs text-neutral-400">You are running the latest version.</p>
+                    </div>
+
+                    <div x-show="data.error" class="mt-4 bg-red-950/50 border border-red-800/50 rounded-lg p-3">
+                        <p class="text-xs text-red-300" x-text="data.error"></p>
+                    </div>
+
+                    <button @click="checking=true; fetch('/api/version/check', {method:'POST'}).then(r=>r.json()).then(d=>{data=d;checking=false})"
+                            :disabled="checking"
+                            class="mt-4 w-full bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 text-neutral-200 py-2 rounded text-sm">
+                        <span x-show="!checking">Check for Updates</span>
+                        <span x-show="checking">Checking...</span>
+                    </button>
+                </div>
+            </template>
+        </div>
+    </main>
+</body>
+</html>
+{{end}}

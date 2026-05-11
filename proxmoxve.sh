@@ -35,8 +35,10 @@ function update_script() {
     exit 1
   fi
 
-  msg_info "Rebuilding ${APP} container"
-  docker compose -f /opt/webfictionpoller/docker-compose.yml build --pull app
+  COMMIT=$(git rev-parse HEAD)
+
+  msg_info "Rebuilding ${APP} container (${COMMIT:0:7})"
+  VERSION_COMMIT=$COMMIT docker compose -f /opt/webfictionpoller/docker-compose.yml build --build-arg VERSION_COMMIT=$COMMIT app
   docker compose -f /opt/webfictionpoller/docker-compose.yml up -d --remove-orphans
   msg_ok "Updated ${APP} successfully"
   exit
@@ -64,7 +66,10 @@ msg_info "Writing docker-compose.yml"
 pct exec "$CTID" -- bash -c "mkdir -p $INSTALL_DIR/data && cat > $INSTALL_DIR/docker-compose.yml << 'DCEOF'
 services:
   app:
-    build: /opt/webfictionpoller/src
+    build:
+      context: /opt/webfictionpoller/src
+      args:
+        VERSION_COMMIT: \${VERSION_COMMIT:-dev}
     ports:
       - \"8080:8080\"
     environment:
@@ -105,20 +110,21 @@ if ! git pull -q 2>/dev/null; then
   exit 1
 fi
 
-echo "Rebuilding container..."
-docker compose -f "$INSTALL_DIR/docker-compose.yml" build --pull app
+COMMIT=$(git rev-parse HEAD)
+echo "Rebuilding container (${COMMIT:0:7})..."
+VERSION_COMMIT=$COMMIT docker compose -f "$INSTALL_DIR/docker-compose.yml" build --build-arg VERSION_COMMIT=$COMMIT app
 docker compose -f "$INSTALL_DIR/docker-compose.yml" up -d --remove-orphans
 
 echo "Removing old images..."
 docker image prune -f 2>/dev/null || true
 
-echo "Update complete!"
+echo "Update complete! Version: ${COMMIT:0:7}"
 UPDEOF
 chmod +x /usr/local/bin/update_webfictionpoller'
 msg_ok "Installed update helper"
 
 msg_info "Building ${APP} container (this takes a minute)"
-pct exec "$CTID" -- docker compose -f "$INSTALL_DIR/docker-compose.yml" build
+pct exec "$CTID" -- bash -c "cd $INSTALL_DIR/src && VERSION_COMMIT=\$(git rev-parse HEAD) docker compose -f $INSTALL_DIR/docker-compose.yml build"
 msg_ok "Built container"
 
 msg_info "Pulling FlareSolverr"

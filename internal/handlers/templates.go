@@ -25,6 +25,9 @@ func InitTemplates() error {
 		"add": func(a, b int) int {
 			return a + b
 		},
+		"mul": func(a, b int) int {
+			return a * b
+		},
 		"faviconURL": func(providerName string) string {
 			return models.ProviderFavicon(providerName)
 		},
