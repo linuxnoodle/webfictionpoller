@@ -12,6 +12,7 @@ services:
       - POLL_INTERVAL=15m
       - FLARESOLVERR_URL=http://flaresolverr:8191
       - LOG_DIR=/data/logs
+      - COMPOSE_FILE=/opt/webfictionpoller/docker-compose.yml
     volumes:
       - ./data:/data
       - ./:/opt/webfictionpoller

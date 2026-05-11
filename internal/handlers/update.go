@@ -168,26 +168,38 @@ func (h *Handler) runSelfUpdate() {
 	}()
 
 	uc.appendLog("Starting self-update...")
+	wd, _ := os.Getwd()
+	uc.appendLog("  working dir: " + wd)
 
-	composeFile := ""
-	candidates := []string{
-		"/opt/webfictionpoller/docker-compose.yml",
-		"/opt/webfictionpoller/docker-compose.yaml",
-		"/app/docker-compose.yml",
-		"/app/docker-compose.yaml",
+	composeFile := os.Getenv("COMPOSE_FILE")
+	if composeFile != "" {
+		uc.appendLog("  COMPOSE_FILE env: " + composeFile)
 	}
-	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
-			composeFile = candidate
-			break
+	if composeFile == "" {
+		candidates := []string{
+			"/opt/webfictionpoller/docker-compose.yml",
+			"/opt/webfictionpoller/docker-compose.yaml",
+			"/app/docker-compose.yml",
+			"/app/docker-compose.yaml",
+		}
+		candidates = append(candidates,
+			wd+"/docker-compose.yml",
+			wd+"/docker-compose.yaml",
+		)
+		for _, candidate := range candidates {
+			if _, err := os.Stat(candidate); err == nil {
+				composeFile = candidate
+				uc.appendLog("  found: " + candidate)
+				break
+			}
 		}
 	}
 	if composeFile == "" {
 		wd, _ := os.Getwd()
 		uc.appendLog("ERROR: docker-compose.yml not found")
 		uc.appendLog("  working dir: " + wd)
-		uc.appendLog("  hint: ensure docker-compose.yml is mounted into the container")
-		logging.Error("self-update: docker-compose.yml not found")
+		uc.appendLog("  hint: set COMPOSE_FILE env var or ensure docker-compose.yml is mounted into the container")
+		logging.Error("self-update: docker-compose.yml not found (wd=%s)", wd)
 		return
 	}
 
@@ -218,7 +230,7 @@ func (h *Handler) runSelfUpdate() {
 		return
 	}
 
-	out, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	out, err := exec.Command("git", "-C", installDir, "rev-parse", "HEAD").Output()
 	if err != nil {
 		uc.appendLog("ERROR: could not determine commit hash")
 		logging.Error("self-update: git rev-parse failed: %v", err)
@@ -236,6 +248,7 @@ func (h *Handler) runSelfUpdate() {
 	logging.Info("self-update: docker compose build")
 
 	cmd = exec.Command("docker", "compose", "-f", composeFile, "build", "--build-arg", "VERSION_COMMIT="+commit, "app")
+	cmd.Dir = installDir
 	if err := uc.streamCmd(cmd); err != nil {
 		uc.appendLog("ERROR: docker build failed: " + err.Error())
 		logging.Error("self-update: docker build failed: %v", err)
@@ -246,6 +259,7 @@ func (h *Handler) runSelfUpdate() {
 	logging.Info("self-update: docker compose up")
 
 	cmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--remove-orphans")
+	cmd.Dir = installDir
 	if err := uc.streamCmd(cmd); err != nil {
 		uc.appendLog("ERROR: docker up failed: " + err.Error())
 		logging.Error("self-update: docker up failed: %v", err)
