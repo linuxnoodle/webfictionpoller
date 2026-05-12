@@ -60,9 +60,10 @@ services:
     environment:
       - WATCHTOWER_HTTP_API=true
       - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller
+      - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 3600 --cleanup app
+    command: --interval 3600 --cleanup --http-api-update
     restart: unless-stopped
 DCEOF
 
@@ -119,9 +120,10 @@ services:
     environment:
       - WATCHTOWER_HTTP_API=true
       - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller
+      - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 3600 --cleanup app
+    command: --interval 3600 --cleanup --http-api-update
     restart: unless-stopped
 DCEOF"
 msg_ok "Created docker-compose.yml"

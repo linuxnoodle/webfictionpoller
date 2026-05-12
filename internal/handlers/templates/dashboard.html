@@ -9,9 +9,6 @@
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
     <style>
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
         .preview-content p { margin-bottom: 0.5em; }
         .preview-content img { max-width: 100%; }
         .preview-content { max-height: 40vh; overflow-y: auto; }
@@ -147,7 +144,7 @@
                              onclick="event.stopPropagation()">
                             <button onclick="ratingDown(this)"
                                     class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                            <input data-rating-value="{{f64f .SeriesRating}}" class="w-10 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400 py-0.5 focus:outline-none focus:border-neutral-500" />
+                            <span data-rating-value="{{f64f .SeriesRating}}" class="w-10 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400 py-0.5 cursor-pointer inline-block" ></span>
                             <button onclick="ratingUp(this)"
                                     class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
                         </div>
@@ -202,7 +199,7 @@
                                  data-rating-sid="{{.Series.ID}}">
                                 <button onclick="ratingDown(this)"
                                         class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                                <input data-rating-value="{{f64f .Series.Rating}}" class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-sm text-neutral-300 py-0.5 focus:outline-none focus:border-neutral-500" />
+                                <span data-rating-value="{{f64f .Series.Rating}}" class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-sm text-neutral-300 py-0.5 cursor-pointer inline-block" ></span>
                                 <button onclick="ratingUp(this)"
                                         class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
                             </div>
@@ -215,7 +212,7 @@
                          data-rating-sid="{{.Series.ID}}">
                         <button onclick="ratingDown(this)"
                                 class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                        <input data-rating-value="{{f64f .Series.Rating}}" class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-sm text-neutral-300 py-0.5 focus:outline-none focus:border-neutral-500" />
+                        <span data-rating-value="{{f64f .Series.Rating}}" class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-sm text-neutral-300 py-0.5 cursor-pointer inline-block" ></span>
                         <button onclick="ratingUp(this)"
                                 class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
                         <a href="{{.Series.SourceURL}}" target="_blank" class="text-xs text-neutral-500 hover:text-neutral-300 ml-auto">Source</a>

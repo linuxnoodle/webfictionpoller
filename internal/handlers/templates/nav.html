@@ -42,42 +42,96 @@ function ratingSync(src, r) {
     });
 }
 function ratingDown(btn) {
-    var inp = btn.parentElement.querySelector('input');
-    var r = inp.dataset.u === '1' ? 0 : parseFloat(inp.value) || 0;
+    var c = btn.parentElement;
+    var el = c.querySelector('[data-rating-value]');
+    if (!el) return;
+    var r = el.dataset.u === '1' || el.textContent === 'U' ? 0 : parseFloat(el.textContent) || 0;
     r = r <= 0 ? -1 : Math.round((r - 0.1) * 10) / 10;
-    if (r < 0) { inp.dataset.u = '1'; inp.type = 'text'; inp.value = 'U'; }
-    else { inp.dataset.u = '0'; inp.type = 'number'; inp.value = r.toFixed(1); }
-    ratingApplyStyle(inp, r);
-    inp._ratingSave(r);
+    if (r < 0) {
+        el.textContent = 'U'; el.dataset.u = '1';
+    } else {
+        el.textContent = r.toFixed(1); el.dataset.u = '0';
+    }
+    ratingApplyStyle(el, r);
+    if (el._ratingSave) el._ratingSave(r);
 }
 function ratingUp(btn) {
-    var inp = btn.parentElement.querySelector('input');
-    var r = inp.dataset.u === '1' ? 0 : parseFloat(inp.value) || 0;
+    var c = btn.parentElement;
+    var el = c.querySelector('[data-rating-value]');
+    if (!el) return;
+    var r = el.dataset.u === '1' || el.textContent === 'U' ? 0 : parseFloat(el.textContent) || 0;
     r = Math.min(10, Math.round((r + 0.1) * 10) / 10);
-    inp.dataset.u = '0'; inp.type = 'number'; inp.value = r.toFixed(1);
-    ratingApplyStyle(inp, r);
-    inp._ratingSave(r);
+    el.textContent = r.toFixed(1); el.dataset.u = '0';
+    ratingApplyStyle(el, r);
+    if (el._ratingSave) el._ratingSave(r);
 }
 document.addEventListener('error', function(e) { if (e.target.tagName === 'IMG') e.target.style.display = 'none'; }, true);
 function initRatings() {
     document.querySelectorAll('[data-rating-sid]').forEach(function(c) {
         var sid = c.dataset.ratingSid;
-        var input = c.querySelector('input');
-        if (!input || input._ratingInited) return;
-        input._ratingInited = true;
-        input.dataset.sid = sid;
-        input._ratingSave = function(r) {
-            ratingSync(input, r);
+        var span = c.querySelector('span[data-rating-value]');
+        if (!span || span._ratingInited) return;
+        span._ratingInited = true;
+        span.dataset.sid = sid;
+        var v = parseFloat(span.dataset.ratingValue);
+        if (v < 0) {
+            span.textContent = 'U';
+            ratingApplyStyle(span, -1);
+        } else {
+            span.textContent = v.toFixed(1);
+            ratingApplyStyle(span, v);
+        }
+        span.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (span.tagName === 'INPUT') return;
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.step = '0.1';
+            input.min = '0';
+            input.max = '10';
+            input.dataset.sid = sid;
+            input.dataset.u = v < 0 ? '1' : '0';
+            input.value = v < 0 ? '' : v.toFixed(1);
+            input.className = span.className;
+            input.setAttribute('autocomplete', 'off');
+            input.setAttribute('data-rating-active', '');
+            input.style.width = span.style.width || '';
+            ratingInput(input);
+            input._ratingSave = function(r) {
+                ratingSync(input, r);
+                htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
+            };
+            if (v >= 0) ratingApplyStyle(input, v);
+            span.replaceWith(input);
+            input.focus();
+            input.select();
+            input.addEventListener('blur', function() {
+                var newSpan = document.createElement('span');
+                newSpan.dataset.ratingValue = '';
+                newSpan.dataset.sid = sid;
+                newSpan._ratingInited = true;
+                newSpan.className = input.className;
+                newSpan.setAttribute('data-rating-value', '');
+                var rv = input.dataset.u === '1' ? -1 : parseFloat(input.value) || -1;
+                newSpan._ratingSave = function(r) {
+                    ratingSync(newSpan, r);
+                    htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
+                };
+                newSpan.addEventListener('click', arguments.callee);
+                if (rv < 0) {
+                    newSpan.textContent = 'U';
+                    ratingApplyStyle(newSpan, -1);
+                } else {
+                    newSpan.textContent = rv.toFixed(1);
+                    ratingApplyStyle(newSpan, rv);
+                }
+                input.replaceWith(newSpan);
+            });
+        });
+        span._ratingSave = function(r) {
+            ratingSync(span, r);
             htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
         };
-        var v = parseFloat(input.dataset.ratingValue);
-        ratingInput(input);
-        if (v < 0) {
-            input.type = 'text'; input.value = 'U'; input.dataset.u = '1';
-        } else {
-            input.type = 'number'; input.value = v.toFixed(1); input.dataset.u = '0';
-            ratingApplyStyle(input, v);
-        }
     });
 }
 document.addEventListener('DOMContentLoaded', initRatings);

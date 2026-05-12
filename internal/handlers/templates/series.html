@@ -8,11 +8,6 @@
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
-    <style>
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
-    </style>
 </head>
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
@@ -70,7 +65,7 @@
                     <div class="flex items-center gap-0.5" data-rating-sid="{{.ID}}">
                         <button onclick="ratingDown(this)"
                                 class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                        <input data-rating-value="{{f64f .Rating}}" class="w-10 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 py-0 focus:outline-none focus:border-neutral-500" />
+                        <span data-rating-value="{{f64f .Rating}}" class="w-10 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 py-0 cursor-pointer inline-block" ></span>
                         <button onclick="ratingUp(this)"
                                 class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
                     </div>
@@ -111,7 +106,7 @@
                             <div class="flex items-center gap-0.5" data-rating-sid="{{.ID}}">
                                 <button onclick="ratingDown(this)"
                                         class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                                <input data-rating-value="{{f64f .Rating}}" class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 py-0 focus:outline-none focus:border-neutral-500" />
+                                <span data-rating-value="{{f64f .Rating}}" class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 py-0 cursor-pointer inline-block" ></span>
                                 <button onclick="ratingUp(this)"
                                         class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
                             </div>
