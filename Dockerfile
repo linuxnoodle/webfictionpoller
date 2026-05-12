@@ -28,7 +28,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
 
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata docker-cli docker-cli-compose
 
 WORKDIR /app
 

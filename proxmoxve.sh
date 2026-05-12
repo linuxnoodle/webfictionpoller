@@ -44,10 +44,10 @@ services:
       - POLL_INTERVAL=15m
       - FLARESOLVERR_URL=http://flaresolverr:8191
       - LOG_DIR=/data/logs
-      - WATCHTOWER_URL=http://watchtower:8080
-      - WATCHTOWER_TOKEN=webfictionpoller
+      - COMPOSE_PROJECT_DIR=/opt/webfictionpoller
     volumes:
       - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - flaresolverr
     restart: unless-stopped
@@ -56,17 +56,6 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     environment:
       - LOG_LEVEL=info
-    restart: unless-stopped
-
-  watchtower:
-    image: containrrr/watchtower:1.7.1
-    environment:
-      - WATCHTOWER_HTTP_API=true
-      - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller
-      - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 3600 --cleanup --http-api-update
     restart: unless-stopped
 DCEOF
 
@@ -102,10 +91,10 @@ services:
       - POLL_INTERVAL=15m
       - FLARESOLVERR_URL=http://flaresolverr:8191
       - LOG_DIR=/data/logs
-      - WATCHTOWER_URL=http://watchtower:8080
-      - WATCHTOWER_TOKEN=webfictionpoller
+      - COMPOSE_PROJECT_DIR=/opt/webfictionpoller
     volumes:
       - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - flaresolverr
     restart: unless-stopped
@@ -114,17 +103,6 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     environment:
       - LOG_LEVEL=info
-    restart: unless-stopped
-
-  watchtower:
-    image: containrrr/watchtower:1.7.1
-    environment:
-      - WATCHTOWER_HTTP_API=true
-      - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller
-      - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 3600 --cleanup --http-api-update
     restart: unless-stopped
 DCEOF"
 msg_ok "Created docker-compose.yml"
@@ -139,7 +117,6 @@ msg_ok "Started ${APP}"
 
 msg_ok "Completed Successfully!\n"
 echo -e "${INFO}${YW} Updates:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}Automatic: Watchtower checks every hour${CL}"
 echo -e "${TAB}${GATEWAY}${BGN}Manual:    pct exec $CTID -- docker compose -f $INSTALL_DIR/docker-compose.yml pull \&\& pct exec $CTID -- docker compose -f $INSTALL_DIR/docker-compose.yml up -d${CL}"
 echo -e "${TAB}${GATEWAY}${BGN}In-app:    Settings -> Version & Updates -> Update Now${CL}"
 echo -e "${INFO}${YW} Access it using the following URL:${CL}"

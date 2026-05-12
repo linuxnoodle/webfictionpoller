@@ -9,10 +9,10 @@ services:
       - POLL_INTERVAL=15m
       - FLARESOLVERR_URL=http://flaresolverr:8191
       - LOG_DIR=/data/logs
-      - WATCHTOWER_URL=http://watchtower:8080
-      - WATCHTOWER_TOKEN=webfictionpoller
+      - COMPOSE_PROJECT_DIR=/opt/webfictionpoller
     volumes:
       - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - flaresolverr
     restart: unless-stopped
@@ -23,19 +23,6 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     environment:
       - LOG_LEVEL=info
-    restart: unless-stopped
-    networks:
-      - default
-
-  watchtower:
-    image: containrrr/watchtower:1.7.1
-    environment:
-      - WATCHTOWER_HTTP_API=true
-      - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller
-      - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 3600 --cleanup --http-api-update
     restart: unless-stopped
     networks:
       - default

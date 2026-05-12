@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"sync"
 	"time"
 
@@ -167,51 +167,34 @@ func (h *Handler) runWatchtowerUpdate() {
 		uc.mu.Unlock()
 	}()
 
-	watchtowerURL := os.Getenv("WATCHTOWER_URL")
-	if watchtowerURL == "" {
-		watchtowerURL = "http://watchtower:8080"
-	}
-
-	token := os.Getenv("WATCHTOWER_TOKEN")
-
-	uc.appendLog("Triggering Watchtower update...")
-	uc.appendLog("  target: " + watchtowerURL)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("POST", watchtowerURL+"/v1/update", nil)
-	if err != nil {
-		uc.appendLog("ERROR: failed to create request: " + err.Error())
+	projectDir := os.Getenv("COMPOSE_PROJECT_DIR")
+	if projectDir == "" {
+		uc.appendLog("ERROR: COMPOSE_PROJECT_DIR not set")
+		uc.appendLog("  Mount /var/run/docker.sock and set COMPOSE_PROJECT_DIR=/opt/webfictionpoller")
 		return
 	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
 
-	uc.appendLog("  sending update request...")
-	resp, err := client.Do(req)
-	if err != nil {
-		uc.appendLog("ERROR: Watchtower request failed: " + err.Error())
-		uc.appendLog("")
-		uc.appendLog("Possible fixes:")
-		uc.appendLog("  1. Upgrade Docker in the LXC: curl -fsSL https://get.docker.com | sh")
-		uc.appendLog("     (Watchtower requires Docker 20.10+, you may have an older version)")
-		uc.appendLog("  2. Restart Watchtower: docker compose up -d watchtower")
-		uc.appendLog("  3. Update manually from the LXC shell:")
-		uc.appendLog("     docker compose -f /opt/webfictionpoller/docker-compose.yml pull && docker compose -f /opt/webfictionpoller/docker-compose.yml up -d")
-		logging.Error("self-update: watchtower request failed: %v", err)
+	composeFile := projectDir + "/docker-compose.yml"
+
+	uc.appendLog("Pulling latest images...")
+	pullCmd := exec.Command("docker", "compose", "-f", composeFile, "pull")
+	pullOut, pullErr := pullCmd.CombinedOutput()
+	uc.appendLog(string(pullOut))
+	if pullErr != nil {
+		uc.appendLog("ERROR: pull failed: " + pullErr.Error())
 		return
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
-		uc.appendLog("Watchtower triggered successfully!")
-		uc.appendLog("The container will restart with the new image shortly.")
-		uc.appendLog("This page will auto-reconnect once the new container is ready.")
-		logging.Info("self-update: watchtower triggered successfully")
-	} else {
-		uc.appendLog(fmt.Sprintf("ERROR: Watchtower returned HTTP %d", resp.StatusCode))
-		uc.appendLog("  hint: check WATCHTOWER_TOKEN matches in both containers")
-		logging.Error("self-update: watchtower returned HTTP %d", resp.StatusCode)
+	uc.appendLog("Restarting with new images...")
+	upCmd := exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--remove-orphans")
+	upOut, upErr := upCmd.CombinedOutput()
+	uc.appendLog(string(upOut))
+	if upErr != nil {
+		uc.appendLog("ERROR: restart failed: " + upErr.Error())
+		return
 	}
+
+	uc.appendLog("Update complete! Container is restarting...")
+	uc.appendLog("This page will auto-reconnect once the new container is ready.")
+	logging.Info("self-update: completed successfully")
 }
