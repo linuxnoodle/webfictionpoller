@@ -7,7 +7,7 @@
     <title>Version - WebFiction Tracker</title>
     <meta name="csrf-token" content="{{.CSRFToken}}">
     <script src="/static/htmx.min.js"></script>
-    <script>document.addEventListener('htmx:configRequest', function(e){e.detail.headers['X-CSRF-Token']=document.querySelector('meta[name="csrf-token"]').content})</script>
+    <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
     <script src="/static/alpine.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
     <style>
@@ -63,7 +63,7 @@
                     <div x-show="data.update_available && !data.updating && !updating" class="mt-4 bg-emerald-900/30 border border-emerald-800/50 rounded-lg p-4">
                         <p class="text-emerald-300 text-sm font-semibold mb-1">Update available!</p>
                         <p class="text-xs text-neutral-400 mb-3">A newer version is available on GitHub.</p>
-                        <button @click="updating=true; serverUp=true; fetch('/api/version/update', {method:'POST',headers:{'X-CSRF-Token':document.querySelector('meta[name=\"csrf-token\"]').content}}).then(r=>r.json()).then(d=>{if(d.error){updating=false;alert(d.error)}}); logPoll=setInterval(()=>{
+                        <button @click="updating=true; serverUp=true; fetch('/api/version/update', {method:'POST',headers:{'X-CSRF-Token':_csrf}}).then(r=>r.json()).then(d=>{if(d.error){updating=false;alert(d.error)}}); logPoll=setInterval(()=>{
                                 var logEl = document.getElementById('update-log');
                                 fetch('/api/version').then(r=>r.json()).then(d=>{data=d; $nextTick(()=>{if(logEl)logEl.scrollTop=logEl.scrollHeight}); if(!d.updating){clearInterval(logPoll); if(data.update_log && data.update_log.indexOf('ERROR')>=0){updating=false}else{setTimeout(()=>location.reload(),2000)}}})
                             }, 1000)"
@@ -99,7 +99,7 @@
                     </div>
 
                     <button x-show="!updating"
-                            @click="checking=true; fetch('/api/version/check', {method:'POST',headers:{'X-CSRF-Token':document.querySelector('meta[name=\"csrf-token\"]').content}}).then(r=>r.json()).then(d=>{data=d;checking=false})"
+                            @click="checking=true; fetch('/api/version/check', {method:'POST',headers:{'X-CSRF-Token':_csrf}}).then(r=>r.json()).then(d=>{data=d;checking=false})"
                             :disabled="checking"
                             class="mt-4 w-full bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 text-neutral-200 py-2 rounded text-sm">
                         <span x-show="!checking">Check for Updates</span>
