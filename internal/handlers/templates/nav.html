@@ -59,7 +59,29 @@ function ratingUp(btn) {
     inp._ratingSave(r);
 }
 document.addEventListener('error', function(e) { if (e.target.tagName === 'IMG') e.target.style.display = 'none'; }, true);
-document.addEventListener('htmx:afterSettle', function() { _ratingEls = {}; });
+function initRatings() {
+    document.querySelectorAll('[data-rating-sid]').forEach(function(c) {
+        var sid = c.dataset.ratingSid;
+        var input = c.querySelector('input');
+        if (!input || input._ratingInited) return;
+        input._ratingInited = true;
+        input.dataset.sid = sid;
+        input._ratingSave = function(r) {
+            ratingSync(input, r);
+            htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
+        };
+        var v = parseFloat(input.dataset.ratingValue);
+        ratingInput(input);
+        if (v < 0) {
+            input.type = 'text'; input.value = 'U'; input.dataset.u = '1';
+        } else {
+            input.type = 'number'; input.value = v.toFixed(1); input.dataset.u = '0';
+            ratingApplyStyle(input, v);
+        }
+    });
+}
+initRatings();
+document.addEventListener('htmx:afterSettle', function() { _ratingEls = {}; initRatings(); });
 </script>
 <nav class="bg-neutral-800 border-b border-neutral-700 px-4 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-bold text-neutral-200 hover:text-white">WebFiction Poller</a>
