@@ -31,14 +31,14 @@ function ratingInput(el) {
 }
 var _ratingEls = {};
 function ratingSync(src, r) {
-    var sid = src.dataset.sid;
+    var sid = src.dataset.sid || src.closest('[data-rating-sid]').dataset.ratingSid;
     var els = _ratingEls[sid];
-    if (!els) { els = document.querySelectorAll('input[data-sid="'+sid+'"]'); _ratingEls[sid] = els; }
-    els.forEach(function(inp) {
-        if (inp === src) return;
-        if (r < 0) { inp.dataset.u = '1'; inp.type = 'text'; inp.value = 'U'; }
-        else { inp.dataset.u = '0'; inp.type = 'number'; inp.value = r.toFixed(1); }
-        ratingApplyStyle(inp, r);
+    if (!els) { els = document.querySelectorAll('[data-rating-sid="'+sid+'"] span[data-rating-value]'); _ratingEls[sid] = els; }
+    els.forEach(function(el) {
+        if (el === src || el.tagName === 'INPUT') return;
+        if (r < 0) { el.textContent = 'U'; el.dataset.u = '1'; }
+        else { el.textContent = r.toFixed(1); el.dataset.u = '0'; }
+        ratingApplyStyle(el, r);
     });
 }
 function ratingDown(btn) {
@@ -92,6 +92,7 @@ document.addEventListener('click', function(e) {
     span.replaceWith(input);
     input.focus(); input.select();
     input.addEventListener('blur', function() {
+        delete _ratingEls[sid];
         var s = document.createElement('span');
         s.dataset.ratingValue = ''; s.dataset.sid = sid; s._ratingInited = true;
         s.className = input.className; s.setAttribute('data-rating-value', '');
@@ -101,7 +102,7 @@ document.addEventListener('click', function(e) {
         else { s.textContent = rv.toFixed(1); ratingApplyStyle(s, rv); }
         input.replaceWith(s);
     });
-});
+}, true);
 function ratingSaveFromEl(el, r) {
     var c = el.closest('[data-rating-sid]');
     if (!c) return;
