@@ -4,25 +4,25 @@
      data-st="{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}">
     <h3 class="text-sm font-semibold text-neutral-500 uppercase tracking-wider px-2 sm:px-4 py-2 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">{{.Date}}</h3>
     {{range .Chapters}}
-    <div class="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded hover:bg-neutral-900/50 cursor-pointer"
+    <div id="row-{{.ID}}" class="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded hover:bg-neutral-900/50 cursor-pointer"
          onclick="togglePreview({{.ID}})">
         <div class="flex items-center gap-1.5 sm:gap-3 flex-1 min-w-0">
             {{if .IsRead}}
             <div class="w-1 flex-shrink-0"></div>
-            <div class="flex-1 min-w-0 overflow-hidden opacity-40">
+            <div data-content class="flex-1 min-w-0 overflow-hidden opacity-40">
                 <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                     <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block">
-                    <span class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                    <span data-badge class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
                     <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
                 </div>
             </div>
             {{else}}
-            <div class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
-            <div class="flex-1 min-w-0 overflow-hidden">
+            <div data-dot class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
+            <div data-content class="flex-1 min-w-0 overflow-hidden">
                 <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                     <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block">
-                    <span class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
-                    <span class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
+                    <span data-badge class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                    <span data-title class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
                 </div>
             </div>
             {{end}}
@@ -44,9 +44,9 @@
                class="text-xs text-neutral-500 hover:text-neutral-300 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded">open</a>
             <span class="invisible text-xs px-2 py-1">Ignore</span>
             {{else}}
-            <button onclick="markRead(this, {{.ID}}, '{{.URL}}')"
+            <button data-act-read onclick="markRead(this, {{.ID}}, '{{.URL}}')"
                     class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
-            <button onclick="markIgnore(this, {{.ID}})"
+            <button data-act-ignore onclick="markIgnore(this, {{.ID}})"
                     class="text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-400 px-2 py-1 rounded">Ignore</button>
             {{end}}
         </div>

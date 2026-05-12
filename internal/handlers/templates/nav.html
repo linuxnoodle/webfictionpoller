@@ -81,7 +81,7 @@ function initRatings() {
     });
 }
 initRatings();
-document.addEventListener('htmx:afterSettle', function() { _ratingEls = {}; initRatings(); });
+document.addEventListener('htmx:afterSettle', function() { initRatings(); });
 </script>
 <nav class="bg-neutral-800 border-b border-neutral-700 px-4 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-bold text-neutral-200 hover:text-white">WebFiction Poller</a>
@@ -94,7 +94,7 @@ document.addEventListener('htmx:afterSettle', function() { _ratingEls = {}; init
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
         </button>
         <div class="relative" x-data="{ open: false, updateAvail: false }"
-             x-init="fetch('/api/version').then(r=>r.json()).then(d=>updateAvail=d.update_available)">
+             x-init="fetch('/api/version').then(r=>r.json()).then(d=>{updateAvail=d.update_available;document.querySelectorAll('[data-ua]').forEach(function(e){e.dataset.ua=d.update_available?'1':'0';if(d.update_available)e.style.display=''})})">
             <button @click="open = !open" @click.outside="open = false"
                     class="relative text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 w-8 h-8 flex items-center justify-center rounded">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -124,12 +124,10 @@ document.addEventListener('htmx:afterSettle', function() { _ratingEls = {}; init
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
 </nav>
-<div id="mobile-nav" class="hidden sm:hidden bg-neutral-800 border-b border-neutral-700 px-4 py-2 space-y-1"
-     x-data="{ updateAvail: false }"
-     x-init="fetch('/api/version').then(r=>r.json()).then(d=>updateAvail=d.update_available)">
+<div id="mobile-nav" class="hidden sm:hidden bg-neutral-800 border-b border-neutral-700 px-4 py-2 space-y-1">
     <a href="/admin/version" class="flex items-center justify-between px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">
         <span>Version & Updates</span>
-        <span x-show="updateAvail" style="display:none" class="w-2 h-2 bg-emerald-400 rounded-full"></span>
+        <span data-ua style="display:none" class="w-2 h-2 bg-emerald-400 rounded-full"></span>
     </a>
     <a href="/series" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Series</a>
     <a href="/series/add" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Add Series</a>
