@@ -28,18 +28,10 @@ function update_script() {
     exit
   fi
 
-  msg_info "Updating ${APP} (pulling latest source)"
-  cd /opt/webfictionpoller/src
-  if ! git pull -q 2>/dev/null; then
-    msg_error "Failed to pull updates. Check network connectivity."
-    exit 1
-  fi
-
-  COMMIT=$(git rev-parse HEAD)
-
-  msg_info "Rebuilding ${APP} container (${COMMIT:0:7})"
-  VERSION_COMMIT=$COMMIT docker compose -f /opt/webfictionpoller/docker-compose.yml build --build-arg VERSION_COMMIT=$COMMIT app
+  msg_info "Updating ${APP} (pulling latest image)"
+  docker compose -f /opt/webfictionpoller/docker-compose.yml pull app
   docker compose -f /opt/webfictionpoller/docker-compose.yml up -d --remove-orphans
+  docker image prune -f >/dev/null 2>&1
   msg_ok "Updated ${APP} successfully"
   exit
 }
@@ -57,19 +49,11 @@ fi
 pct exec "$CTID" -- systemctl enable -q --now docker
 msg_ok "Installed Docker"
 
-msg_info "Cloning ${APP} into LXC"
-pct exec "$CTID" -- bash -c "apt-get update -qq && apt-get install -y -qq git > /dev/null 2>&1"
-pct exec "$CTID" -- git clone -q https://github.com/linuxnoodle/webfictionpoller.git "$INSTALL_DIR/src"
-msg_ok "Cloned repository"
-
 msg_info "Writing docker-compose.yml"
 pct exec "$CTID" -- bash -c "mkdir -p $INSTALL_DIR/data && cat > $INSTALL_DIR/docker-compose.yml << 'DCEOF'
 services:
   app:
-    build:
-      context: /opt/webfictionpoller/src
-      args:
-        VERSION_COMMIT: \${VERSION_COMMIT:-dev}
+    image: ghcr.io/linuxnoodle/webfictionpoller:latest
     ports:
       - \"8080:8080\"
     environment:
@@ -78,6 +62,8 @@ services:
       - POLL_INTERVAL=15m
       - FLARESOLVERR_URL=http://flaresolverr:8191
       - LOG_DIR=/data/logs
+      - WATCHTOWER_URL=http://watchtower:8080
+      - WATCHTOWER_TOKEN=webfictionpoller
     volumes:
       - ./data:/data
     depends_on:
@@ -89,55 +75,31 @@ services:
     environment:
       - LOG_LEVEL=info
     restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    environment:
+      - WATCHTOWER_HTTP_API=true
+      - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 3600 --cleanup app
+    restart: unless-stopped
 DCEOF"
 msg_ok "Created docker-compose.yml"
 
-msg_info "Installing update helper"
-pct exec "$CTID" -- bash -c 'cat > /usr/local/bin/update_webfictionpoller << '\''UPDEOF'\''
-#!/usr/bin/env bash
-set -e
-INSTALL_DIR="/opt/webfictionpoller"
-
-if [[ ! -f "$INSTALL_DIR/docker-compose.yml" ]]; then
-  echo "Error: WebFictionPoller not found at $INSTALL_DIR"
-  exit 1
-fi
-
-echo "Pulling latest source..."
-cd "$INSTALL_DIR/src"
-if ! git pull -q 2>/dev/null; then
-  echo "Error: Failed to pull updates. Check network connectivity."
-  exit 1
-fi
-
-COMMIT=$(git rev-parse HEAD)
-echo "Rebuilding container (${COMMIT:0:7})..."
-VERSION_COMMIT=$COMMIT docker compose -f "$INSTALL_DIR/docker-compose.yml" build --build-arg VERSION_COMMIT=$COMMIT app
-docker compose -f "$INSTALL_DIR/docker-compose.yml" up -d --remove-orphans
-
-echo "Removing old images..."
-docker image prune -f 2>/dev/null || true
-
-echo "Update complete! Version: ${COMMIT:0:7}"
-UPDEOF
-chmod +x /usr/local/bin/update_webfictionpoller'
-msg_ok "Installed update helper"
-
-msg_info "Building ${APP} container (this takes a minute)"
-pct exec "$CTID" -- bash -c "cd $INSTALL_DIR/src && VERSION_COMMIT=\$(git rev-parse HEAD) docker compose -f $INSTALL_DIR/docker-compose.yml build"
-msg_ok "Built container"
-
-msg_info "Pulling FlareSolverr"
-pct exec "$CTID" -- docker compose -f "$INSTALL_DIR/docker-compose.yml" pull flaresolverr
-msg_ok "Pulled FlareSolverr"
+msg_info "Pulling ${APP} image"
+pct exec "$CTID" -- docker compose -f "$INSTALL_DIR/docker-compose.yml" pull
+msg_ok "Pulled images"
 
 msg_info "Starting ${APP}"
 pct exec "$CTID" -- docker compose -f "$INSTALL_DIR/docker-compose.yml" up -d
 msg_ok "Started ${APP}"
 
 msg_ok "Completed Successfully!\n"
-echo -e "${INFO}${YW} To update later, run one of:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}pct exec $CTID -- update_webfictionpoller${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}pct enter $CTID && update_webfictionpoller${CL}"
+echo -e "${INFO}${YW} Updates:${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}Automatic: Watchtower checks every hour${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}Manual:    pct exec $CTID -- docker compose -f $INSTALL_DIR/docker-compose.yml pull \&\& pct exec $CTID -- docker compose -f $INSTALL_DIR/docker-compose.yml up -d${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}In-app:    Settings -> Version & Updates -> Update Now${CL}"
 echo -e "${INFO}${YW} Access it using the following URL:${CL}"
 echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8080${CL}"

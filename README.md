@@ -2,7 +2,7 @@
 
 A self-hosted tracker for web fiction updates. Polls Royal Road, SpaceBattles, SufficientVelocity, QuestionableQuesting, and FanFiction.net on a schedule, shows you what's new, and lets you mark chapters read.
 
-Single Go binary, SQLite database, dark-themed web UI. Runs in Docker.
+Single Go binary, SQLite database, dark-themed web UI. Runs in Docker. Auto-updates via Watchtower.
 
 ## what it does
 
@@ -13,8 +13,10 @@ Single Go binary, SQLite database, dark-themed web UI. Runs in Docker.
 - Rating per series (0.0-10.0 in 0.1 steps) to control sort order
 - Mark individual chapters or entire series as read
 - Import and export series lists via OPML
+- JSON backup import/export with full metadata
 - Log viewer for troubleshooting poll errors
 - Password-protected with session management
+- Self-update via Watchtower (one-click from the web UI)
 
 ## supported sites
 
@@ -30,7 +32,7 @@ Single Go binary, SQLite database, dark-themed web UI. Runs in Docker.
 
 ### Proxmox VE
 
-The `proxmoxve.sh` script sets everything up in an LXC container: installs Docker, clones this repo, builds the app image locally, pulls FlareSolverr, writes a docker-compose.yml, and starts the containers. The app runs on port 8080.
+The `proxmoxve.sh` script sets everything up in an LXC container: installs Docker, writes a docker-compose.yml that pulls the pre-built image from GitHub Container Registry, and starts the app with Watchtower for auto-updates.
 
 In the Proxmox VE shell:
 
@@ -38,19 +40,22 @@ In the Proxmox VE shell:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/linuxnoodle/webfictionpoller/refs/heads/master/proxmoxve.sh)"
 ```
 
-It assigns 2 CPU cores, 2GB RAM, and 8GB disk by default. The repo is cloned to `/opt/webfictionpoller/src/` and data ends up in `/opt/webfictionpoller/data/`.
+It assigns 2 CPU cores, 2GB RAM, and 8GB disk by default. Data ends up in `/opt/webfictionpoller/data/`.
 
-To update later, run the same script again. It detects the existing install, does a `git pull`, rebuilds the container, and restarts.
+Updates happen automatically via Watchtower (checks every hour), or click **Update Now** on the Version & Updates page in the app.
+
+To update manually: `pct exec <CTID> -- docker compose -f /opt/webfictionpoller/docker-compose.yml pull && pct exec <CTID> -- docker compose -f /opt/webfictionpoller/docker-compose.yml up -d`
 
 ### docker compose
 
 ```bash
+curl -O https://raw.githubusercontent.com/linuxnoodle/webfictionpoller/master/docker-compose.yml
 docker compose up -d
 ```
 
 Open `http://localhost:8080`. On first visit you will be asked to create an admin account.
 
-Data lives in `./data/` on the host (database, logs).
+Data lives in `./data/` on the host (database, logs). Watchtower checks for image updates every hour and applies them automatically.
 
 ### manual
 
@@ -61,6 +66,16 @@ go build -o webfictionpoller ./cmd/main.go
 
 Defaults to `:8080`, `data.db` in the current directory, 15-minute poll interval.
 
+## updating
+
+The app uses a CI/CD pipeline with Watchtower:
+
+1. Every push to `master` triggers GitHub Actions, which builds a Docker image and pushes it to `ghcr.io/linuxnoodle/webfictionpoller:latest`
+2. Watchtower (running alongside the app) detects the new image and restarts the container automatically
+3. You can also trigger an immediate update from the **Version & Updates** page in the web UI
+
+No git clone, no local build, no manual intervention needed.
+
 ## environment variables
 
 | Variable | Default | What it controls |
@@ -70,6 +85,8 @@ Defaults to `:8080`, `data.db` in the current directory, 15-minute poll interval
 | `POLL_INTERVAL` | `15m` | How often to poll for updates |
 | `LOG_DIR` | `data/logs` | Where log files go |
 | `FLARESOLVERR_URL` | `http://flaresolverr:8191` | FlareSolverr endpoint for FanFiction.net |
+| `WATCHTOWER_URL` | `http://watchtower:8080` | Watchtower HTTP API endpoint |
+| `WATCHTOWER_TOKEN` | | Watchtower API token (must match Watchtower config) |
 
 ## adding series
 
@@ -112,6 +129,8 @@ internal/
   opml/                   OPML parser and exporter
   providers/              site-specific scrapers (royalroad, xenforo, fanfictionnet)
   worker/                 goroutine pool with per-provider rate limiting
+.github/
+  workflows/build.yml     CI/CD: build + push Docker image to GHCR
 ```
 
 Templates are embedded in the binary via `//go:embed`. No external template files needed at runtime.
