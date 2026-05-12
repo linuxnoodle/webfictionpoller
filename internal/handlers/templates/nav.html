@@ -10,10 +10,12 @@ function ratingApplyStyle(inp, r) {
     inp.style.color = r < 0 ? '' : c;
     inp.style.borderColor = r < 0 ? '' : c;
     inp.style.backgroundColor = r < 0 ? '' : c.replace('50%)', '12%)');
-    var btns = inp.parentElement.querySelectorAll('button');
-    btns.forEach(function(b) {
-        b.style.color = r < 0 ? '' : c;
-    });
+    if (inp.parentElement) {
+        var btns = inp.parentElement.querySelectorAll('button');
+        btns.forEach(function(b) {
+            b.style.color = r < 0 ? '' : c;
+        });
+    }
 }
 function ratingInput(el) {
     el.addEventListener('focus', function() { if (this.dataset.u === '1') { this.value = ''; this.type = 'number'; } });
@@ -30,11 +32,9 @@ function ratingInput(el) {
     el.addEventListener('keydown', function(e) { if (e.key === 'Enter') this.blur(); });
 }
 var _ratingEls = {};
-function ratingSync(src, r) {
-    var sid = src.dataset.sid || src.closest('[data-rating-sid]').dataset.ratingSid;
-    var els = _ratingEls[sid];
-    if (!els) { els = document.querySelectorAll('[data-rating-sid="'+sid+'"] span[data-rating-value]'); _ratingEls[sid] = els; }
-    els.forEach(function(el) {
+function ratingSync(sid, src, r) {
+    delete _ratingEls[sid];
+    document.querySelectorAll('[data-rating-sid="'+sid+'"] span[data-rating-value]').forEach(function(el) {
         if (el === src || el.tagName === 'INPUT') return;
         if (r < 0) { el.textContent = 'U'; el.dataset.u = '1'; }
         else { el.textContent = r.toFixed(1); el.dataset.u = '0'; }
@@ -76,7 +76,7 @@ document.addEventListener('click', function(e) {
     var sid = container.dataset.ratingSid;
     var v = parseFloat(span.dataset.ratingValue);
     var save = function(r) {
-        ratingSync(span.tagName === 'INPUT' ? span : span, r);
+        ratingSync(sid, null, r);
         htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
     };
     var input = document.createElement('input');
@@ -92,22 +92,22 @@ document.addEventListener('click', function(e) {
     span.replaceWith(input);
     input.focus(); input.select();
     input.addEventListener('blur', function() {
-        delete _ratingEls[sid];
         var s = document.createElement('span');
         s.dataset.ratingValue = ''; s.dataset.sid = sid; s._ratingInited = true;
         s.className = input.className; s.setAttribute('data-rating-value', '');
         var rv = input.dataset.u === '1' ? -1 : parseFloat(input.value) || -1;
         s._ratingSave = save;
-        if (rv < 0) { s.textContent = 'U'; ratingApplyStyle(s, -1); }
-        else { s.textContent = rv.toFixed(1); ratingApplyStyle(s, rv); }
+        if (rv < 0) { s.textContent = 'U'; }
+        else { s.textContent = rv.toFixed(1); }
         input.replaceWith(s);
+        ratingApplyStyle(s, rv < 0 ? -1 : rv);
     });
 }, true);
 function ratingSaveFromEl(el, r) {
     var c = el.closest('[data-rating-sid]');
     if (!c) return;
     var sid = c.dataset.ratingSid;
-    ratingSync(el, r);
+    ratingSync(sid, el, r);
     htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
 }
 </script>
