@@ -97,6 +97,18 @@ func main() {
 		w.Write(static.CSS)
 	})
 
+	r.Get("/static/htmx.min.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(static.HTMX)
+	})
+
+	r.Get("/static/alpine.min.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(static.Alpine)
+	})
+
 	r.Get("/static/favicons/{provider}", faviconCache.ServeHTTP)
 
 	r.Post("/logout", logoutHandler(sessionManager))
@@ -183,7 +195,7 @@ func envOrDefault(key, def string) string {
 
 func securityHeaders(next http.Handler) http.Handler {
 	csp := "default-src 'self'; " +
-		"script-src 'self' 'unsafe-inline' https://unpkg.com; " +
+		"script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
 		"style-src 'self' 'unsafe-inline'; " +
 		"img-src 'self' data: https:; " +
 		"connect-src 'self'; " +
