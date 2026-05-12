@@ -53,7 +53,7 @@ function ratingDown(btn) {
         el.textContent = r.toFixed(1); el.dataset.u = '0';
     }
     ratingApplyStyle(el, r);
-    if (el._ratingSave) el._ratingSave(r);
+    ratingSaveFromEl(el, r);
 }
 function ratingUp(btn) {
     var c = btn.parentElement;
@@ -63,66 +63,52 @@ function ratingUp(btn) {
     r = Math.min(10, Math.round((r + 0.1) * 10) / 10);
     el.textContent = r.toFixed(1); el.dataset.u = '0';
     ratingApplyStyle(el, r);
-    if (el._ratingSave) el._ratingSave(r);
+    ratingSaveFromEl(el, r);
 }
 document.addEventListener('error', function(e) { if (e.target.tagName === 'IMG') e.target.style.display = 'none'; }, true);
-function initRatings() {
-    document.querySelectorAll('[data-rating-sid]').forEach(function(c) {
-        var sid = c.dataset.ratingSid;
-        var span = c.querySelector('span[data-rating-value]');
-        if (!span || span._ratingInited) return;
-        span._ratingInited = true;
-        span.dataset.sid = sid;
-        var v = parseFloat(span.dataset.ratingValue);
-        span._ratingSave = function(r) {
-            ratingSync(span, r);
-            htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
-        };
-        span.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (span.tagName === 'INPUT') return;
-            var input = document.createElement('input');
-            input.type = 'number';
-            input.step = '0.1';
-            input.min = '0';
-            input.max = '10';
-            input.dataset.sid = sid;
-            input.dataset.u = v < 0 ? '1' : '0';
-            input.value = v < 0 ? '' : v.toFixed(1);
-            input.className = span.className;
-            input.setAttribute('autocomplete', 'off');
-            input.setAttribute('data-rating-active', '');
-            input.style.width = span.style.width || '';
-            ratingInput(input);
-            input._ratingSave = span._ratingSave;
-            if (v >= 0) ratingApplyStyle(input, v);
-            span.replaceWith(input);
-            input.focus();
-            input.select();
-            input.addEventListener('blur', function() {
-                var newSpan = document.createElement('span');
-                newSpan.dataset.ratingValue = '';
-                newSpan.dataset.sid = sid;
-                newSpan._ratingInited = true;
-                newSpan.className = input.className;
-                newSpan.setAttribute('data-rating-value', '');
-                var rv = input.dataset.u === '1' ? -1 : parseFloat(input.value) || -1;
-                newSpan._ratingSave = span._ratingSave;
-                newSpan.addEventListener('click', arguments.callee);
-                if (rv < 0) {
-                    newSpan.textContent = 'U';
-                    ratingApplyStyle(newSpan, -1);
-                } else {
-                    newSpan.textContent = rv.toFixed(1);
-                    ratingApplyStyle(newSpan, rv);
-                }
-                input.replaceWith(newSpan);
-            });
-        });
+document.addEventListener('click', function(e) {
+    var span = e.target.closest('span[data-rating-value]');
+    if (!span) return;
+    var container = span.closest('[data-rating-sid]');
+    if (!container) return;
+    e.stopPropagation();
+    if (span.tagName === 'INPUT') return;
+    var sid = container.dataset.ratingSid;
+    var v = parseFloat(span.dataset.ratingValue);
+    var save = function(r) {
+        ratingSync(span.tagName === 'INPUT' ? span : span, r);
+        htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
+    };
+    var input = document.createElement('input');
+    input.type = 'number'; input.step = '0.1'; input.min = '0'; input.max = '10';
+    input.dataset.sid = sid; input.dataset.u = v < 0 ? '1' : '0';
+    input.value = v < 0 ? '' : v.toFixed(1);
+    input.className = span.className;
+    input.setAttribute('autocomplete', 'off');
+    input.style.width = span.style.width || '';
+    ratingInput(input);
+    input._ratingSave = save;
+    if (v >= 0) ratingApplyStyle(input, v);
+    span.replaceWith(input);
+    input.focus(); input.select();
+    input.addEventListener('blur', function() {
+        var s = document.createElement('span');
+        s.dataset.ratingValue = ''; s.dataset.sid = sid; s._ratingInited = true;
+        s.className = input.className; s.setAttribute('data-rating-value', '');
+        var rv = input.dataset.u === '1' ? -1 : parseFloat(input.value) || -1;
+        s._ratingSave = save;
+        if (rv < 0) { s.textContent = 'U'; ratingApplyStyle(s, -1); }
+        else { s.textContent = rv.toFixed(1); ratingApplyStyle(s, rv); }
+        input.replaceWith(s);
     });
+});
+function ratingSaveFromEl(el, r) {
+    var c = el.closest('[data-rating-sid]');
+    if (!c) return;
+    var sid = c.dataset.ratingSid;
+    ratingSync(el, r);
+    htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
 }
-document.addEventListener('DOMContentLoaded', initRatings);
-document.addEventListener('htmx:afterSettle', function() { initRatings(); });
 </script>
 <nav class="bg-neutral-800 border-b border-neutral-700 px-4 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-bold text-neutral-200 hover:text-white">WebFiction Poller</a>
