@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -34,8 +35,13 @@ func NewFanfictionNetProvider() *FlareSolverrProvider {
 
 func (p *FlareSolverrProvider) Name() string { return "fanfictionnet" }
 
-func (p *FlareSolverrProvider) MatchURL(url string) bool {
-	return strings.Contains(url, "fanfiction.net")
+func (p *FlareSolverrProvider) MatchURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := u.Host
+	return host == "fanfiction.net" || host == "www.fanfiction.net" || strings.HasSuffix(host, ".fanfiction.net")
 }
 
 func (p *FlareSolverrProvider) RequiresAuth() bool { return false }

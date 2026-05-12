@@ -3,6 +3,7 @@ package providers
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -28,8 +29,13 @@ func NewRoyalRoadProvider() *RoyalRoadProvider {
 
 func (p *RoyalRoadProvider) Name() string { return "royalroad" }
 
-func (p *RoyalRoadProvider) MatchURL(url string) bool {
-	return strings.Contains(url, "royalroad.com")
+func (p *RoyalRoadProvider) MatchURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := u.Host
+	return host == "royalroad.com" || host == "www.royalroad.com" || strings.HasSuffix(host, ".royalroad.com")
 }
 
 func (p *RoyalRoadProvider) RequiresAuth() bool { return false }

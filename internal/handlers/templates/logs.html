@@ -5,7 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Logs - WebFiction Tracker</title>
+    <meta name="csrf-token" content="{{.CSRFToken}}">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script>document.addEventListener('htmx:configRequest', function(e){e.detail.headers['X-CSRF-Token']=document.querySelector('meta[name="csrf-token"]').content})</script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
 </head>

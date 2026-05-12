@@ -142,7 +142,7 @@ function ratingSaveFromEl(el, r) {
                 <a href="/admin/providers" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Providers</a>
                 <a href="/admin/logs" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Logs</a>
                 <div class="border-t border-neutral-700 my-1"></div>
-                <a href="/logout" class="block px-4 py-2 text-sm text-red-400 hover:bg-neutral-700">Logout</a>
+                <form method="POST" action="/logout" class="block px-4 py-2 text-sm text-red-400 hover:bg-neutral-700"><button type="submit" class="w-full text-left">Logout</button></form>
             </div>
         </div>
     </div>
@@ -166,6 +166,6 @@ function ratingSaveFromEl(el, r) {
     <a href="/admin/providers" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Providers</a>
     <a href="/admin/logs" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Logs</a>
     <div class="border-t border-neutral-700 my-1"></div>
-    <a href="/logout" class="block px-3 py-2 text-sm text-red-400 hover:bg-neutral-700 rounded">Logout</a>
+    <form method="POST" action="/logout" class="block px-3 py-2 text-sm text-red-400 hover:bg-neutral-700 rounded"><button type="submit" class="w-full text-left">Logout</button></form>
 </div>
 {{end}}

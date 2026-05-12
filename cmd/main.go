@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/justinas/nosurf"
+	"golang.org/x/time/rate"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
 	"github.com/linuxnoodle/webfictionpoller/internal/database"
@@ -49,6 +52,7 @@ func main() {
 	sessionManager.Lifetime = 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
+	sessionManager.Cookie.Secure = os.Getenv("COOKIE_SECURE") != "false"
 
 	providerList := []providers.Provider{
 		providers.NewRoyalRoadProvider(),
@@ -81,12 +85,12 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(sessionManager.LoadAndSave)
+	r.Use(securityHeaders)
 
 	r.Get("/login", loginPage)
-	r.Post("/login", loginHandler(db, sessionManager))
+	r.Post("/login", loginRateLimiter(loginHandler(db, sessionManager)))
 	r.Get("/setup", setupPage(db))
 	r.Post("/setup", setupHandler(db, sessionManager))
-	r.Get("/logout", logoutHandler(sessionManager))
 
 	r.Get("/static/app.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
@@ -95,6 +99,8 @@ func main() {
 	})
 
 	r.Get("/static/favicons/{provider}", faviconCache.ServeHTTP)
+
+	r.Post("/logout", logoutHandler(sessionManager))
 
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware(sessionManager, db))
@@ -129,6 +135,11 @@ func main() {
 		r.Get("/admin/version", h.VersionPage)
 	})
 
+	csrfHandler := nosurf.New(r)
+	csrfHandler.ExemptFunc(func(r *http.Request) bool {
+		return r.Method == "GET" || r.Method == "HEAD" || r.Method == "OPTIONS"
+	})
+
 	interval, err := time.ParseDuration(pollInterval)
 	if err != nil {
 		log.Fatalf("invalid POLL_INTERVAL: %v", err)
@@ -141,7 +152,7 @@ func main() {
 	go scheduler.start(ctx)
 
 	logging.Info("starting server on %s (poll interval: %s)", addr, interval)
-	server := &http.Server{Addr: addr, Handler: r}
+	server := &http.Server{Addr: addr, Handler: csrfHandler}
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
@@ -169,6 +180,75 @@ func envOrDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	csp := "default-src 'self'; " +
+		"script-src 'self' 'unsafe-inline' https://unpkg.com; " +
+		"style-src 'self' 'unsafe-inline'; " +
+		"img-src 'self' data: https:; " +
+		"connect-src 'self'; " +
+		"frame-ancestors 'none'"
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", csp)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+type ipLimiter struct {
+	mu       sync.Mutex
+	limiters map[string]*rate.Limiter
+}
+
+func newIPLimiter() *ipLimiter {
+	return &ipLimiter{limiters: make(map[string]*rate.Limiter)}
+}
+
+func (il *ipLimiter) get(ip string) *rate.Limiter {
+	il.mu.Lock()
+	defer il.mu.Unlock()
+	if l, ok := il.limiters[ip]; ok {
+		return l
+	}
+	l := rate.NewLimiter(rate.Every(time.Second), 5)
+	il.limiters[ip] = l
+	return l
+}
+
+func (il *ipLimiter) cleanup() {
+	il.mu.Lock()
+	defer il.mu.Unlock()
+	il.limiters = make(map[string]*rate.Limiter)
+}
+
+var loginLimiter = newIPLimiter()
+
+func init() {
+	go func() {
+		for range time.Tick(10 * time.Minute) {
+			loginLimiter.cleanup()
+		}
+	}()
+}
+
+func loginRateLimiter(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+			ip = fwd
+		}
+		if !loginLimiter.get(ip).Allow() {
+			handlers.RenderLoginPage(w, r, map[string]interface{}{"Error": "Too many login attempts. Please wait."})
+			return
+		}
+		next(w, r)
+	}
 }
 
 func loadProviderCookies(store *handlers.Store, pool *worker.WorkerPool) {
@@ -204,7 +284,7 @@ func authMiddleware(sm *scs.SessionManager, db *sql.DB) func(http.Handler) http.
 }
 
 func loginPage(w http.ResponseWriter, r *http.Request) {
-	handlers.RenderLoginPage(w, nil)
+	handlers.RenderLoginPage(w, r, nil)
 }
 
 func loginHandler(db *sql.DB, sm *scs.SessionManager) http.HandlerFunc {
@@ -213,7 +293,7 @@ func loginHandler(db *sql.DB, sm *scs.SessionManager) http.HandlerFunc {
 		password := r.FormValue("password")
 		id, err := auth.Authenticate(db, username, password)
 		if err != nil {
-			handlers.RenderLoginPage(w, map[string]interface{}{"Error": "Invalid username or password"})
+			handlers.RenderLoginPage(w, r, map[string]interface{}{"Error": "Invalid username or password"})
 			return
 		}
 		sm.Put(r.Context(), "userID", id)
@@ -229,7 +309,7 @@ func setupPage(db *sql.DB) http.HandlerFunc {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		handlers.RenderSetupPage(w, nil)
+		handlers.RenderSetupPage(w, r, nil)
 	}
 }
 
@@ -244,15 +324,15 @@ func setupHandler(db *sql.DB, sm *scs.SessionManager) http.HandlerFunc {
 		password := r.FormValue("password")
 		confirm := r.FormValue("confirm_password")
 		if username == "" || password == "" {
-			handlers.RenderSetupPage(w, map[string]interface{}{"Error": "Username and password are required"})
+			handlers.RenderSetupPage(w, r, map[string]interface{}{"Error": "Username and password are required"})
 			return
 		}
 		if password != confirm {
-			handlers.RenderSetupPage(w, map[string]interface{}{"Error": "Passwords do not match"})
+			handlers.RenderSetupPage(w, r, map[string]interface{}{"Error": "Passwords do not match"})
 			return
 		}
 		if err := auth.CreateUser(db, username, password); err != nil {
-			handlers.RenderSetupPage(w, map[string]interface{}{"Error": "Failed to create account: " + err.Error()})
+			handlers.RenderSetupPage(w, r, map[string]interface{}{"Error": "Failed to create account"})
 			return
 		}
 		id, err := auth.Authenticate(db, username, password)

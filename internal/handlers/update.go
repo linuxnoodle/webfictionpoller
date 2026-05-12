@@ -128,7 +128,7 @@ func (h *Handler) VersionCheckNow(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) VersionPage(w http.ResponseWriter, r *http.Request) {
 	status := h.updateChecker.GetStatus()
-	renderTemplate(w, "version", map[string]interface{}{
+	renderTemplate(w, r, "version", map[string]interface{}{
 		"Version": status,
 	})
 }

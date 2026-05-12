@@ -10,12 +10,21 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/microcosm-cc/bluemonday"
+
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 	"github.com/linuxnoodle/webfictionpoller/internal/opml"
 	"github.com/linuxnoodle/webfictionpoller/internal/providers"
 	"github.com/linuxnoodle/webfictionpoller/internal/worker"
 )
+
+var contentPolicy = bluemonday.UGCPolicy()
+
+func internalError(w http.ResponseWriter, r *http.Request, err error) {
+	logging.Error("[handler] %s %s: %v", r.Method, r.URL.Path, err)
+	http.Error(w, "internal server error", http.StatusInternalServerError)
+}
 
 type Handler struct {
 	store         *Store
@@ -36,23 +45,23 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	seriesView, err := h.store.GetSeriesView()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
 	timeChapters, err := h.store.GetTimeView(0, 50, sortBy)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
 	stats, err := h.store.GetDashboardStats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
-	renderTemplate(w, "dashboard", map[string]interface{}{
+	renderTemplate(w, r, "dashboard", map[string]interface{}{
 		"Groups":      seriesView,
 		"TimeView":    timeChapters,
 		"TimeGroups":  groupByDay(timeChapters, sortBy),
@@ -75,7 +84,7 @@ func (h *Handler) TimePagePartial(w http.ResponseWriter, r *http.Request) {
 
 	chapters, err := h.store.GetTimeView(page, 50, sortBy)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
@@ -88,7 +97,7 @@ func (h *Handler) TimePagePartial(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "time_page_partial", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 	}
 }
 
@@ -103,7 +112,7 @@ func (h *Handler) ChapterPreview(w http.ResponseWriter, r *http.Request) {
 
 	ch, err := h.store.GetChapterWithProvider(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	if ch == nil {
@@ -111,7 +120,7 @@ func (h *Handler) ChapterPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content := ch.PreviewHTML
+	content := contentPolicy.Sanitize(ch.PreviewHTML)
 	if content == "" {
 		p, ok := h.pool.GetProvider(ch.ProviderName)
 		if !ok {
@@ -122,9 +131,9 @@ func (h *Handler) ChapterPreview(w http.ResponseWriter, r *http.Request) {
 		fetched, err := p.FetchChapterContent(ch.URL)
 		if err != nil {
 			logging.Error("[preview] error fetching content for chapter %d: %v", id, err)
-			content = fmt.Sprintf("<p class='text-red-400 text-sm'>Failed to load preview: %s</p>", err.Error())
+			content = fmt.Sprintf("<p class='text-red-400 text-sm'>Failed to load preview</p>")
 		} else {
-			content = fetched
+			content = contentPolicy.Sanitize(fetched)
 			go func() {
 				if saveErr := h.store.SavePreviewHTML(id, content); saveErr != nil {
 					logging.Error("[preview] error saving preview for chapter %d: %v", id, saveErr)
@@ -139,12 +148,12 @@ func (h *Handler) ChapterPreview(w http.ResponseWriter, r *http.Request) {
 		"Content":    template.HTML(content),
 		"FaviconURL": models.ProviderFavicon(ch.ProviderName),
 	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 	}
 }
 
 func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
-	renderTemplate(w, "logs", nil)
+	renderTemplate(w, r, "logs", nil)
 }
 
 func (h *Handler) LogsData(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +164,7 @@ func (h *Handler) LogsData(w http.ResponseWriter, r *http.Request) {
 
 	logs, err := logging.ReadLogs(h.logDir, lines)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
@@ -169,12 +178,12 @@ func (h *Handler) LogsData(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SeriesList(w http.ResponseWriter, r *http.Request) {
 	series, err := h.store.ListSeries()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	buckets, err := h.store.GetRatingDistribution()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	dist := make([]int, 101)
@@ -188,7 +197,7 @@ func (h *Handler) SeriesList(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	renderTemplate(w, "series", map[string]interface{}{
+	renderTemplate(w, r, "series", map[string]interface{}{
 		"Series":     series,
 		"RatingDist": dist,
 		"MaxRating":  maxCount,
@@ -196,7 +205,7 @@ func (h *Handler) SeriesList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AddSeriesPage(w http.ResponseWriter, r *http.Request) {
-	renderTemplate(w, "add_series", map[string]interface{}{
+	renderTemplate(w, r, "add_series", map[string]interface{}{
 		"Providers": h.pool.AllProviders(),
 	})
 }
@@ -212,14 +221,16 @@ func (h *Handler) AddSeries(w http.ResponseWriter, r *http.Request) {
 		if p.MatchURL(url) {
 			meta, err := p.FetchSeriesMetadata(url)
 			if err != nil {
-				http.Error(w, "fetching metadata: "+err.Error(), http.StatusInternalServerError)
+				logging.Error("[handler] fetching metadata for %s: %v", url, err)
+				http.Error(w, "failed to fetch series metadata", http.StatusInternalServerError)
 				return
 			}
 			meta.Rating = models.UnratedRating
 			meta.Status = "active"
 			id, err := h.store.AddSeries(meta)
 			if err != nil {
-				http.Error(w, "saving series: "+err.Error(), http.StatusInternalServerError)
+				logging.Error("[handler] saving series: %v", err)
+				http.Error(w, "failed to save series", http.StatusInternalServerError)
 				return
 			}
 			h.pool.Submit(worker.Job{Series: meta, Provider: p})
@@ -230,7 +241,7 @@ func (h *Handler) AddSeries(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Error(w, "no provider matched url: "+url, http.StatusBadRequest)
+	http.Error(w, "no provider matched the given url", http.StatusBadRequest)
 }
 
 func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
@@ -244,7 +255,7 @@ func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
 
 	redirectURL, err := h.store.MarkChapterRead(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
@@ -270,7 +281,7 @@ func (h *Handler) UpdateSeriesStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.UpdateSeriesStatus(id, status); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	w.Header().Set("HX-Redirect", "/series")
@@ -295,7 +306,7 @@ func (h *Handler) UpdateSeriesRating(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.UpdateSeriesRating(id, rating); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -310,7 +321,7 @@ func (h *Handler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.MarkAllSeriesRead(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	w.Header().Set("HX-Redirect", "/")
@@ -319,7 +330,7 @@ func (h *Handler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) MarkAllChaptersRead(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.MarkAllChaptersRead(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	w.Header().Set("HX-Redirect", "/")
@@ -335,7 +346,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.DeleteSeries(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	w.Header().Set("HX-Redirect", "/series")
@@ -351,7 +362,7 @@ func (h *Handler) ProviderConfigPage(w http.ResponseWriter, r *http.Request) {
 			configs[name] = pc.CookieData
 		}
 	}
-	renderTemplate(w, "provider_config", map[string]interface{}{
+	renderTemplate(w, r, "provider_config", map[string]interface{}{
 		"Providers": providers,
 		"Configs":   configs,
 	})
@@ -365,7 +376,7 @@ func (h *Handler) SaveProviderConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.UpsertProviderConfig(name, cookieData); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	if p, ok := h.pool.GetProvider(name); ok && p.RequiresAuth() {
@@ -379,7 +390,7 @@ func (h *Handler) SaveProviderConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PollNow(w http.ResponseWriter, r *http.Request) {
 	all, err := h.store.GetAllActiveSeries()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	count := 0
@@ -404,7 +415,7 @@ func (h *Handler) SearchSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	results, err := h.store.SearchSeries(q)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -412,20 +423,24 @@ func (h *Handler) SearchSeries(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ImportOPMLPage(w http.ResponseWriter, r *http.Request) {
-	renderTemplate(w, "import_opml", nil)
+	renderTemplate(w, r, "import_opml", nil)
 }
 
+const maxUploadSize = 10 << 20
+
 func (h *Handler) ImportOPML(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	file, _, err := r.FormFile("opml_file")
 	if err != nil {
-		http.Error(w, "opml_file required: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "opml_file required", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
 	feeds, err := opml.Parse(file)
 	if err != nil {
-		http.Error(w, "parsing OPML: "+err.Error(), http.StatusBadRequest)
+		logging.Error("[handler] parsing OPML: %v", err)
+		http.Error(w, "invalid OPML file", http.StatusBadRequest)
 		return
 	}
 
@@ -515,13 +530,13 @@ func (h *Handler) resolveThreadURL(feedURL string) string {
 func (h *Handler) ExportOPML(w http.ResponseWriter, r *http.Request) {
 	series, err := h.store.ListSeries()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
 	data, err := opml.BuildOPML(series)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
@@ -533,13 +548,13 @@ func (h *Handler) ExportOPML(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ExportBackup(w http.ResponseWriter, r *http.Request) {
 	backup, err := h.store.ExportBackup()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
 	data, err := json.MarshalIndent(backup, "", "  ")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
@@ -549,28 +564,30 @@ func (h *Handler) ExportBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ImportBackup(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	file, _, err := r.FormFile("backup_file")
 	if err != nil {
-		http.Error(w, "backup_file required: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "backup_file required", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "reading file: "+err.Error(), http.StatusInternalServerError)
+		internalError(w, r, err)
 		return
 	}
 
 	var backup models.Backup
 	if err := json.Unmarshal(data, &backup); err != nil {
-		http.Error(w, "invalid backup file: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid backup file", http.StatusBadRequest)
 		return
 	}
 
 	imported, skipped, err := h.store.ImportBackup(&backup)
 	if err != nil {
-		http.Error(w, "import error: "+err.Error(), http.StatusInternalServerError)
+		logging.Error("[handler] import error: %v", err)
+		http.Error(w, "import failed", http.StatusInternalServerError)
 		return
 	}
 

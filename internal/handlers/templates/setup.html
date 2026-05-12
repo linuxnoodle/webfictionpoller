@@ -15,6 +15,7 @@
         <div class="bg-red-950/50 text-red-300 rounded px-3 py-2 text-sm mb-4">{{.Error}}</div>
         {{end}}
         <form method="POST" action="/setup" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <div>
                 <label class="block text-sm text-neutral-500 mb-1">Username</label>
                 <input type="text" name="username" required autofocus

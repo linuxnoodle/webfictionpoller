@@ -51,7 +51,11 @@ func newXenForoProvider(name, baseURL, domain string, requiresAuth bool) *XenFor
 func (p *XenForoProvider) Name() string { return p.name }
 
 func (p *XenForoProvider) MatchURL(rawURL string) bool {
-	return strings.Contains(rawURL, p.domain)
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return u.Host == p.domain || strings.HasSuffix(u.Host, "."+p.domain)
 }
 
 func (p *XenForoProvider) RequiresAuth() bool { return p.requires }

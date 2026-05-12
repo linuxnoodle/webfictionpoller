@@ -1,13 +1,15 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/justinas/nosurf"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 )
@@ -61,30 +63,46 @@ func InitTemplates() error {
 			return models.ProviderFavicon(providerName)
 		},
 		"jsstr": func(s string) string {
-			return strings.ReplaceAll(s, `\`, `\\`)
+			b, _ := json.Marshal(s)
+			return string(b)
 		},
 	}).ParseFS(sub, "*.html"))
 	return nil
 }
 
-func RenderLoginPage(w http.ResponseWriter, data interface{}) {
+func RenderLoginPage(w http.ResponseWriter, r *http.Request, data interface{}) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+	d := withCSRF(r, data)
+	if err := tmpl.ExecuteTemplate(w, "login.html", d); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func RenderSetupPage(w http.ResponseWriter, data interface{}) {
+func RenderSetupPage(w http.ResponseWriter, r *http.Request, data interface{}) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "setup.html", data); err != nil {
+	d := withCSRF(r, data)
+	if err := tmpl.ExecuteTemplate(w, "setup.html", d); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func renderTemplate(w http.ResponseWriter, name string, data interface{}) {
+func renderTemplate(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, name+".html", data); err != nil {
+	d := withCSRF(r, data)
+	if err := tmpl.ExecuteTemplate(w, name+".html", d); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func withCSRF(r *http.Request, data interface{}) map[string]interface{} {
+	token := nosurf.Token(r)
+	if m, ok := data.(map[string]interface{}); ok {
+		m["CSRFToken"] = token
+		return m
+	}
+	return map[string]interface{}{
+		"CSRFToken": token,
+		"Data":      data,
 	}
 }
 
