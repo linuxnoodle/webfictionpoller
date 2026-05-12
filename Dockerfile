@@ -10,7 +10,7 @@ RUN npm init -y && npm install tailwindcss@3 @tailwindcss/typography && \
 
 FROM golang:alpine AS builder
 
-RUN apk add --no-cache gcc musl-dev git
+RUN apk add --no-cache gcc musl-dev
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
 
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates tzdata git docker-cli
+RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 

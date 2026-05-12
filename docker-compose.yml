@@ -1,9 +1,6 @@
 services:
   app:
-    build:
-      context: .
-      args:
-        VERSION_COMMIT: ${VERSION_COMMIT:-dev}
+    image: ghcr.io/linuxnoodle/webfictionpoller:latest
     ports:
       - "8080:8080"
     environment:
@@ -12,13 +9,13 @@ services:
       - POLL_INTERVAL=15m
       - FLARESOLVERR_URL=http://flaresolverr:8191
       - LOG_DIR=/data/logs
-      - COMPOSE_FILE=/opt/webfictionpoller/docker-compose.yml
+      - WATCHTOWER_URL=http://watchtower:8080
+      - WATCHTOWER_TOKEN=webfictionpoller
     volumes:
       - ./data:/data
-      - ./:/opt/webfictionpoller
-      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - flaresolverr
+    restart: unless-stopped
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
@@ -26,4 +23,14 @@ services:
       - "8191:8191"
     environment:
       - LOG_LEVEL=info
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    environment:
+      - WATCHTOWER_HTTP_API=true
+      - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 3600 --cleanup app
     restart: unless-stopped

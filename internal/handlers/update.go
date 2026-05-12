@@ -1,12 +1,10 @@
 package handlers
 
 import (
-	"bufio"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
@@ -34,15 +32,15 @@ type githubCommitResp struct {
 }
 
 type VersionResponse struct {
-	CurrentCommit  string `json:"current_commit"`
-	CurrentShort   string `json:"current_short"`
-	LatestCommit   string `json:"latest_commit,omitempty"`
-	LatestShort    string `json:"latest_short,omitempty"`
-	UpdateAvail    bool   `json:"update_available"`
-	Error          string `json:"error,omitempty"`
-	LastChecked    string `json:"last_checked,omitempty"`
-	Updating       bool   `json:"updating,omitempty"`
-	UpdateLog      string `json:"update_log,omitempty"`
+	CurrentCommit string `json:"current_commit"`
+	CurrentShort  string `json:"current_short"`
+	LatestCommit  string `json:"latest_commit,omitempty"`
+	LatestShort   string `json:"latest_short,omitempty"`
+	UpdateAvail   bool   `json:"update_available"`
+	Error         string `json:"error,omitempty"`
+	LastChecked   string `json:"last_checked,omitempty"`
+	Updating      bool   `json:"updating,omitempty"`
+	UpdateLog     string `json:"update_log,omitempty"`
 }
 
 func (uc *UpdateChecker) check() {
@@ -136,30 +134,32 @@ func (h *Handler) VersionPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SelfUpdate(w http.ResponseWriter, r *http.Request) {
-	h.updateChecker.mu.Lock()
-	if h.updateChecker.updating {
-		h.updateChecker.mu.Unlock()
+	uc := h.updateChecker
+	uc.mu.Lock()
+	if uc.updating {
+		uc.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{"error": "update already in progress"})
 		return
 	}
-	h.updateChecker.updating = true
-	h.updateChecker.updateLog = ""
-	h.updateChecker.mu.Unlock()
+	uc.updating = true
+	uc.updateLog = ""
+	uc.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"status": "started"})
 
-	go h.runSelfUpdate()
+	go h.runWatchtowerUpdate()
 }
 
 func (uc *UpdateChecker) appendLog(line string) {
 	uc.mu.Lock()
 	uc.updateLog += line + "\n"
 	uc.mu.Unlock()
+	logging.Info("self-update: %s", line)
 }
 
-func (h *Handler) runSelfUpdate() {
+func (h *Handler) runWatchtowerUpdate() {
 	uc := h.updateChecker
 	defer func() {
 		uc.mu.Lock()
@@ -167,165 +167,46 @@ func (h *Handler) runSelfUpdate() {
 		uc.mu.Unlock()
 	}()
 
-	uc.appendLog("Starting self-update...")
-	wd, _ := os.Getwd()
-	uc.appendLog("  working dir: " + wd)
-	uc.appendLog("  COMPOSE_FILE env: " + os.Getenv("COMPOSE_FILE"))
-
-	composeFile := os.Getenv("COMPOSE_FILE")
-	if composeFile != "" {
-		uc.appendLog("  using COMPOSE_FILE env")
-	}
-	if composeFile == "" {
-		candidates := []string{
-			"/opt/webfictionpoller/docker-compose.yml",
-			"/opt/webfictionpoller/docker-compose.yaml",
-			"/app/docker-compose.yml",
-			"/app/docker-compose.yaml",
-		}
-		candidates = append(candidates,
-			wd+"/docker-compose.yml",
-			wd+"/docker-compose.yaml",
-		)
-		for _, candidate := range candidates {
-			_, err := os.Stat(candidate)
-			if err == nil {
-				composeFile = candidate
-				uc.appendLog("  found: " + candidate)
-				logging.Info("self-update: found compose file: %s", candidate)
-				break
-			}
-			uc.appendLog("  tried: " + candidate + " -> " + err.Error())
-			logging.Info("self-update: tried %s: %v", candidate, err)
-		}
-		entries, _ := os.ReadDir("/opt")
-		if entries != nil {
-			for _, e := range entries {
-				uc.appendLog("  /opt/" + e.Name())
-				logging.Info("self-update: /opt contains: %s", e.Name())
-			}
-		} else {
-			uc.appendLog("  /opt: not readable")
-			logging.Info("self-update: /opt: not readable")
-		}
-		entries2, _ := os.ReadDir("/opt/webfictionpoller")
-		if entries2 != nil {
-			for _, e := range entries2 {
-				uc.appendLog("  /opt/webfictionpoller/" + e.Name())
-				logging.Info("self-update: /opt/webfictionpoller contains: %s", e.Name())
-			}
-		} else {
-			uc.appendLog("  /opt/webfictionpoller: does not exist")
-			logging.Info("self-update: /opt/webfictionpoller: not readable or does not exist")
-		}
-	}
-	if composeFile == "" {
-		uc.appendLog("ERROR: docker-compose.yml not found")
-		uc.appendLog("  working dir: " + wd)
-		uc.appendLog("  hint: set COMPOSE_FILE env var or ensure docker-compose.yml is mounted into the container")
-		logging.Error("self-update: docker-compose.yml not found (wd=%s)", wd)
-		return
+	watchtowerURL := os.Getenv("WATCHTOWER_URL")
+	if watchtowerURL == "" {
+		watchtowerURL = "http://watchtower:8080"
 	}
 
-	installDir := strings.TrimSuffix(composeFile, "/docker-compose.yml")
-	installDir = strings.TrimSuffix(installDir, "/docker-compose.yaml")
+	token := os.Getenv("WATCHTOWER_TOKEN")
 
-	if _, err := exec.LookPath("git"); err != nil {
-		uc.appendLog("ERROR: git not installed in container")
-		uc.appendLog("  hint: add 'git' to Dockerfile apk add")
-		logging.Error("self-update: git not found: %v", err)
-		return
-	}
-	if _, err := exec.LookPath("docker"); err != nil {
-		uc.appendLog("ERROR: docker CLI not installed in container")
-		uc.appendLog("  hint: add 'docker-cli' to Dockerfile apk add and mount /var/run/docker.sock")
-		logging.Error("self-update: docker not found: %v", err)
-		return
-	}
+	uc.appendLog("Triggering Watchtower update...")
+	uc.appendLog("  target: " + watchtowerURL)
 
-	uc.appendLog("[1/4] Fetching latest code...")
-	logging.Info("self-update: git pull")
+	client := &http.Client{Timeout: 30 * time.Second}
 
-	cmd := exec.Command("git", "pull")
-	cmd.Dir = installDir
-	if err := uc.streamCmd(cmd); err != nil {
-		uc.appendLog("ERROR: git pull failed: " + err.Error())
-		logging.Error("self-update: git pull failed: %v", err)
-		return
-	}
-
-	out, err := exec.Command("git", "-C", installDir, "rev-parse", "HEAD").Output()
+	req, err := http.NewRequest("POST", watchtowerURL+"/v1/update", nil)
 	if err != nil {
-		uc.appendLog("ERROR: could not determine commit hash")
-		logging.Error("self-update: git rev-parse failed: %v", err)
+		uc.appendLog("ERROR: failed to create request: " + err.Error())
 		return
 	}
-	commit := strings.TrimSpace(string(out))
-	short := commit
-	if len(short) > 7 {
-		short = short[:7]
-	}
-	uc.appendLog("  commit: " + short)
-	logging.Info("self-update: building commit %s", short)
-
-	uc.appendLog("[2/4] Building Docker image (this may take a few minutes)...")
-	logging.Info("self-update: docker compose build")
-
-	cmd = exec.Command("docker", "compose", "-f", composeFile, "build", "--build-arg", "VERSION_COMMIT="+commit, "app")
-	cmd.Dir = installDir
-	if err := uc.streamCmd(cmd); err != nil {
-		uc.appendLog("ERROR: docker build failed: " + err.Error())
-		logging.Error("self-update: docker build failed: %v", err)
-		return
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	uc.appendLog("[3/4] Restarting container...")
-	logging.Info("self-update: docker compose up")
-
-	cmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--remove-orphans")
-	cmd.Dir = installDir
-	if err := uc.streamCmd(cmd); err != nil {
-		uc.appendLog("ERROR: docker up failed: " + err.Error())
-		logging.Error("self-update: docker up failed: %v", err)
-		return
-	}
-
-	uc.appendLog("[4/4] Cleaning up old images...")
-	exec.Command("docker", "image", "prune", "-f").Run()
-
-	uc.appendLog("Update complete! The page will reconnect once the new container is ready.")
-	logging.Info("self-update completed successfully")
-}
-
-func (uc *UpdateChecker) streamCmd(cmd *exec.Cmd) error {
-	stdout, err := cmd.StdoutPipe()
+	uc.appendLog("  sending update request...")
+	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		uc.appendLog("ERROR: Watchtower request failed: " + err.Error())
+		uc.appendLog("  hint: ensure WATCHTOWER_URL is set and Watchtower container is running")
+		uc.appendLog("  hint: add Watchtower to docker-compose.yml with WATCHTOWER_HTTP_API=true")
+		logging.Error("self-update: watchtower request failed: %v", err)
+		return
 	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
+	defer resp.Body.Close()
 
-	if err := cmd.Start(); err != nil {
-		return err
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
+		uc.appendLog("Watchtower triggered successfully!")
+		uc.appendLog("The container will restart with the new image shortly.")
+		uc.appendLog("This page will auto-reconnect once the new container is ready.")
+		logging.Info("self-update: watchtower triggered successfully")
+	} else {
+		uc.appendLog(fmt.Sprintf("ERROR: Watchtower returned HTTP %d", resp.StatusCode))
+		uc.appendLog("  hint: check WATCHTOWER_TOKEN matches in both containers")
+		logging.Error("self-update: watchtower returned HTTP %d", resp.StatusCode)
 	}
-
-	sc := bufio.NewScanner(stdout)
-	for sc.Scan() {
-		line := sc.Text()
-		if line != "" {
-			uc.appendLog("  " + line)
-		}
-	}
-
-	scErr := bufio.NewScanner(stderr)
-	for scErr.Scan() {
-		line := scErr.Text()
-		if line != "" && !strings.Contains(line, "CACHED") && !strings.Contains(line, "transferring") {
-			uc.appendLog("  " + line)
-		}
-	}
-
-	return cmd.Wait()
 }
