@@ -16,7 +16,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/justinas/nosurf"
-	"golang.org/x/time/rate"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
 	"github.com/linuxnoodle/webfictionpoller/internal/database"
@@ -88,7 +87,7 @@ func main() {
 	r.Use(securityHeaders)
 
 	r.Get("/login", loginPage)
-	r.Post("/login", loginRateLimiter(loginHandler(db, sessionManager)))
+	r.Post("/login", loginBanMiddleware(loginHandler(db, sessionManager)))
 	r.Get("/setup", setupPage(db))
 	r.Post("/setup", setupHandler(db, sessionManager))
 
@@ -201,50 +200,68 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-type ipLimiter struct {
-	mu       sync.Mutex
-	limiters map[string]*rate.Limiter
+type loginBan struct {
+	mu    sync.Mutex
+	fails map[string]int
+	bans  map[string]time.Time
 }
 
-func newIPLimiter() *ipLimiter {
-	return &ipLimiter{limiters: make(map[string]*rate.Limiter)}
+var loginBans = &loginBan{
+	fails: make(map[string]int),
+	bans:  make(map[string]time.Time),
 }
-
-func (il *ipLimiter) get(ip string) *rate.Limiter {
-	il.mu.Lock()
-	defer il.mu.Unlock()
-	if l, ok := il.limiters[ip]; ok {
-		return l
-	}
-	l := rate.NewLimiter(rate.Every(time.Second), 5)
-	il.limiters[ip] = l
-	return l
-}
-
-func (il *ipLimiter) cleanup() {
-	il.mu.Lock()
-	defer il.mu.Unlock()
-	il.limiters = make(map[string]*rate.Limiter)
-}
-
-var loginLimiter = newIPLimiter()
 
 func init() {
 	go func() {
-		for range time.Tick(10 * time.Minute) {
-			loginLimiter.cleanup()
+		for range time.Tick(5 * time.Minute) {
+			loginBans.mu.Lock()
+			loginBans.fails = make(map[string]int)
+			now := time.Now()
+			for ip, t := range loginBans.bans {
+				if now.Sub(t) > 15*time.Minute {
+					delete(loginBans.bans, ip)
+				}
+			}
+			loginBans.mu.Unlock()
 		}
 	}()
 }
 
-func loginRateLimiter(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			ip = fwd
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		return fwd
+	}
+	return r.RemoteAddr
+}
+
+func (lb *loginBan) isBanned(ip string) bool {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	if t, ok := lb.bans[ip]; ok {
+		if time.Since(t) < 15*time.Minute {
+			return true
 		}
-		if !loginLimiter.get(ip).Allow() {
-			handlers.RenderLoginPage(w, r, map[string]interface{}{"Error": "Too many login attempts. Please wait."})
+		delete(lb.bans, ip)
+	}
+	return false
+}
+
+func (lb *loginBan) recordFail(ip string) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	lb.fails[ip]++
+	if lb.fails[ip] >= 5 {
+		lb.bans[ip] = time.Now()
+		delete(lb.fails, ip)
+		logging.Info("[auth] banned %s for 15m after %d failed logins", ip, 5)
+	}
+}
+
+func loginBanMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := clientIP(r)
+		if loginBans.isBanned(ip) {
+			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 		next(w, r)
@@ -293,6 +310,7 @@ func loginHandler(db *sql.DB, sm *scs.SessionManager) http.HandlerFunc {
 		password := r.FormValue("password")
 		id, err := auth.Authenticate(db, username, password)
 		if err != nil {
+			loginBans.recordFail(clientIP(r))
 			handlers.RenderLoginPage(w, r, map[string]interface{}{"Error": "Invalid username or password"})
 			return
 		}
