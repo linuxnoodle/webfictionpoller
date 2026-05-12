@@ -26,12 +26,18 @@ func InitTemplates() error {
 			}
 			return strconv.FormatFloat(f, 'f', 1, 64)
 		},
-		"ratingInit": func(f float64) string {
+		"ratingStyle": func(f float64) template.HTMLAttr {
 			if f < 0 {
-				return `ratingInput($el); $el.type='text'; $el.value='U'; $el.dataset.u='1'`
+				return ""
 			}
-			s := strconv.FormatFloat(f, 'f', 1, 64)
-			return fmt.Sprintf("ratingInput($el); $el.type='number'; $el.value='%s'; $el.dataset.u='0'; ratingApplyStyle($el, %s)", s, s)
+			h := (f / 10.0) * 120.0
+			return template.HTMLAttr(fmt.Sprintf(`style="color:hsl(%.0f,65%%,50%%);border-color:hsl(%.0f,65%%,50%%);background-color:hsl(%.0f,65%%,12%%)"`, h, h, h))
+		},
+		"ratingText": func(f float64) string {
+			if f < 0 {
+				return "U"
+			}
+			return strconv.FormatFloat(f, 'f', 1, 64)
 		},
 		"ratingSave": func(sidVar string) string {
 			return fmt.Sprintf(`$nextTick(()=>{ var i=$el.querySelector('input'); i.dataset.sid=%s; i._ratingSave=function(r){ratingSync(i,r);htmx.ajax('POST','/api/series/'+%s+'/rating',{values:{rating:r},swap:'none'})} })`, sidVar, sidVar)

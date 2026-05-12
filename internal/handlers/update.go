@@ -192,8 +192,13 @@ func (h *Handler) runWatchtowerUpdate() {
 	resp, err := client.Do(req)
 	if err != nil {
 		uc.appendLog("ERROR: Watchtower request failed: " + err.Error())
-		uc.appendLog("  hint: ensure WATCHTOWER_URL is set and Watchtower container is running")
-		uc.appendLog("  hint: add Watchtower to docker-compose.yml with WATCHTOWER_HTTP_API=true")
+		uc.appendLog("")
+		uc.appendLog("Possible fixes:")
+		uc.appendLog("  1. Upgrade Docker in the LXC: curl -fsSL https://get.docker.com | sh")
+		uc.appendLog("     (Watchtower requires Docker 20.10+, you may have an older version)")
+		uc.appendLog("  2. Restart Watchtower: docker compose up -d watchtower")
+		uc.appendLog("  3. Update manually from the LXC shell:")
+		uc.appendLog("     docker compose -f /opt/webfictionpoller/docker-compose.yml pull && docker compose -f /opt/webfictionpoller/docker-compose.yml up -d")
 		logging.Error("self-update: watchtower request failed: %v", err)
 		return
 	}

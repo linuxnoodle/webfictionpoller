@@ -28,6 +28,9 @@ function update_script() {
     exit
   fi
 
+  msg_info "Ensuring Docker is up to date"
+  curl -fsSL https://get.docker.com | sh >/dev/null 2>&1
+
   msg_info "Updating docker-compose.yml"
   cat > /opt/webfictionpoller/docker-compose.yml << 'DCEOF'
 services:
@@ -56,7 +59,7 @@ services:
     restart: unless-stopped
 
   watchtower:
-    image: containrrr/watchtower
+    image: containrrr/watchtower:1.7.1
     environment:
       - WATCHTOWER_HTTP_API=true
       - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller
@@ -82,9 +85,7 @@ description
 INSTALL_DIR="/opt/webfictionpoller"
 
 msg_info "Installing Docker in LXC"
-if ! pct exec "$CTID" -- bash -c "command -v docker &>/dev/null"; then
-  pct exec "$CTID" -- bash -c "curl -fsSL https://get.docker.com | sh"
-fi
+pct exec "$CTID" -- bash -c "curl -fsSL https://get.docker.com | sh"
 pct exec "$CTID" -- systemctl enable -q --now docker
 msg_ok "Installed Docker"
 
@@ -116,7 +117,7 @@ services:
     restart: unless-stopped
 
   watchtower:
-    image: containrrr/watchtower
+    image: containrrr/watchtower:1.7.1
     environment:
       - WATCHTOWER_HTTP_API=true
       - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller

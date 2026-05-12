@@ -74,13 +74,10 @@ function initRatings() {
         span._ratingInited = true;
         span.dataset.sid = sid;
         var v = parseFloat(span.dataset.ratingValue);
-        if (v < 0) {
-            span.textContent = 'U';
-            ratingApplyStyle(span, -1);
-        } else {
-            span.textContent = v.toFixed(1);
-            ratingApplyStyle(span, v);
-        }
+        span._ratingSave = function(r) {
+            ratingSync(span, r);
+            htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
+        };
         span.addEventListener('click', function(e) {
             e.stopPropagation();
             if (span.tagName === 'INPUT') return;
@@ -97,10 +94,7 @@ function initRatings() {
             input.setAttribute('data-rating-active', '');
             input.style.width = span.style.width || '';
             ratingInput(input);
-            input._ratingSave = function(r) {
-                ratingSync(input, r);
-                htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
-            };
+            input._ratingSave = span._ratingSave;
             if (v >= 0) ratingApplyStyle(input, v);
             span.replaceWith(input);
             input.focus();
@@ -113,10 +107,7 @@ function initRatings() {
                 newSpan.className = input.className;
                 newSpan.setAttribute('data-rating-value', '');
                 var rv = input.dataset.u === '1' ? -1 : parseFloat(input.value) || -1;
-                newSpan._ratingSave = function(r) {
-                    ratingSync(newSpan, r);
-                    htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
-                };
+                newSpan._ratingSave = span._ratingSave;
                 newSpan.addEventListener('click', arguments.callee);
                 if (rv < 0) {
                     newSpan.textContent = 'U';
@@ -128,10 +119,6 @@ function initRatings() {
                 input.replaceWith(newSpan);
             });
         });
-        span._ratingSave = function(r) {
-            ratingSync(span, r);
-            htmx.ajax('POST', '/api/series/' + sid + '/rating', {values:{rating:r}, swap:'none'});
-        };
     });
 }
 document.addEventListener('DOMContentLoaded', initRatings);
