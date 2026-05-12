@@ -80,7 +80,7 @@ function initRatings() {
         }
     });
 }
-initRatings();
+document.addEventListener('DOMContentLoaded', initRatings);
 document.addEventListener('htmx:afterSettle', function() { initRatings(); });
 </script>
 <nav class="bg-neutral-800 border-b border-neutral-700 px-4 py-3 flex items-center justify-between">
