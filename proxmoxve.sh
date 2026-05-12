@@ -28,8 +28,46 @@ function update_script() {
     exit
   fi
 
+  msg_info "Updating docker-compose.yml"
+  cat > /opt/webfictionpoller/docker-compose.yml << 'DCEOF'
+services:
+  app:
+    image: ghcr.io/linuxnoodle/webfictionpoller:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_PATH=/data/data.db
+      - ADDR=:8080
+      - POLL_INTERVAL=15m
+      - FLARESOLVERR_URL=http://flaresolverr:8191
+      - LOG_DIR=/data/logs
+      - WATCHTOWER_URL=http://watchtower:8080
+      - WATCHTOWER_TOKEN=webfictionpoller
+    volumes:
+      - ./data:/data
+    depends_on:
+      - flaresolverr
+    restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    environment:
+      - LOG_LEVEL=info
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    environment:
+      - WATCHTOWER_HTTP_API=true
+      - WATCHTOWER_HTTP_API_TOKEN=webfictionpoller
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 3600 --cleanup app
+    restart: unless-stopped
+DCEOF
+
   msg_info "Updating ${APP} (pulling latest image)"
-  docker compose -f /opt/webfictionpoller/docker-compose.yml pull app
+  docker compose -f /opt/webfictionpoller/docker-compose.yml pull
   docker compose -f /opt/webfictionpoller/docker-compose.yml up -d --remove-orphans
   docker image prune -f >/dev/null 2>&1
   msg_ok "Updated ${APP} successfully"
