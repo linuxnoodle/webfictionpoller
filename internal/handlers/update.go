@@ -170,12 +170,11 @@ func (h *Handler) runSelfUpdate() {
 	uc.appendLog("Starting self-update...")
 	wd, _ := os.Getwd()
 	uc.appendLog("  working dir: " + wd)
-	logging.Info("self-update: working dir: %s", wd)
+	uc.appendLog("  COMPOSE_FILE env: " + os.Getenv("COMPOSE_FILE"))
 
 	composeFile := os.Getenv("COMPOSE_FILE")
 	if composeFile != "" {
-		uc.appendLog("  COMPOSE_FILE env: " + composeFile)
-		logging.Info("self-update: COMPOSE_FILE env: %s", composeFile)
+		uc.appendLog("  using COMPOSE_FILE env")
 	}
 	if composeFile == "" {
 		candidates := []string{
@@ -196,22 +195,27 @@ func (h *Handler) runSelfUpdate() {
 				logging.Info("self-update: found compose file: %s", candidate)
 				break
 			}
+			uc.appendLog("  tried: " + candidate + " -> " + err.Error())
 			logging.Info("self-update: tried %s: %v", candidate, err)
 		}
 		entries, _ := os.ReadDir("/opt")
 		if entries != nil {
 			for _, e := range entries {
+				uc.appendLog("  /opt/" + e.Name())
 				logging.Info("self-update: /opt contains: %s", e.Name())
 			}
 		} else {
+			uc.appendLog("  /opt: not readable")
 			logging.Info("self-update: /opt: not readable")
 		}
 		entries2, _ := os.ReadDir("/opt/webfictionpoller")
 		if entries2 != nil {
 			for _, e := range entries2 {
+				uc.appendLog("  /opt/webfictionpoller/" + e.Name())
 				logging.Info("self-update: /opt/webfictionpoller contains: %s", e.Name())
 			}
 		} else {
+			uc.appendLog("  /opt/webfictionpoller: does not exist")
 			logging.Info("self-update: /opt/webfictionpoller: not readable or does not exist")
 		}
 	}
