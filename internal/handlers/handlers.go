@@ -402,8 +402,15 @@ func (h *Handler) PollNow(w http.ResponseWriter, r *http.Request) {
 		h.pool.Submit(worker.Job{Series: s, Provider: p})
 		count++
 	}
+	h.pool.StartPoll(count)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{"queued": count})
+}
+
+func (h *Handler) PollProgress(w http.ResponseWriter, r *http.Request) {
+	status := h.pool.PollProgress()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
 }
 
 func (h *Handler) SearchSeries(w http.ResponseWriter, r *http.Request) {

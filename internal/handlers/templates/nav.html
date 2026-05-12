@@ -1,4 +1,5 @@
 {{define "nav"}}
+<style>@keyframes spin{to{transform:rotate(360deg)}}.spinner{animation:spin 1s linear infinite;display:inline-block}</style>
 <script>
 function ratingColor(v) {
     if (v < 0) return 'hsl(0,0%,50%)';
@@ -103,6 +104,37 @@ document.addEventListener('click', function(e) {
         ratingApplyStyle(s, rv < 0 ? -1 : rv);
     });
 }, true);
+function startPoll(btn) {
+    var icon = document.getElementById('poll-icon');
+    var spinner = document.getElementById('poll-spinner');
+    var status = document.getElementById('poll-status');
+    var statusMobile = document.getElementById('poll-status-mobile');
+    btn.disabled = true;
+    icon.style.display = 'none';
+    spinner.style.display = '';
+    status.style.display = '';
+    status.textContent = 'Starting...';
+    if (statusMobile) { statusMobile.style.display = ''; statusMobile.textContent = 'Starting...'; }
+    fetch('/api/poll', {method:'POST', headers:{'X-CSRF-Token':_csrf}}).then(function(r){return r.json()}).then(function(d) {
+        if (!d.queued) { btn.disabled = false; icon.style.display = ''; spinner.style.display = 'none'; status.style.display = 'none'; if (statusMobile) statusMobile.style.display = 'none'; return; }
+        var label = '0/' + d.queued;
+        status.textContent = label;
+        if (statusMobile) statusMobile.textContent = label;
+        var poll = setInterval(function() {
+            fetch('/api/poll/progress').then(function(r){return r.json()}).then(function(p) {
+                var lbl = p.done + '/' + p.total;
+                status.textContent = lbl;
+                if (statusMobile) statusMobile.textContent = lbl;
+                if (!p.active) {
+                    clearInterval(poll);
+                    btn.disabled = false; icon.style.display = ''; spinner.style.display = 'none';
+                    status.textContent = 'Done'; if (statusMobile) statusMobile.textContent = 'Done';
+                    setTimeout(function(){ status.style.display = 'none'; if (statusMobile) statusMobile.style.display = 'none'; location.reload(); }, 800);
+                }
+            });
+        }, 1500);
+    });
+}
 function ratingSaveFromEl(el, r) {
     var c = el.closest('[data-rating-sid]');
     if (!c) return;
@@ -117,10 +149,12 @@ function ratingSaveFromEl(el, r) {
         <a href="/series" class="text-neutral-400 hover:text-neutral-200 px-2 py-1 text-sm">Series</a>
         <a href="/series/add" title="Add series"
            class="text-neutral-300 hover:text-white bg-neutral-700 hover:bg-neutral-600 w-8 h-8 flex items-center justify-center rounded font-bold text-lg leading-none">+</a>
-        <button hx-post="/api/poll" hx-swap="none" hx-on::after-request="location.reload()" title="Poll now"
+        <button id="poll-btn" title="Poll now" onclick="startPoll(this)"
                 class="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 w-8 h-8 flex items-center justify-center rounded">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+            <svg id="poll-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+            <svg id="poll-spinner" style="display:none" class="spinner w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg>
         </button>
+        <span id="poll-status" style="display:none" class="text-xs text-neutral-500 whitespace-nowrap"></span>
         <div class="relative" x-data="{ open: false, updateAvail: false }"
              x-init="fetch('/api/version').then(r=>r.json()).then(d=>{updateAvail=d.update_available;document.querySelectorAll('[data-ua]').forEach(function(e){e.dataset.ua=d.update_available?'1':'0';if(d.update_available)e.style.display=''})})">
             <button @click="open = !open" @click.outside="open = false"
@@ -159,7 +193,8 @@ function ratingSaveFromEl(el, r) {
     </a>
     <a href="/series" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Series</a>
     <a href="/series/add" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Add Series</a>
-    <button hx-post="/api/poll" hx-swap="none" hx-on::after-request="location.reload()" class="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Poll Now</button>
+    <button id="poll-btn-mobile" onclick="startPoll(document.getElementById('poll-btn'))" class="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Poll Now</button>
+    <div id="poll-status-mobile" style="display:none" class="px-3 py-1 text-xs text-neutral-500"></div>
     <div class="border-t border-neutral-700 my-1"></div>
     <a href="/series/import" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Import OPML</a>
     <a href="/series/export" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Export OPML</a>

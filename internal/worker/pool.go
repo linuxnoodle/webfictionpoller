@@ -22,6 +22,11 @@ type WorkerPool struct {
 	wg         sync.WaitGroup
 	stopCh     chan struct{}
 	onChapters func(seriesID int64, chapters []models.Chapter)
+
+	pollMu      sync.Mutex
+	pollTotal   int
+	pollDone    int
+	pollActive  bool
 }
 
 type rateLimiter struct {
@@ -136,6 +141,7 @@ func (wp *WorkerPool) run(id int) {
 			chapters, err := job.Provider.PollUpdates(job.Series)
 			if err != nil {
 				logging.Error("[worker %d] error polling series %d (%s): %v", id, job.Series.ID, job.Series.Title, err)
+				wp.FinishPoll()
 				continue
 			}
 
@@ -143,6 +149,7 @@ func (wp *WorkerPool) run(id int) {
 				wp.onChapters(job.Series.ID, chapters)
 			}
 
+			wp.FinishPoll()
 			logging.Info("[worker %d] series %q: found %d chapters", id, job.Series.Title, len(chapters))
 		}
 	}
@@ -163,4 +170,37 @@ func (wp *WorkerPool) AllProviders() map[string]providers.Provider {
 		result[k] = v
 	}
 	return result
+}
+
+func (wp *WorkerPool) StartPoll(count int) {
+	wp.pollMu.Lock()
+	defer wp.pollMu.Unlock()
+	wp.pollTotal = count
+	wp.pollDone = 0
+	wp.pollActive = count > 0
+}
+
+func (wp *WorkerPool) FinishPoll() {
+	wp.pollMu.Lock()
+	defer wp.pollMu.Unlock()
+	wp.pollDone++
+	if wp.pollDone >= wp.pollTotal {
+		wp.pollActive = false
+	}
+}
+
+type PollStatus struct {
+	Active bool `json:"active"`
+	Total  int  `json:"total"`
+	Done   int  `json:"done"`
+}
+
+func (wp *WorkerPool) PollProgress() PollStatus {
+	wp.pollMu.Lock()
+	defer wp.pollMu.Unlock()
+	return PollStatus{
+		Active: wp.pollActive,
+		Total:  wp.pollTotal,
+		Done:   wp.pollDone,
+	}
 }

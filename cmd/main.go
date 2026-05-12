@@ -139,6 +139,7 @@ func main() {
 		r.Post("/api/read-all", h.MarkAllChaptersRead)
 		r.Post("/api/series/{id}/delete", h.DeleteSeries)
 		r.Post("/api/poll", h.PollNow)
+		r.Get("/api/poll/progress", h.PollProgress)
 		r.Get("/api/search", h.SearchSeries)
 		r.Get("/api/version", h.VersionAPI)
 		r.Post("/api/version/check", h.VersionCheckNow)
