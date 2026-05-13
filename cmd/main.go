@@ -148,6 +148,13 @@ func main() {
 	})
 
 	csrfHandler := nosurf.New(r)
+	csrfHandler.SetBaseCookie(http.Cookie{
+		Path:     "/",
+		MaxAge:   31536000,
+		HttpOnly: true,
+		Secure:  os.Getenv("COOKIE_SECURE") != "false",
+		SameSite: http.SameSiteLaxMode,
+	})
 	csrfHandler.ExemptFunc(func(r *http.Request) bool {
 		return r.Method == "GET" || r.Method == "HEAD" || r.Method == "OPTIONS"
 	})

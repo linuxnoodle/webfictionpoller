@@ -233,8 +233,20 @@ func (h *Handler) AddSeries(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "failed to save series", http.StatusInternalServerError)
 				return
 			}
-			h.pool.Submit(worker.Job{Series: meta, Provider: p})
-			logging.Info("[handler] added series %q (id=%d)", meta.Title, id)
+			meta.ID = id
+
+			chapters, err := p.PollUpdates(meta)
+			if err != nil {
+				logging.Error("[handler] initial poll for %q (id=%d): %v", meta.Title, id, err)
+			} else if len(chapters) > 0 {
+				if _, insertErr := h.store.InsertChapters(id, chapters); insertErr != nil {
+					logging.Error("[handler] inserting chapters for %q (id=%d): %v", meta.Title, id, insertErr)
+				}
+				logging.Info("[handler] added series %q (id=%d) with %d chapters", meta.Title, id, len(chapters))
+			} else {
+				logging.Info("[handler] added series %q (id=%d) with 0 chapters", meta.Title, id)
+			}
+
 			w.Header().Set("HX-Redirect", "/series")
 			w.WriteHeader(http.StatusOK)
 			return
