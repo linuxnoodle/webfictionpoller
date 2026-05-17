@@ -10,4 +10,6 @@ type Provider interface {
 	FetchChapterContent(url string) (string, error)
 	RequiresAuth() bool
 	SetCookies(cookies string) error
+	SupportsLogin() bool
+	Login(username, password string) error
 }

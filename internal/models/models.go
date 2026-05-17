@@ -32,10 +32,12 @@ type User struct {
 }
 
 type ProviderConfig struct {
-	ID           int64     `json:"id"`
-	ProviderName string    `json:"provider_name"`
-	CookieData   string    `json:"cookie_data"`
-	LastPolled   time.Time `json:"last_polled"`
+	ID                 int64     `json:"id"`
+	ProviderName       string    `json:"provider_name"`
+	CookieData         string    `json:"cookie_data"`
+	Username           string    `json:"username"`
+	EncryptedPassword  string    `json:"-"`
+	LastPolled         time.Time `json:"last_polled"`
 }
 
 type SeriesWithChapters struct {

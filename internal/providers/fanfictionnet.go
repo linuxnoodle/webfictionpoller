@@ -48,6 +48,10 @@ func (p *FlareSolverrProvider) RequiresAuth() bool { return false }
 
 func (p *FlareSolverrProvider) SetCookies(_ string) error { return nil }
 
+func (p *FlareSolverrProvider) SupportsLogin() bool { return false }
+
+func (p *FlareSolverrProvider) Login(_, _ string) error { return fmt.Errorf("not supported") }
+
 func (p *FlareSolverrProvider) solve(url string) (string, error) {
 	payload := map[string]interface{}{
 		"cmd":        "request.get",

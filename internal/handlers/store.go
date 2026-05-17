@@ -272,9 +272,9 @@ func (s *Store) GetAllActiveSeries() ([]models.Series, error) {
 func (s *Store) GetProviderConfig(name string) (*models.ProviderConfig, error) {
 	var pc models.ProviderConfig
 	err := s.db.QueryRow(`
-		SELECT id, provider_name, cookie_data, last_polled
+		SELECT id, provider_name, cookie_data, last_polled, username, encrypted_password
 		FROM provider_configs WHERE provider_name = ?
-	`, name).Scan(&pc.ID, &pc.ProviderName, &pc.CookieData, &pc.LastPolled)
+	`, name).Scan(&pc.ID, &pc.ProviderName, &pc.CookieData, &pc.LastPolled, &pc.Username, &pc.EncryptedPassword)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -284,12 +284,12 @@ func (s *Store) GetProviderConfig(name string) (*models.ProviderConfig, error) {
 	return &pc, nil
 }
 
-func (s *Store) UpsertProviderConfig(name, cookieData string) error {
+func (s *Store) UpsertProviderConfig(name, cookieData, username, encryptedPassword string) error {
 	_, err := s.db.Exec(`
-		INSERT INTO provider_configs (provider_name, cookie_data, last_polled)
-		VALUES (?, ?, ?)
-		ON CONFLICT(provider_name) DO UPDATE SET cookie_data = ?, last_polled = ?
-	`, name, cookieData, time.Now(), cookieData, time.Now())
+		INSERT INTO provider_configs (provider_name, cookie_data, last_polled, username, encrypted_password)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(provider_name) DO UPDATE SET cookie_data = ?, last_polled = ?, username = ?, encrypted_password = ?
+	`, name, cookieData, time.Now(), username, encryptedPassword, cookieData, time.Now(), username, encryptedPassword)
 	return err
 }
 
@@ -472,7 +472,7 @@ func (s *Store) ImportBackup(backup *models.Backup) (imported, skipped int, err 
 	}
 
 	for name, data := range backup.Providers {
-		s.UpsertProviderConfig(name, data)
+		s.UpsertProviderConfig(name, data, "", "")
 	}
 
 	return imported, skipped, nil

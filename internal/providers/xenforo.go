@@ -60,6 +60,8 @@ func (p *XenForoProvider) MatchURL(rawURL string) bool {
 
 func (p *XenForoProvider) RequiresAuth() bool { return p.requires }
 
+func (p *XenForoProvider) SupportsLogin() bool { return p.requires }
+
 func (p *XenForoProvider) SetCookies(cookieStr string) error {
 	if cookieStr == "" {
 		return nil
@@ -86,6 +88,62 @@ func (p *XenForoProvider) parseCookies(raw string) []*http.Cookie {
 		}
 	}
 	return cookies
+}
+
+func (p *XenForoProvider) Login(username, password string) error {
+	loginURL := p.baseURL + "/login/"
+	resp, err := doGet(p.client, loginURL)
+	if err != nil {
+		return fmt.Errorf("fetching login page: %w", err)
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return fmt.Errorf("parsing login page: %w", err)
+	}
+
+	xfToken := ""
+	doc.Find("input[name='_xfToken']").Each(func(i int, s *goquery.Selection) {
+		if v, ok := s.Attr("value"); ok && v != "" {
+			xfToken = v
+		}
+	})
+
+	form := url.Values{}
+	form.Set("login", username)
+	form.Set("password", password)
+	form.Set("_xfToken", xfToken)
+	form.Set("remember", "1")
+
+	req, err := http.NewRequest("POST", p.baseURL+"/login/login", strings.NewReader(form.Encode()))
+	if err != nil {
+		return fmt.Errorf("creating login request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", userAgent)
+
+	loginResp, err := p.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("login request failed: %w", err)
+	}
+	defer loginResp.Body.Close()
+
+	if loginResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("login returned status %d", loginResp.StatusCode)
+	}
+
+	loginDoc, err := goquery.NewDocumentFromReader(loginResp.Body)
+	if err != nil {
+		return fmt.Errorf("parsing login response: %w", err)
+	}
+
+	if loginDoc.Find(".blockMessage--error").Length() > 0 {
+		return fmt.Errorf("login failed: invalid credentials")
+	}
+
+	logging.Info("[%s] successfully logged in as %s", p.name, username)
+	return nil
 }
 
 func (p *XenForoProvider) FetchSeriesMetadata(rawURL string) (models.Series, error) {

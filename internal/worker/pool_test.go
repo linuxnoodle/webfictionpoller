@@ -25,6 +25,8 @@ func (m *mockProvider) FetchSeriesMetadata(url string) (models.Series, error) {
 }
 func (m *mockProvider) RequiresAuth() bool              { return false }
 func (m *mockProvider) SetCookies(cookies string) error { return nil }
+func (m *mockProvider) SupportsLogin() bool             { return false }
+func (m *mockProvider) Login(_, _ string) error         { return fmt.Errorf("not supported") }
 func (m *mockProvider) FetchChapterContent(url string) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }

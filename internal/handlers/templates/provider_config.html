@@ -28,6 +28,30 @@
                     <span class="text-xs bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded">Public</span>
                     {{end}}
                 </div>
+                {{if $p.SupportsLogin}}
+                <div>
+                    <label class="block text-sm text-neutral-500 mb-1">Username</label>
+                    <input type="text" name="username"
+                           value="{{index $.Usernames $name}}"
+                           placeholder="Account username"
+                           autocomplete="username"
+                           class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                </div>
+                <div>
+                    <label class="block text-sm text-neutral-500 mb-1">Password</label>
+                    <input type="password" name="password"
+                           placeholder="{{if index $.Usernames $name}}Leave blank to keep saved password{{else}}Account password{{end}}"
+                           autocomplete="current-password"
+                           class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                </div>
+                <div class="pt-2 border-t border-neutral-800">
+                    <label class="block text-sm text-neutral-500 mb-1">Cookie Data <span class="text-neutral-600">(advanced fallback)</span></label>
+                    <input type="text" name="cookie_data"
+                           value="{{index $.Configs $name}}"
+                           placeholder="key1=value1; key2=value2"
+                           class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                </div>
+                {{else}}
                 <div>
                     <label class="block text-sm text-neutral-500 mb-1">Cookie Data</label>
                     <input type="text" name="cookie_data"
@@ -35,6 +59,7 @@
                            placeholder="key1=value1; key2=value2"
                            class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
                 </div>
+                {{end}}
                 <button type="submit" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1 rounded text-sm">
                     Save
                 </button>

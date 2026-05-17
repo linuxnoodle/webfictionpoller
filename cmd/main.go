@@ -18,6 +18,7 @@ import (
 	"github.com/justinas/nosurf"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
+	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
 	"github.com/linuxnoodle/webfictionpoller/internal/database"
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
@@ -46,6 +47,12 @@ func main() {
 	}
 	defer db.Close()
 
+	vault, err := crypto.OpenVault(envOrDefault("SECRET_KEY_PATH", "data/secret.key"))
+	if err != nil {
+		logging.Error("failed to init encryption vault: %v", err)
+		log.Fatalf("failed to init encryption vault: %v", err)
+	}
+
 	sessionManager := scs.New()
 	sessionManager.Store = sqlite3store.New(db)
 	sessionManager.Lifetime = 24 * time.Hour
@@ -70,7 +77,7 @@ func main() {
 		}
 	})
 
-	loadProviderCookies(store, pool)
+	loadProviderCredentials(store, pool, vault)
 
 	if err := handlers.InitTemplates(); err != nil {
 		log.Fatalf("failed to load templates: %v", err)
@@ -78,7 +85,7 @@ func main() {
 
 	faviconCache := handlers.NewFaviconCache()
 
-	h := handlers.NewHandler(store, pool, logDir)
+	h := handlers.NewHandler(store, pool, logDir, vault)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -288,17 +295,33 @@ func loginBanMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func loadProviderCookies(store *handlers.Store, pool *worker.WorkerPool) {
+func loadProviderCredentials(store *handlers.Store, pool *worker.WorkerPool, vault *crypto.Vault) {
 	for name, p := range pool.AllProviders() {
 		if !p.RequiresAuth() {
 			continue
 		}
 		pc, err := store.GetProviderConfig(name)
-		if err != nil || pc == nil || pc.CookieData == "" {
+		if err != nil || pc == nil {
 			continue
 		}
-		if err := p.SetCookies(pc.CookieData); err != nil {
-			logging.Error("warning: failed to set cookies for %s: %v", name, err)
+
+		if pc.Username != "" && pc.EncryptedPassword != "" && p.SupportsLogin() {
+			plainPass, err := vault.Decrypt(pc.EncryptedPassword)
+			if err != nil {
+				logging.Error("warning: failed to decrypt password for %s: %v", name, err)
+			} else if err := p.Login(pc.Username, plainPass); err != nil {
+				logging.Error("warning: login failed for %s: %v", name, err)
+				if pc.CookieData != "" {
+					_ = p.SetCookies(pc.CookieData)
+				}
+			}
+			continue
+		}
+
+		if pc.CookieData != "" {
+			if err := p.SetCookies(pc.CookieData); err != nil {
+				logging.Error("warning: failed to set cookies for %s: %v", name, err)
+			}
 		}
 	}
 }

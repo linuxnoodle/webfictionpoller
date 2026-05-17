@@ -71,6 +71,8 @@ type migration struct {
 var migrations = []migration{
 	{"add_preview_html", "ALTER TABLE chapters ADD COLUMN preview_html TEXT DEFAULT ''"},
 	{"unrated_rating", "UPDATE series SET rating = -1 WHERE rating = 5.0 OR rating = 0"},
+	{"provider_credentials", "ALTER TABLE provider_configs ADD COLUMN username TEXT DEFAULT ''"},
+	{"provider_encrypted_password", "ALTER TABLE provider_configs ADD COLUMN encrypted_password TEXT DEFAULT ''"},
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {

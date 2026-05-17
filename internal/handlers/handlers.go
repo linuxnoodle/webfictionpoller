@@ -12,6 +12,7 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 
+	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 	"github.com/linuxnoodle/webfictionpoller/internal/opml"
@@ -31,10 +32,11 @@ type Handler struct {
 	pool          *worker.WorkerPool
 	logDir        string
 	updateChecker *UpdateChecker
+	vault         *crypto.Vault
 }
 
-func NewHandler(store *Store, pool *worker.WorkerPool, logDir string) *Handler {
-	return &Handler{store: store, pool: pool, logDir: logDir, updateChecker: NewUpdateChecker()}
+func NewHandler(store *Store, pool *worker.WorkerPool, logDir string, vault *crypto.Vault) *Handler {
+	return &Handler{store: store, pool: pool, logDir: logDir, updateChecker: NewUpdateChecker(), vault: vault}
 }
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
@@ -368,32 +370,71 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ProviderConfigPage(w http.ResponseWriter, r *http.Request) {
 	providers := h.pool.AllProviders()
 	configs := make(map[string]string)
+	usernames := make(map[string]string)
 	for name := range providers {
 		pc, _ := h.store.GetProviderConfig(name)
 		if pc != nil {
 			configs[name] = pc.CookieData
+			usernames[name] = pc.Username
 		}
 	}
 	renderTemplate(w, r, "provider_config", map[string]interface{}{
 		"Providers": providers,
 		"Configs":   configs,
+		"Usernames": usernames,
 	})
 }
 
 func (h *Handler) SaveProviderConfig(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("provider_name")
 	cookieData := r.FormValue("cookie_data")
+	username := r.FormValue("username")
+	password := r.FormValue("password")
 	if name == "" {
 		http.Error(w, "provider_name required", http.StatusBadRequest)
 		return
 	}
-	if err := h.store.UpsertProviderConfig(name, cookieData); err != nil {
+
+	var encryptedPassword string
+	if h.vault != nil && password != "" {
+		enc, err := h.vault.Encrypt(password)
+		if err != nil {
+			logging.Error("[handler] encrypting password for %s: %v", name, err)
+			http.Error(w, "encryption error", http.StatusInternalServerError)
+			return
+		}
+		encryptedPassword = enc
+	} else if h.vault != nil && password == "" {
+		existing, _ := h.store.GetProviderConfig(name)
+		if existing != nil {
+			encryptedPassword = existing.EncryptedPassword
+		}
+	}
+
+	if err := h.store.UpsertProviderConfig(name, cookieData, username, encryptedPassword); err != nil {
 		internalError(w, r, err)
 		return
 	}
-	if p, ok := h.pool.GetProvider(name); ok && p.RequiresAuth() {
+
+	p, ok := h.pool.GetProvider(name)
+	if !ok {
+		logging.Info("[handler] updated provider config for %s", name)
+		w.Header().Set("HX-Redirect", "/admin/providers")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if username != "" && encryptedPassword != "" && p.SupportsLogin() && h.vault != nil {
+		plainPass, err := h.vault.Decrypt(encryptedPassword)
+		if err != nil {
+			logging.Error("[handler] decrypting password for %s: %v", name, err)
+		} else if err := p.Login(username, plainPass); err != nil {
+			logging.Error("[handler] login failed for %s: %v", name, err)
+		}
+	} else if p.RequiresAuth() && cookieData != "" {
 		_ = p.SetCookies(cookieData)
 	}
+
 	logging.Info("[handler] updated provider config for %s", name)
 	w.Header().Set("HX-Redirect", "/admin/providers")
 	w.WriteHeader(http.StatusOK)

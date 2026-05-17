@@ -42,6 +42,10 @@ func (p *RoyalRoadProvider) RequiresAuth() bool { return false }
 
 func (p *RoyalRoadProvider) SetCookies(_ string) error { return nil }
 
+func (p *RoyalRoadProvider) SupportsLogin() bool { return false }
+
+func (p *RoyalRoadProvider) Login(_, _ string) error { return fmt.Errorf("not supported") }
+
 func (p *RoyalRoadProvider) FetchSeriesMetadata(url string) (models.Series, error) {
 	var series models.Series
 	resp, err := doGet(p.client, url)

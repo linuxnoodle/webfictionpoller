@@ -271,7 +271,7 @@ func TestProviderConfig(t *testing.T) {
 		t.Error("expected nil for non-existent config")
 	}
 
-	err = s.UpsertProviderConfig("test", "cookie1=val1")
+	err = s.UpsertProviderConfig("test", "cookie1=val1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestProviderConfig(t *testing.T) {
 		t.Errorf("CookieData = %q, want %q", got.CookieData, "cookie1=val1")
 	}
 
-	err = s.UpsertProviderConfig("test", "cookie2=val2")
+	err = s.UpsertProviderConfig("test", "cookie2=val2", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
