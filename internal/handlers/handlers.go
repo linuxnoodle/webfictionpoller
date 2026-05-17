@@ -213,18 +213,18 @@ func (h *Handler) AddSeriesPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AddSeries(w http.ResponseWriter, r *http.Request) {
-	url := r.FormValue("url")
-	if url == "" {
-		http.Error(w, "url required", http.StatusBadRequest)
+	rawURL := r.FormValue("url")
+	if rawURL == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "URL is required"})
 		return
 	}
 
 	for _, p := range h.pool.AllProviders() {
-		if p.MatchURL(url) {
-			meta, err := p.FetchSeriesMetadata(url)
+		if p.MatchURL(rawURL) {
+			meta, err := p.FetchSeriesMetadata(rawURL)
 			if err != nil {
-				logging.Error("[handler] fetching metadata for %s: %v", url, err)
-				http.Error(w, "failed to fetch series metadata", http.StatusInternalServerError)
+				logging.Error("[handler] fetching metadata for %s: %v", rawURL, err)
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]interface{}{"success": false, "error": "Failed to fetch series metadata. Check the URL and try again."})
 				return
 			}
 			meta.Rating = models.UnratedRating
@@ -232,30 +232,46 @@ func (h *Handler) AddSeries(w http.ResponseWriter, r *http.Request) {
 			id, err := h.store.AddSeries(meta)
 			if err != nil {
 				logging.Error("[handler] saving series: %v", err)
-				http.Error(w, "failed to save series", http.StatusInternalServerError)
+				writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": "Failed to save series"})
+				return
+			}
+			if id == 0 {
+				writeJSON(w, http.StatusConflict, map[string]interface{}{"success": false, "error": "This series is already tracked"})
 				return
 			}
 			meta.ID = id
 
+			var chapterCount int
 			chapters, err := p.PollUpdates(meta)
 			if err != nil {
 				logging.Error("[handler] initial poll for %q (id=%d): %v", meta.Title, id, err)
 			} else if len(chapters) > 0 {
-				if _, insertErr := h.store.InsertChapters(id, chapters); insertErr != nil {
+				inserted, insertErr := h.store.InsertChapters(id, chapters)
+				if insertErr != nil {
 					logging.Error("[handler] inserting chapters for %q (id=%d): %v", meta.Title, id, insertErr)
 				}
-				logging.Info("[handler] added series %q (id=%d) with %d chapters", meta.Title, id, len(chapters))
+				chapterCount = inserted
+				logging.Info("[handler] added series %q (id=%d) with %d chapters", meta.Title, id, inserted)
 			} else {
 				logging.Info("[handler] added series %q (id=%d) with 0 chapters", meta.Title, id)
 			}
 
-			w.Header().Set("HX-Redirect", "/series")
-			w.WriteHeader(http.StatusOK)
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"success":  true,
+				"title":    meta.Title,
+				"chapters": chapterCount,
+			})
 			return
 		}
 	}
 
-	http.Error(w, "no provider matched the given url", http.StatusBadRequest)
+	writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "No provider matched the given URL. Check the URL and try again."})
+}
+
+func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
 }
 
 func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {

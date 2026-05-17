@@ -4,7 +4,7 @@
     <div class="min-w-0 flex-1">
         <h4 class="text-sm sm:text-base font-semibold text-neutral-100 leading-tight">{{.Chapter.Title}}</h4>
         <div class="flex items-center gap-2 mt-1">
-            <span class="text-xs text-neutral-400">{{.Chapter.SeriesTitle}}</span>
+            <span class="text-xs text-neutral-400 cursor-pointer hover:text-neutral-200" onclick="goToSeries({{.Chapter.SeriesID}})">{{.Chapter.SeriesTitle}}</span>
             <span class="text-neutral-700">&middot;</span>
             <span class="text-xs text-neutral-500">{{.Chapter.PublishedAt.Format "Jan 02, 2006 15:04"}}</span>
         </div>

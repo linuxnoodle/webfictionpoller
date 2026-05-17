@@ -12,7 +12,7 @@
             <div data-content class="flex-1 min-w-0 overflow-hidden opacity-40">
                 <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                     <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block">
-                    <span data-badge class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                     <span data-badge class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem] cursor-pointer hover:text-neutral-400" onclick="event.stopPropagation();goToSeries({{.SeriesID}})">{{.SeriesTitle}}</span>
                     <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
                 </div>
             </div>
@@ -21,7 +21,7 @@
             <div data-content class="flex-1 min-w-0 overflow-hidden">
                 <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                     <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block">
-                    <span data-badge class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                     <span data-badge class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem] cursor-pointer hover:text-neutral-200" onclick="event.stopPropagation();goToSeries({{.SeriesID}})">{{.SeriesTitle}}</span>
                     <span data-title class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
                 </div>
             </div>

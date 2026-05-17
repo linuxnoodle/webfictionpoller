@@ -10,16 +10,20 @@
     <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
     <script src="/static/alpine.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
+    <style>@keyframes fadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}.result-dialog{animation:fadeIn .15s ease-out}</style>
 </head>
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
     <main class="max-w-6xl mx-auto px-4 py-6">
     <div class="max-w-xl mx-auto">
         <h1 class="text-2xl font-bold mb-6 text-neutral-100">Add Series</h1>
-        <form hx-post="/series/add" hx-swap="none" class="space-y-4">
+        <form id="add-form" hx-post="/series/add" hx-swap="none"
+              hx-on::after-request="showAddResult(event)"
+              class="space-y-4">
             <div>
                 <label class="block text-sm text-neutral-500 mb-1">Series URL</label>
-                <input type="url" name="url" required placeholder="https://www.royalroad.com/fiction/..."
+                <input id="series-url" type="url" name="url" required
+                       placeholder="https://www.royalroad.com/fiction/..."
                        class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 focus:outline-none focus:border-neutral-500" />
             </div>
             <div>
@@ -30,12 +34,70 @@
                     {{end}}
                 </div>
             </div>
-            <button type="submit" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-4 py-2 rounded">
-                Add Series
-            </button>
+            <button id="add-btn" type="submit"
+                    class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-4 py-2 rounded">Add Series</button>
         </form>
     </div>
+
+    <div id="add-result" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.6)">
+        <div class="result-dialog bg-neutral-900 border border-neutral-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 id="result-heading" class="text-lg font-semibold mb-2"></h3>
+            <p id="result-message" class="text-sm text-neutral-400 mb-4"></p>
+            <div class="flex gap-2 justify-end">
+                <button onclick="document.getElementById('add-result').classList.add('hidden')"
+                        class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-4 py-2 rounded text-sm">Close</button>
+                <a id="result-view-link" href="/series" class="hidden bg-emerald-800 hover:bg-emerald-700 text-emerald-200 px-4 py-2 rounded text-sm">View Series</a>
+                <button id="result-add-another" class="hidden bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-4 py-2 rounded text-sm"
+                        onclick="document.getElementById('add-result').classList.add('hidden');document.getElementById('series-url').focus()">Add Another</button>
+            </div>
+        </div>
+    </div>
     </main>
+    <script>
+    function showAddResult(event) {
+        var btn = document.getElementById('add-btn');
+        btn.disabled = false;
+        btn.textContent = 'Add Series';
+        var xhr = event.detail && event.detail.xhr;
+        if (!xhr) {
+            showResult(false, 'Network error. Please try again.');
+            return;
+        }
+        var data = JSON.parse(xhr.responseText);
+        if (data.success) {
+            showResult(true, '"' + data.title + '" added with ' + data.chapters + ' chapter' + (data.chapters !== 1 ? 's' : ''));
+        } else {
+            showResult(false, data.error);
+        }
+    }
+    function showResult(success, message) {
+        var el = document.getElementById('add-result');
+        var heading = document.getElementById('result-heading');
+        var msg = document.getElementById('result-message');
+        var viewLink = document.getElementById('result-view-link');
+        var addAnother = document.getElementById('result-add-another');
+        if (success) {
+            heading.textContent = 'Series Added';
+            heading.className = 'text-lg font-semibold text-emerald-400 mb-2';
+            msg.textContent = message;
+            viewLink.classList.remove('hidden');
+            addAnother.classList.remove('hidden');
+            document.getElementById('series-url').value = '';
+        } else {
+            heading.textContent = 'Error';
+            heading.className = 'text-lg font-semibold text-red-400 mb-2';
+            msg.textContent = message;
+            viewLink.classList.add('hidden');
+            addAnother.classList.add('hidden');
+        }
+        el.classList.remove('hidden');
+    }
+    document.getElementById('add-form').addEventListener('htmx:beforeRequest', function() {
+        var btn = document.getElementById('add-btn');
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+    });
+    </script>
 </body>
 </html>
 {{end}}

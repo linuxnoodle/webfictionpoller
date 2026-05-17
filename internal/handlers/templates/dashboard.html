@@ -14,7 +14,12 @@
         .preview-content p { margin-bottom: 0.5em; }
         .preview-content img { max-width: 100%; }
         .preview-content { max-height: 40vh; overflow-y: auto; }
+        @keyframes series-highlight { 0% { box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.6); } 100% { box-shadow: none; } }
+        .series-highlight { animation: series-highlight 1.5s ease-out; }
     </style>
+    <script>
+    if(!location.search||!new URLSearchParams(location.search).has('sort')){var _ds=localStorage.getItem('dashSort');if(_ds&&_ds!=='published')location.replace('/?sort='+_ds)}
+    </script>
     <script>
     var openPreviewId = null;
     function togglePreview(id) {
@@ -61,12 +66,22 @@
         var row = document.getElementById('row-' + id);
         if (row) _markReadRow(row, id, null);
     }
+    function goToSeries(seriesId) {
+        if (openPreviewId !== null) {
+            var prev = document.getElementById('preview-' + openPreviewId);
+            if (prev) prev.classList.add('hidden');
+            openPreviewId = null;
+        }
+        window.dispatchEvent(new CustomEvent('go-to-series', { detail: { id: seriesId } }));
+    }
     </script>
 </head>
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
     <main class="max-w-6xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
-    <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published' }" x-init="$watch('view', v => localStorage.setItem('dashView', v)); $watch('sortBy', v => localStorage.setItem('dashSort', v)); var _sRows=null,_sTimer=null; $watch('search', function(q) { if(!_sRows)_sRows=document.querySelectorAll('[data-st]'); clearTimeout(_sTimer); _sTimer=setTimeout(function(){ q=q.toLowerCase(); for(var i=0;i<_sRows.length;i++){_sRows[i].style.display=!q||_sRows[i].dataset.st.toLowerCase().indexOf(q)>=0?'':'none'} },150) })">
+    <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published' }"
+         @go-to-series.window="view='series';$nextTick(()=>{var c=document.getElementById('series-card-'+$event.detail.id);if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('series-highlight');setTimeout(function(){c.classList.remove('series-highlight')},1500)}})"
+         x-init="var _sortInit=true;var _urlSort=new URLSearchParams(location.search).get('sort');if(_urlSort==='published'||_urlSort==='received'){sortBy=_urlSort}$watch('view',function(v){localStorage.setItem('dashView',v)});$watch('sortBy',function(v){localStorage.setItem('dashSort',v);if(!_sortInit)location.href='/?sort='+v});_sortInit=false;var _sRows=null,_sTimer=null;$watch('search',function(q){if(!_sRows)_sRows=document.querySelectorAll('[data-st]');clearTimeout(_sTimer);_sTimer=setTimeout(function(){q=q.toLowerCase();for(var i=0;i<_sRows.length;i++){_sRows[i].style.display=!q||_sRows[i].dataset.st.toLowerCase().indexOf(q)>=0?'':'none'}},150)})">
         <div class="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between mb-4 sm:mb-6">
             <div class="flex flex-wrap items-center gap-2 sm:gap-4">
                 <h1 class="text-xl sm:text-2xl font-bold text-neutral-100">Dashboard</h1>
@@ -110,8 +125,7 @@
         {{end}}
 
         <!-- TIME VIEW -->
-        <div x-show="view === 'time'"
-             x-init="$watch('sortBy', () => { window.location.href = '/?sort=' + sortBy })">
+        <div x-show="view === 'time'">
             {{range .TimeGroups}}
             <div class="mt-4"
                  data-st="{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}">
@@ -125,16 +139,16 @@
                         <div data-content class="flex-1 min-w-0 overflow-hidden opacity-40">
                             <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                                 <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
-                                <span data-badge class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
-                                <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
-                            </div>
-                        </div>
-                        {{else}}
-                        <div data-dot class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
-                        <div data-content class="flex-1 min-w-0 overflow-hidden">
-                            <div class="flex items-center gap-1 sm:gap-2 min-w-0">
-                                <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
-                                <span data-badge class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                                 <span data-badge class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem] cursor-pointer hover:text-neutral-400" onclick="event.stopPropagation();goToSeries({{.SeriesID}})">{{.SeriesTitle}}</span>
+                                 <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
+                             </div>
+                         </div>
+                         {{else}}
+                         <div data-dot class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
+                         <div data-content class="flex-1 min-w-0 overflow-hidden">
+                             <div class="flex items-center gap-1 sm:gap-2 min-w-0">
+                                 <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
+                                 <span data-badge class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem] cursor-pointer hover:text-neutral-200" onclick="event.stopPropagation();goToSeries({{.SeriesID}})">{{.SeriesTitle}}</span>
                                 <span data-title class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
                             </div>
                         </div>
@@ -185,7 +199,7 @@
         <!-- SERIES VIEW -->
         <div x-show="view === 'series'">
             {{range .Groups}}
-            <div class="mb-4 sm:mb-6 bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden"
+            <div id="series-card-{{.Series.ID}}" class="mb-4 sm:mb-6 bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden"
                  data-st="{{jsstr .Series.Title}}">
                 <div class="px-3 sm:px-4 py-3 bg-neutral-800/40 border-b border-neutral-800">
                     <div class="flex items-center justify-between">
