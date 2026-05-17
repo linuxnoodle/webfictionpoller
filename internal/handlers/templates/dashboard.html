@@ -18,6 +18,9 @@
         .series-highlight { animation: series-highlight 1.5s ease-out; }
     </style>
     <script>
+    (function(){if(!location.search||!new URLSearchParams(location.search).has('sort')){var _ds=localStorage.getItem('dashSort');if(_ds&&_ds!=='published')location.replace('/?sort='+_ds)}})();
+    </script>
+    <script>
     var openPreviewId = null;
     function togglePreview(id) {
         if (openPreviewId !== null && openPreviewId !== id) {
@@ -123,7 +126,7 @@
 
         <!-- TIME VIEW -->
         <div x-show="view === 'time'"
-             x-init="var _us=new URLSearchParams(location.search).get('sort');if(!_us&&sortBy!=='published'){location.replace('/?sort='+sortBy)}$watch('sortBy',function(){location.href='/?sort='+sortBy})">
+             x-init="$watch('sortBy',function(){location.href='/?sort='+sortBy})">
             {{range .TimeGroups}}
             <div class="mt-4"
                  data-st="{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}">
