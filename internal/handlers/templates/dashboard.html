@@ -18,9 +18,6 @@
         .series-highlight { animation: series-highlight 1.5s ease-out; }
     </style>
     <script>
-    if(!location.search||!new URLSearchParams(location.search).has('sort')){var _ds=localStorage.getItem('dashSort');if(_ds&&_ds!=='published')location.replace('/?sort='+_ds)}
-    </script>
-    <script>
     var openPreviewId = null;
     function togglePreview(id) {
         if (openPreviewId !== null && openPreviewId !== id) {
@@ -81,7 +78,7 @@
     <main class="max-w-6xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
     <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published' }"
          @go-to-series.window="view='series';$nextTick(()=>{var c=document.getElementById('series-card-'+$event.detail.id);if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('series-highlight');setTimeout(function(){c.classList.remove('series-highlight')},1500)}})"
-         x-init="var _sortInit=true;var _urlSort=new URLSearchParams(location.search).get('sort');if(_urlSort==='published'||_urlSort==='received'){sortBy=_urlSort}$watch('view',function(v){localStorage.setItem('dashView',v)});$watch('sortBy',function(v){localStorage.setItem('dashSort',v);if(!_sortInit)location.href='/?sort='+v});_sortInit=false;var _sRows=null,_sTimer=null;$watch('search',function(q){if(!_sRows)_sRows=document.querySelectorAll('[data-st]');clearTimeout(_sTimer);_sTimer=setTimeout(function(){q=q.toLowerCase();for(var i=0;i<_sRows.length;i++){_sRows[i].style.display=!q||_sRows[i].dataset.st.toLowerCase().indexOf(q)>=0?'':'none'}},150)})">
+         x-init="$watch('view',function(v){localStorage.setItem('dashView',v)});$watch('sortBy',function(v){localStorage.setItem('dashSort',v)});var _sRows=null,_sTimer=null;$watch('search',function(q){if(!_sRows)_sRows=document.querySelectorAll('[data-st]');clearTimeout(_sTimer);_sTimer=setTimeout(function(){q=q.toLowerCase();for(var i=0;i<_sRows.length;i++){_sRows[i].style.display=!q||_sRows[i].dataset.st.toLowerCase().indexOf(q)>=0?'':'none'}},150)})">
         <div class="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between mb-4 sm:mb-6">
             <div class="flex flex-wrap items-center gap-2 sm:gap-4">
                 <h1 class="text-xl sm:text-2xl font-bold text-neutral-100">Dashboard</h1>
@@ -125,7 +122,8 @@
         {{end}}
 
         <!-- TIME VIEW -->
-        <div x-show="view === 'time'">
+        <div x-show="view === 'time'"
+             x-init="var _us=new URLSearchParams(location.search).get('sort');if(!_us&&sortBy!=='published'){location.replace('/?sort='+sortBy)}$watch('sortBy',function(){location.href='/?sort='+sortBy})">
             {{range .TimeGroups}}
             <div class="mt-4"
                  data-st="{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}">
