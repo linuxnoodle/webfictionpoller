@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 )
@@ -102,6 +103,10 @@ func TestFanfictionNet_FetchSeriesMetadata(t *testing.T) {
 func TestFanfictionNet_PollUpdates(t *testing.T) {
 	storyHTML := `<!DOCTYPE html>
 <html><body>
+<div id="profile_top">
+  <span data-xutime="1700000000">Published: some date</span>
+  <span data-xutime="1700086400">Updated: some date</span>
+</div>
 <select id="chap_select">
   <option value="1">Chapter 1: The Beginning</option>
   <option value="2">Chapter 2: The Middle</option>
@@ -140,6 +145,62 @@ func TestFanfictionNet_PollUpdates(t *testing.T) {
 
 	if !strings.Contains(chapters[0].URL, "12345/1") {
 		t.Errorf("chapter URL = %q, should contain story ID and chapter number", chapters[0].URL)
+	}
+
+	firstPub := time.Unix(1700000000, 0)
+	if !chapters[0].PublishedAt.Equal(firstPub) {
+		t.Errorf("first chapter PublishedAt = %v, want %v", chapters[0].PublishedAt, firstPub)
+	}
+
+	lastPub := time.Unix(1700086400, 0)
+	if !chapters[2].PublishedAt.Equal(lastPub) {
+		t.Errorf("last chapter PublishedAt = %v, want %v", chapters[2].PublishedAt, lastPub)
+	}
+}
+
+func TestFanfictionNet_PollUpdatesSingleChapter(t *testing.T) {
+	storyHTML := `<!DOCTYPE html>
+<html><body>
+<div id="profile_top">
+  <span data-xutime="1700000000">Published: some date</span>
+</div>
+<select id="chap_select">
+  <option value="1">Chapter 1: The Only One</option>
+</select>
+</body></html>`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"status": "ok",
+			"solution": map[string]string{
+				"response": storyHTML,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	p := NewFanfictionNetProvider()
+	p.proxyURL = server.URL
+
+	series := models.Series{
+		ID:        1,
+		SourceURL: "https://www.fanfiction.net/s/12345/1/Test",
+	}
+
+	chapters, err := p.PollUpdates(series)
+	if err != nil {
+		t.Fatalf("PollUpdates failed: %v", err)
+	}
+
+	if len(chapters) != 1 {
+		t.Fatalf("expected 1 chapter, got %d", len(chapters))
+	}
+
+	expected := time.Unix(1700000000, 0)
+	if !chapters[0].PublishedAt.Equal(expected) {
+		t.Errorf("single chapter PublishedAt = %v, want %v", chapters[0].PublishedAt, expected)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,6 +187,39 @@ func (p *FlareSolverrProvider) PollUpdates(series models.Series) ([]models.Chapt
 			PublishedAt: time.Now(),
 		})
 	})
+
+	var published, updated time.Time
+	doc.Find("#profile_top span[data-xutime]").Each(func(i int, s *goquery.Selection) {
+		tsStr, ok := s.Attr("data-xutime")
+		if !ok {
+			return
+		}
+		ts, err := strconv.ParseInt(tsStr, 10, 64)
+		if err != nil {
+			return
+		}
+		t := time.Unix(ts, 0)
+		if published.IsZero() || t.Before(published) {
+			published = t
+		}
+		if t.After(updated) {
+			updated = t
+		}
+	})
+
+	if len(chapters) == 1 {
+		if !published.IsZero() {
+			chapters[0].PublishedAt = published
+		}
+	} else if len(chapters) > 1 {
+		if !published.IsZero() {
+			chapters[0].PublishedAt = published
+		}
+		if !updated.IsZero() {
+			chapters[len(chapters)-1].PublishedAt = updated
+		}
+	}
+
 	return chapters, nil
 }
 

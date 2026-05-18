@@ -15,6 +15,7 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/opds"
 	"github.com/linuxnoodle/webfictionpoller/internal/opml"
 	"github.com/linuxnoodle/webfictionpoller/internal/providers"
 	"github.com/linuxnoodle/webfictionpoller/internal/worker"
@@ -33,10 +34,23 @@ type Handler struct {
 	logDir        string
 	updateChecker *UpdateChecker
 	vault         *crypto.Vault
+	opdsCatalog   *opds.Catalog
+	archiver      *worker.Archiver
 }
 
 func NewHandler(store *Store, pool *worker.WorkerPool, logDir string, vault *crypto.Vault) *Handler {
-	return &Handler{store: store, pool: pool, logDir: logDir, updateChecker: NewUpdateChecker(), vault: vault}
+	return &Handler{
+		store:         store,
+		pool:          pool,
+		logDir:        logDir,
+		updateChecker: NewUpdateChecker(),
+		vault:         vault,
+		opdsCatalog:   opds.NewCatalog(store),
+	}
+}
+
+func (h *Handler) SetArchiver(a *worker.Archiver) {
+	h.archiver = a
 }
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
@@ -303,8 +317,9 @@ func (h *Handler) UpdateSeriesStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := r.FormValue("status")
-	if status == "" {
-		http.Error(w, "status required", http.StatusBadRequest)
+	validStatuses := map[string]bool{"active": true, "binge": true, "hiatus": true, "dropped": true}
+	if !validStatuses[status] {
+		http.Error(w, "invalid status", http.StatusBadRequest)
 		return
 	}
 	if err := h.store.UpdateSeriesStatus(id, status); err != nil {
@@ -746,12 +761,45 @@ func (h *Handler) ImportBackup(w http.ResponseWriter, r *http.Request) {
 
 	logging.Info("[backup-import] complete: %d imported, %d updated/skipped", imported, skipped)
 
-	all, _ := h.store.GetAllActiveSeries()
-	for _, s := range all {
-		if p, ok := h.pool.GetProvider(s.ProviderName); ok {
-			h.pool.Submit(worker.Job{Series: s, Provider: p})
-		}
-	}
-
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (h *Handler) UpdateSeriesArchive(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/series/")
+	idStr = strings.TrimSuffix(idStr, "/archive")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	archive := r.FormValue("archive") == "true"
+	if err := h.store.UpdateSeriesArchive(id, archive); err != nil {
+		internalError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) OPDSRoot(w http.ResponseWriter, r *http.Request) {
+	h.opdsCatalog.ServeRoot(w, r)
+}
+
+func (h *Handler) OPDSCover(w http.ResponseWriter, r *http.Request) {
+	h.opdsCatalog.ServeCover(w, r)
+}
+
+func (h *Handler) OPDSEpub(w http.ResponseWriter, r *http.Request) {
+	h.opdsCatalog.ServeEPUB(w, r)
+}
+
+func (h *Handler) OPDSImage(w http.ResponseWriter, r *http.Request) {
+	h.opdsCatalog.ServeImage(w, r)
+}
+
+func (h *Handler) ArchiverStatusAPI(w http.ResponseWriter, r *http.Request) {
+	if h.archiver == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"active": false})
+		return
+	}
+	writeJSON(w, http.StatusOK, h.archiver.GetStatus())
 }

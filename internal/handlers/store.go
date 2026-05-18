@@ -19,7 +19,7 @@ func NewStore(db *sql.DB) *Store {
 
 func (s *Store) GetSeriesView() ([]models.SeriesWithChapters, error) {
 	rows, err := s.db.Query(`
-		SELECT s.id, s.title, s.author, s.source_url, s.provider_name, s.rating, s.status, s.summary, s.image_url, s.created_at
+		SELECT s.id, s.title, s.author, s.source_url, s.provider_name, s.rating, s.status, s.summary, s.image_url, s.archive, s.created_at
 		FROM series s
 		WHERE s.status IN ('active', 'binge')
 		  AND EXISTS (SELECT 1 FROM chapters c WHERE c.series_id = s.id)
@@ -35,7 +35,7 @@ func (s *Store) GetSeriesView() ([]models.SeriesWithChapters, error) {
 		var swc models.SeriesWithChapters
 		if err := rows.Scan(&swc.Series.ID, &swc.Series.Title, &swc.Series.Author,
 			&swc.Series.SourceURL, &swc.Series.ProviderName, &swc.Series.Rating,
-			&swc.Series.Status, &swc.Series.Summary, &swc.Series.ImageURL, &swc.Series.CreatedAt); err != nil {
+			&swc.Series.Status, &swc.Series.Summary, &swc.Series.ImageURL, &swc.Series.Archive, &swc.Series.CreatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, swc)
@@ -169,9 +169,9 @@ func (s *Store) InsertChapters(seriesID int64, chapters []models.Chapter) (int, 
 
 func (s *Store) AddSeries(series models.Series) (int64, error) {
 	result, err := s.db.Exec(`
-		INSERT OR IGNORE INTO series (title, author, source_url, provider_name, rating, status, summary, image_url)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, series.Title, series.Author, series.SourceURL, series.ProviderName, series.Rating, series.Status, series.Summary, series.ImageURL)
+		INSERT OR IGNORE INTO series (title, author, source_url, provider_name, rating, status, summary, image_url, archive)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, series.Title, series.Author, series.SourceURL, series.ProviderName, series.Rating, series.Status, series.Summary, series.ImageURL, series.Archive)
 	if err != nil {
 		return 0, err
 	}
@@ -181,9 +181,9 @@ func (s *Store) AddSeries(series models.Series) (int64, error) {
 func (s *Store) GetSeriesBySourceURL(sourceURL string) (*models.Series, error) {
 	var ser models.Series
 	err := s.db.QueryRow(`
-		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, archive, created_at
 		FROM series WHERE source_url = ?
-	`, sourceURL).Scan(&ser.ID, &ser.Title, &ser.Author, &ser.SourceURL, &ser.ProviderName, &ser.Rating, &ser.Status, &ser.Summary, &ser.ImageURL, &ser.CreatedAt)
+	`, sourceURL).Scan(&ser.ID, &ser.Title, &ser.Author, &ser.SourceURL, &ser.ProviderName, &ser.Rating, &ser.Status, &ser.Summary, &ser.ImageURL, &ser.Archive, &ser.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -195,7 +195,7 @@ func (s *Store) GetSeriesBySourceURL(sourceURL string) (*models.Series, error) {
 
 func (s *Store) ListSeries() ([]models.Series, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, archive, created_at
 		FROM series ORDER BY title ASC
 	`)
 	if err != nil {
@@ -206,7 +206,7 @@ func (s *Store) ListSeries() ([]models.Series, error) {
 	var series []models.Series
 	for rows.Next() {
 		var s models.Series
-		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.Archive, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		series = append(series, s)
@@ -250,7 +250,7 @@ func (s *Store) UpdateSeriesRating(id int64, rating float64) error {
 
 func (s *Store) GetAllActiveSeries() ([]models.Series, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, archive, created_at
 		FROM series WHERE status IN ('active', 'binge')
 	`)
 	if err != nil {
@@ -261,7 +261,7 @@ func (s *Store) GetAllActiveSeries() ([]models.Series, error) {
 	var series []models.Series
 	for rows.Next() {
 		var s models.Series
-		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.Archive, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		series = append(series, s)
@@ -316,9 +316,9 @@ func (s *Store) MarkAllChaptersRead() error {
 func (s *Store) GetSeriesByID(id int64) (*models.Series, error) {
 	var ser models.Series
 	err := s.db.QueryRow(`
-		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, archive, created_at
 		FROM series WHERE id = ?
-	`, id).Scan(&ser.ID, &ser.Title, &ser.Author, &ser.SourceURL, &ser.ProviderName, &ser.Rating, &ser.Status, &ser.Summary, &ser.ImageURL, &ser.CreatedAt)
+	`, id).Scan(&ser.ID, &ser.Title, &ser.Author, &ser.SourceURL, &ser.ProviderName, &ser.Rating, &ser.Status, &ser.Summary, &ser.ImageURL, &ser.Archive, &ser.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -402,6 +402,7 @@ func (s *Store) ExportBackup() (*models.Backup, error) {
 			Status:       ser.Status,
 			Summary:      ser.Summary,
 			ImageURL:     ser.ImageURL,
+			Archive:      ser.Archive,
 			Chapters:     chapters,
 		})
 	}
@@ -447,6 +448,7 @@ func (s *Store) ImportBackup(backup *models.Backup) (imported, skipped int, err 
 			Status:       sb.Status,
 			Summary:      sb.Summary,
 			ImageURL:     sb.ImageURL,
+			Archive:      sb.Archive,
 		}
 		id, aerr := s.AddSeries(ser)
 		if aerr != nil {
@@ -490,7 +492,7 @@ func (s *Store) ImportBackup(backup *models.Backup) (imported, skipped int, err 
 func (s *Store) SearchSeries(query string) ([]models.Series, error) {
 	q := "%" + strings.ToLower(query) + "%"
 	rows, err := s.db.Query(`
-		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, archive, created_at
 		FROM series WHERE LOWER(title) LIKE ? OR LOWER(author) LIKE ?
 		ORDER BY title ASC LIMIT 20
 	`, q, q)
@@ -502,10 +504,108 @@ func (s *Store) SearchSeries(query string) ([]models.Series, error) {
 	var series []models.Series
 	for rows.Next() {
 		var s models.Series
-		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.Archive, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		series = append(series, s)
 	}
 	return series, nil
+}
+
+func (s *Store) UpdateSeriesArchive(id int64, archive bool) error {
+	_, err := s.db.Exec("UPDATE series SET archive = ? WHERE id = ?", archive, id)
+	return err
+}
+
+func (s *Store) GetArchivedSeries() ([]models.Series, error) {
+	rows, err := s.db.Query(`
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, archive, created_at
+		FROM series WHERE archive = 1 AND status IN ('active', 'binge')
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var series []models.Series
+	for rows.Next() {
+		var s models.Series
+		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.Archive, &s.CreatedAt); err != nil {
+			return nil, err
+		}
+		series = append(series, s)
+	}
+	return series, nil
+}
+
+func (s *Store) GetChaptersForArchive(seriesID int64) ([]models.Chapter, error) {
+	rows, err := s.db.Query(`
+		SELECT id, series_id, title, url, published_at, is_read, content_html, created_at
+		FROM chapters WHERE series_id = ?
+		ORDER BY published_at ASC
+	`, seriesID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var chapters []models.Chapter
+	for rows.Next() {
+		var ch models.Chapter
+		if err := rows.Scan(&ch.ID, &ch.SeriesID, &ch.Title, &ch.URL, &ch.PublishedAt, &ch.IsRead, &ch.ContentHTML, &ch.CreatedAt); err != nil {
+			return nil, err
+		}
+		chapters = append(chapters, ch)
+	}
+	return chapters, nil
+}
+
+func (s *Store) SaveChapterContent(id int64, content string) error {
+	_, err := s.db.Exec("UPDATE chapters SET content_html = ? WHERE id = ?", content, id)
+	return err
+}
+
+func (s *Store) GetChaptersNeedingContent(seriesID int64) ([]models.Chapter, error) {
+	rows, err := s.db.Query(`
+		SELECT id, series_id, title, url, published_at, is_read, content_html, created_at
+		FROM chapters WHERE series_id = ? AND (content_html IS NULL OR content_html = '')
+		ORDER BY published_at ASC
+	`, seriesID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var chapters []models.Chapter
+	for rows.Next() {
+		var ch models.Chapter
+		if err := rows.Scan(&ch.ID, &ch.SeriesID, &ch.Title, &ch.URL, &ch.PublishedAt, &ch.IsRead, &ch.ContentHTML, &ch.CreatedAt); err != nil {
+			return nil, err
+		}
+		chapters = append(chapters, ch)
+	}
+	return chapters, nil
+}
+
+func (s *Store) SaveChapterImage(chapterID int64, url string, data []byte, contentType string) error {
+	_, err := s.db.Exec(`
+		INSERT OR REPLACE INTO chapter_images (chapter_id, url, data, content_type)
+		VALUES (?, ?, ?, ?)
+	`, chapterID, url, data, contentType)
+	return err
+}
+
+func (s *Store) GetChapterImage(chapterID int64, url string) ([]byte, string, error) {
+	var data []byte
+	var contentType string
+	err := s.db.QueryRow(`
+		SELECT data, content_type FROM chapter_images WHERE chapter_id = ? AND url = ?
+	`, chapterID, url).Scan(&data, &contentType)
+	if err == sql.ErrNoRows {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	return data, contentType, nil
 }

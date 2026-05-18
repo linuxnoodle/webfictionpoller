@@ -76,6 +76,18 @@ var migrations = []migration{
 	{"series_summary", "ALTER TABLE series ADD COLUMN summary TEXT DEFAULT ''"},
 	{"series_image_url", "ALTER TABLE series ADD COLUMN image_url TEXT DEFAULT ''"},
 	{"provider_login_tested", "ALTER TABLE provider_configs ADD COLUMN login_tested BOOLEAN DEFAULT 0"},
+	{"series_archive", "ALTER TABLE series ADD COLUMN archive BOOLEAN DEFAULT 0"},
+	{"chapter_content_html", "ALTER TABLE chapters ADD COLUMN content_html TEXT DEFAULT ''"},
+	{"chapter_images", `CREATE TABLE IF NOT EXISTS chapter_images (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		chapter_id INTEGER NOT NULL,
+		url TEXT NOT NULL,
+		data BLOB NOT NULL,
+		content_type TEXT DEFAULT '',
+		FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE,
+		UNIQUE(chapter_id, url)
+	)`},
+	{"chapter_images_idx", "CREATE INDEX IF NOT EXISTS idx_chapter_images_chapter ON chapter_images(chapter_id)"},
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {

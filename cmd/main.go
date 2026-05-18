@@ -87,6 +87,9 @@ func main() {
 
 	h := handlers.NewHandler(store, pool, logDir, vault)
 
+	archiver := worker.NewArchiver(store, providerList)
+	h.SetArchiver(archiver)
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -121,6 +124,14 @@ func main() {
 	r.Post("/logout", logoutHandler(sessionManager))
 
 	r.Group(func(r chi.Router) {
+		r.Use(opdsBasicAuth(db))
+		r.Get("/opds", h.OPDSRoot)
+		r.Get("/opds/cover/{id}", h.OPDSCover)
+		r.Get("/opds/epub/{id}", h.OPDSEpub)
+		r.Get("/opds/images/{chapterId}/{url}", h.OPDSImage)
+	})
+
+	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware(sessionManager, db))
 
 		r.Get("/", h.Dashboard)
@@ -148,6 +159,8 @@ func main() {
 		r.Get("/api/poll/progress", h.PollProgress)
 		r.Post("/api/providers/check-auth", h.CheckAuthProvider)
 		r.Get("/api/providers/password", h.GetProviderPassword)
+		r.Post("/api/series/{id}/archive", h.UpdateSeriesArchive)
+		r.Get("/api/archive/status", h.ArchiverStatusAPI)
 		r.Get("/api/search", h.SearchSeries)
 		r.Get("/api/version", h.VersionAPI)
 		r.Post("/api/version/check", h.VersionCheckNow)
@@ -177,6 +190,13 @@ func main() {
 
 	scheduler := newScheduler(interval, store, pool, logDir)
 	go scheduler.start(ctx)
+
+	archiveInterval := envOrDefault("ARCHIVE_INTERVAL", "1h")
+	archiveDur, _ := time.ParseDuration(archiveInterval)
+	if archiveDur == 0 {
+		archiveDur = time.Hour
+	}
+	go archiver.Run(ctx, archiveDur)
 
 	logging.Info("starting server on %s (poll interval: %s)", addr, interval)
 	server := &http.Server{Addr: addr, Handler: csrfHandler}
@@ -337,6 +357,31 @@ func authMiddleware(sm *scs.SessionManager, db *sql.DB) func(http.Handler) http.
 			}
 			if sm.Get(r.Context(), "userID") == nil {
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func opdsBasicAuth(db *sql.DB) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hasUsers, err := auth.HasUsers(db)
+			if err != nil || !hasUsers {
+				next.ServeHTTP(w, r)
+				return
+			}
+			username, password, ok := r.BasicAuth()
+			if !ok {
+				w.Header().Set("WWW-Authenticate", `Basic realm="WebFiction Poller OPDS"`)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			_, err = auth.Authenticate(db, username, password)
+			if err != nil {
+				w.Header().Set("WWW-Authenticate", `Basic realm="WebFiction Poller OPDS"`)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 			next.ServeHTTP(w, r)

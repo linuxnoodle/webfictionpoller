@@ -14,6 +14,7 @@ type Series struct {
 	Status       string    `json:"status"`
 	Summary      string    `json:"summary"`
 	ImageURL     string    `json:"image_url"`
+	Archive      bool      `json:"archive"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -24,6 +25,7 @@ type Chapter struct {
 	URL         string    `json:"url"`
 	PublishedAt time.Time `json:"published_at"`
 	IsRead      bool      `json:"is_read"`
+	ContentHTML string    `json:"content_html,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -77,6 +79,7 @@ type SeriesBackup struct {
 	Status       string          `json:"status"`
 	Summary      string          `json:"summary,omitempty"`
 	ImageURL     string          `json:"image_url,omitempty"`
+	Archive      bool            `json:"archive,omitempty"`
 	Chapters     []ChapterBackup `json:"chapters"`
 }
 

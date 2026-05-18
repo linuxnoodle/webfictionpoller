@@ -50,14 +50,8 @@ func InitTemplates() error {
 		"add": func(a, b int) int {
 			return a + b
 		},
-		"mul": func(a, b int) int {
-			return a * b
-		},
 		"mod": func(a, b int) int {
 			return a % b
-		},
-		"fdiv": func(a, b int) float64 {
-			return float64(a) / float64(b)
 		},
 		"faviconURL": func(providerName string) string {
 			return models.ProviderFavicon(providerName)
