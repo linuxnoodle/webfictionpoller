@@ -97,6 +97,15 @@ type Backup struct {
 	Providers  map[string]string `json:"providers,omitempty"`
 }
 
+type ArchiveStat struct {
+	SeriesID         int64
+	SeriesTitle      string
+	TotalChapters    int
+	ArchivedChapters int
+	Percent          int
+	Complete         bool
+}
+
 func ProviderFavicon(name string) string {
 	switch name {
 	case "royalroad", "spacebattles", "sufficientvelocity", "questionablequesting", "fanfictionnet":

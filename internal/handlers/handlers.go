@@ -803,3 +803,22 @@ func (h *Handler) ArchiverStatusAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, h.archiver.GetStatus())
 }
+
+func (h *Handler) LibraryPage(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.store.GetArchiveStats()
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	host := r.Host
+
+	renderTemplate(w, r, "library", map[string]interface{}{
+		"ArchiveStats": stats,
+		"OPDSURL":      fmt.Sprintf("%s://USERNAME:PASSWORD@%s/opds", scheme, host),
+	})
+}

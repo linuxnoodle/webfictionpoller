@@ -145,6 +145,7 @@ func main() {
 		r.Get("/admin/providers", h.ProviderConfigPage)
 		r.Post("/admin/providers", h.SaveProviderConfig)
 		r.Get("/admin/logs", h.LogsPage)
+		r.Get("/admin/library", h.LibraryPage)
 
 		r.Get("/api/chapters/time", h.TimePagePartial)
 		r.Get("/api/chapters/{id}/preview", h.ChapterPreview)

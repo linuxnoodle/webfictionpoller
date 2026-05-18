@@ -609,3 +609,32 @@ func (s *Store) GetChapterImage(chapterID int64, url string) ([]byte, string, er
 	}
 	return data, contentType, nil
 }
+
+func (s *Store) GetArchiveStats() ([]models.ArchiveStat, error) {
+	rows, err := s.db.Query(`
+		SELECT s.id, s.title,
+			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id),
+			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.content_html != '')
+		FROM series s
+		WHERE s.archive = 1 AND s.status IN ('active', 'binge')
+		ORDER BY s.title ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []models.ArchiveStat
+	for rows.Next() {
+		var st models.ArchiveStat
+		if err := rows.Scan(&st.SeriesID, &st.SeriesTitle, &st.TotalChapters, &st.ArchivedChapters); err != nil {
+			return nil, err
+		}
+		if st.TotalChapters > 0 {
+			st.Percent = int(float64(st.ArchivedChapters) / float64(st.TotalChapters) * 100)
+		}
+		st.Complete = st.ArchivedChapters == st.TotalChapters && st.TotalChapters > 0
+		stats = append(stats, st)
+	}
+	return stats, nil
+}
