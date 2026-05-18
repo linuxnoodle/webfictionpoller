@@ -504,6 +504,38 @@ func (h *Handler) CheckAuthProvider(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 }
 
+func (h *Handler) GetProviderPassword(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("provider")
+	if name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "provider required"})
+		return
+	}
+
+	pc, err := h.store.GetProviderConfig(name)
+	if err != nil || pc == nil {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "no config found"})
+		return
+	}
+
+	if pc.EncryptedPassword == "" {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"password": ""})
+		return
+	}
+
+	if h.vault == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "encryption not available"})
+		return
+	}
+
+	plainPass, err := h.vault.Decrypt(pc.EncryptedPassword)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "failed to decrypt"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"password": plainPass})
+}
+
 func (h *Handler) PollNow(w http.ResponseWriter, r *http.Request) {
 	all, err := h.store.GetAllActiveSeries()
 	if err != nil {

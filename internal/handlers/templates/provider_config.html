@@ -11,8 +11,41 @@
     <script src="/static/alpine.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
     <script>
+    function togglePassword(btn, name) {
+        var input = btn.closest('form').querySelector('input[name="password"]');
+        if (btn.dataset.loaded === '1') {
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = 'Hide';
+            } else {
+                input.type = 'password';
+                btn.textContent = 'View';
+            }
+            return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Loading...';
+        fetch('/api/providers/password?provider=' + encodeURIComponent(name), {
+            headers: {'X-CSRF-Token': _csrf}
+        }).then(function(r){return r.json()}).then(function(d) {
+            btn.disabled = false;
+            if (d.password === '') {
+                btn.textContent = 'View';
+                return;
+            }
+            input.type = 'text';
+            input.value = d.password;
+            input.placeholder = '';
+            btn.dataset.loaded = '1';
+            btn.textContent = 'Hide';
+        }).catch(function() {
+            btn.disabled = false;
+            btn.textContent = 'View';
+        });
+    }
     function checkAuth(btn, name) {
-        var status = btn.parentElement.querySelector('[data-auth-status]');
+        var form = btn.closest('form');
+        var status = form.querySelector('[data-auth-status]');
         btn.disabled = true;
         btn.textContent = 'Checking...';
         status.textContent = '';
@@ -75,10 +108,16 @@
                 </div>
                 <div>
                     <label class="block text-sm text-neutral-500 mb-1">Password</label>
-                    <input type="password" name="password"
-                           placeholder="{{if index $.Usernames $name}}Leave blank to keep saved password{{else}}Account password{{end}}"
-                           autocomplete="current-password"
-                           class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                    <div class="flex gap-2">
+                        <input type="password" name="password"
+                               placeholder="{{if index $.Usernames $name}}Leave blank to keep saved password{{else}}Account password{{end}}"
+                               autocomplete="current-password"
+                               class="flex-1 bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                        {{if index $.Usernames $name}}
+                        <button type="button" onclick="togglePassword(this, '{{$name}}')"
+                                class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1 rounded text-sm flex-shrink-0">View</button>
+                        {{end}}
+                    </div>
                 </div>
                 <div class="pt-2 border-t border-neutral-800">
                     <label class="block text-sm text-neutral-500 mb-1">Cookie Data <span class="text-neutral-600">(advanced fallback)</span></label>

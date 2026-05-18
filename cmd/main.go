@@ -148,6 +148,7 @@ func main() {
 		r.Post("/api/poll", h.PollNow)
 		r.Get("/api/poll/progress", h.PollProgress)
 		r.Post("/api/providers/check-auth", h.CheckAuthProvider)
+		r.Get("/api/providers/password", h.GetProviderPassword)
 		r.Get("/api/search", h.SearchSeries)
 		r.Get("/api/version", h.VersionAPI)
 		r.Post("/api/version/check", h.VersionCheckNow)
