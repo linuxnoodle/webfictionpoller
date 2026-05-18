@@ -124,7 +124,6 @@ func main() {
 		r.Use(authMiddleware(sessionManager, db))
 
 		r.Get("/", h.Dashboard)
-		r.Get("/series", h.SeriesList)
 		r.Get("/series/add", h.AddSeriesPage)
 		r.Post("/series/add", h.AddSeries)
 		r.Get("/series/import", h.ImportOPMLPage)

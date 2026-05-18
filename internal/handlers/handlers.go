@@ -51,6 +51,29 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	allSeries, err := h.store.ListSeries()
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	buckets, err := h.store.GetRatingDistribution()
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	dist := make([]int, 101)
+	var maxCount int
+	for _, b := range buckets {
+		idx := int(math.Round(b.Rating * 10))
+		if idx >= 0 && idx <= 100 {
+			dist[idx] = b.Count
+			if b.Count > maxCount {
+				maxCount = b.Count
+			}
+		}
+	}
+
 	timeChapters, err := h.store.GetTimeView(0, 50, sortBy)
 	if err != nil {
 		internalError(w, r, err)
@@ -65,6 +88,9 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	renderTemplate(w, r, "dashboard", map[string]interface{}{
 		"Groups":      seriesView,
+		"AllSeries":   allSeries,
+		"RatingDist":  dist,
+		"MaxRating":   maxCount,
 		"TimeView":    timeChapters,
 		"TimeGroups":  groupByDay(timeChapters, sortBy),
 		"Stats":       stats,
@@ -177,35 +203,6 @@ func (h *Handler) LogsData(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) SeriesList(w http.ResponseWriter, r *http.Request) {
-	series, err := h.store.ListSeries()
-	if err != nil {
-		internalError(w, r, err)
-		return
-	}
-	buckets, err := h.store.GetRatingDistribution()
-	if err != nil {
-		internalError(w, r, err)
-		return
-	}
-	dist := make([]int, 101)
-	var maxCount int
-	for _, b := range buckets {
-		idx := int(math.Round(b.Rating*10))
-		if idx >= 0 && idx <= 100 {
-			dist[idx] = b.Count
-			if b.Count > maxCount {
-				maxCount = b.Count
-			}
-		}
-	}
-	renderTemplate(w, r, "series", map[string]interface{}{
-		"Series":     series,
-		"RatingDist": dist,
-		"MaxRating":  maxCount,
-	})
-}
-
 func (h *Handler) AddSeriesPage(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, "add_series", map[string]interface{}{
 		"Providers": h.pool.AllProviders(),
@@ -314,7 +311,7 @@ func (h *Handler) UpdateSeriesStatus(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
-	w.Header().Set("HX-Redirect", "/series")
+	w.Header().Set("HX-Redirect", "/")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -379,7 +376,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
-	w.Header().Set("HX-Redirect", "/series")
+	w.Header().Set("HX-Redirect", "/")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -654,7 +651,7 @@ func (h *Handler) ImportOPML(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logging.Info("[import] complete: %d imported, %d skipped, %d unmatched", imported, skipped, unmatched)
-	http.Redirect(w, r, "/series", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (h *Handler) matchProvider(rawURL string) providers.Provider {
@@ -756,5 +753,5 @@ func (h *Handler) ImportBackup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Redirect(w, r, "/series", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

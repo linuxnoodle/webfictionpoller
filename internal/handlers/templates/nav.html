@@ -146,7 +146,6 @@ function ratingSaveFromEl(el, r) {
 <nav class="bg-neutral-800 border-b border-neutral-700 px-4 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-bold text-neutral-200 hover:text-white">WebFiction Poller</a>
     <div class="hidden sm:flex items-center gap-2">
-        <a href="/series" class="text-neutral-400 hover:text-neutral-200 px-2 py-1 text-sm">Series</a>
         <a href="/series/add" title="Add series"
            class="text-neutral-300 hover:text-white bg-neutral-700 hover:bg-neutral-600 w-8 h-8 flex items-center justify-center rounded font-bold text-lg leading-none">+</a>
         <button id="poll-btn" title="Poll now" onclick="startPoll(this)"
@@ -172,7 +171,6 @@ function ratingSaveFromEl(el, r) {
                 <div class="border-t border-neutral-700 my-1"></div>
                 <a href="/series/import" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Import OPML</a>
                 <a href="/series/export" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Export OPML</a>
-                <a href="/series/backup" download class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Export Backup</a>
                 <div class="border-t border-neutral-700 my-1"></div>
                 <a href="/admin/providers" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Providers</a>
                 <a href="/admin/logs" class="block px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-700">Logs</a>
@@ -191,14 +189,12 @@ function ratingSaveFromEl(el, r) {
         <span>Version & Updates</span>
         <span data-ua style="display:none" class="w-2 h-2 bg-emerald-400 rounded-full"></span>
     </a>
-    <a href="/series" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Series</a>
     <a href="/series/add" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Add Series</a>
     <button id="poll-btn-mobile" onclick="startPoll(document.getElementById('poll-btn'))" class="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Poll Now</button>
     <div id="poll-status-mobile" style="display:none" class="px-3 py-1 text-xs text-neutral-500"></div>
     <div class="border-t border-neutral-700 my-1"></div>
     <a href="/series/import" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Import OPML</a>
     <a href="/series/export" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Export OPML</a>
-    <a href="/series/backup" download class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Export Backup</a>
     <a href="/admin/providers" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Providers</a>
     <a href="/admin/logs" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Logs</a>
     <div class="border-t border-neutral-700 my-1"></div>

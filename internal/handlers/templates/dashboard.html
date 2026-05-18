@@ -72,7 +72,8 @@
             if (prev) prev.classList.add('hidden');
             openPreviewId = null;
         }
-        window.dispatchEvent(new CustomEvent('go-to-series', { detail: { id: seriesId } }));
+        var ev = new CustomEvent('go-to-series', { detail: { id: seriesId } });
+        window.dispatchEvent(ev);
     }
     </script>
 </head>
@@ -80,7 +81,7 @@
     {{template "nav" .}}
     <main class="max-w-6xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
     <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published' }"
-         @go-to-series.window="view='series';$nextTick(()=>{var c=document.getElementById('series-card-'+$event.detail.id);if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('series-highlight');setTimeout(function(){c.classList.remove('series-highlight')},1500)}})"
+         @go-to-series.window="view='series';$nextTick(()=>{var c=document.querySelector('[data-series-id=\''+$event.detail.id+'\']');if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('series-highlight');setTimeout(function(){c.classList.remove('series-highlight')},1500)}})"
          x-init="$watch('view',function(v){localStorage.setItem('dashView',v)});$watch('sortBy',function(v){localStorage.setItem('dashSort',v)});var _sRows=null,_sTimer=null;$watch('search',function(q){if(!_sRows)_sRows=document.querySelectorAll('[data-st]');clearTimeout(_sTimer);_sTimer=setTimeout(function(){q=q.toLowerCase();for(var i=0;i<_sRows.length;i++){_sRows[i].style.display=!q||_sRows[i].dataset.st.toLowerCase().indexOf(q)>=0?'':'none'}},150)})">
         <div class="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between mb-4 sm:mb-6">
             <div class="flex flex-wrap items-center gap-2 sm:gap-4">
@@ -199,91 +200,136 @@
 
         <!-- SERIES VIEW -->
         <div x-show="view === 'series'">
-            {{range .Groups}}
-            <div id="series-card-{{.Series.ID}}" class="mb-4 sm:mb-6 bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden"
-                 data-st="{{jsstr .Series.Title}}">
-                <div class="px-3 sm:px-4 py-3 bg-neutral-800/40 border-b border-neutral-800">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2 min-w-0 overflow-hidden">
-                            {{if .Series.ImageURL}}
-                            <img src="{{.Series.ImageURL}}" alt="" class="w-10 h-14 object-cover rounded flex-shrink-0">
-                            {{end}}
-                            <div class="min-w-0 overflow-hidden">
-                                <h2 class="text-sm sm:text-base font-semibold text-neutral-200 truncate">{{.Series.Title}}</h2>
-                                <span class="text-xs text-neutral-500">by {{.Series.Author}} &middot; {{.Series.ProviderName}}</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-2">
-                            <div class="hidden sm:flex items-center gap-0.5"
-                                 data-rating-sid="{{.Series.ID}}">
-                                <button onclick="ratingDown(this)"
-                                        class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                                <span data-rating-value="{{f64f .Series.Rating}}" {{ratingStyle .Series.Rating}}class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-sm text-neutral-300 py-0.5 cursor-pointer inline-block">{{ratingText .Series.Rating}}</span>
-                                <button onclick="ratingUp(this)"
-                                        class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
-                            </div>
-                            <a href="{{.Series.SourceURL}}" target="_blank" class="text-xs text-neutral-500 hover:text-neutral-300 hidden sm:inline">Source</a>
-                            <button hx-post="/api/series/{{.Series.ID}}/read-all" hx-swap="none"
-                                    class="text-xs bg-neutral-700 hover:bg-neutral-600 text-neutral-300 px-2 py-1 rounded">Read All</button>
-                        </div>
+            {{if .RatingDist}}
+            <div class="mb-4 bg-neutral-900 rounded-lg border border-neutral-800 p-4">
+                <h2 class="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-3">Rating Distribution</h2>
+                <div class="flex items-end gap-px h-24">
+                    {{range $i, $count := .RatingDist}}
+                    <div class="flex-1 flex flex-col items-center justify-end h-full min-w-0">
+                        {{if gt $count 0}}<span class="text-neutral-500 mb-0.5" style="font-size:8px">{{$count}}</span>{{end}}
+                        <div class="w-full rounded-t transition-all"
+                             style="height: {{if gt $count 0}}max(3px, calc({{$count}} / {{$.MaxRating}} * 100%)){{else}}1px{{end}}; min-height: 1px; background: hsl({{ratingHue $i}}, 65%, 50%);"></div>
                     </div>
-                    <div class="flex items-center gap-2 mt-2 sm:hidden"
-                         data-rating-sid="{{.Series.ID}}">
-                        <button onclick="ratingDown(this)"
-                                class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                        <span data-rating-value="{{f64f .Series.Rating}}" {{ratingStyle .Series.Rating}}class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-sm text-neutral-300 py-0.5 cursor-pointer inline-block">{{ratingText .Series.Rating}}</span>
-                        <button onclick="ratingUp(this)"
-                                class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
-                        <a href="{{.Series.SourceURL}}" target="_blank" class="text-xs text-neutral-500 hover:text-neutral-300 ml-auto">Source</a>
-                    </div>
-                    {{if .Series.Summary}}
-                    <p class="text-xs text-neutral-500 mt-2" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{.Series.Summary}}</p>
                     {{end}}
                 </div>
-                <div class="divide-y divide-neutral-800/50">
-                    {{range .Chapters}}
-                    <div id="row-{{.ID}}" class="cursor-pointer hover:bg-neutral-800/30"
-                         onclick="togglePreview({{.ID}})">
-                        {{if .IsRead}}
-                        <div class="flex items-center justify-between px-3 sm:px-4 py-2 opacity-40">
-                            <div class="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
-                                <div class="w-1 flex-shrink-0"></div>
-                                <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-600 hover:text-neutral-400 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
-                            </div>
-                            <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-2 sm:ml-3">
-                                <span class="text-xs text-neutral-700 w-12 text-right flex-shrink-0">{{.PublishedAt.Format "Jan 02"}}</span>
-                                <a href="{{.URL}}" target="_blank" rel="noopener"
-                                   onclick="event.stopPropagation()"
-                                   class="text-xs text-neutral-600 hover:text-neutral-400 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded">open</a>
-                                <span class="invisible text-xs px-2 py-1">Ignore</span>
-                            </div>
-                        </div>
-                        {{else}}
-                        <div class="flex items-center justify-between px-3 sm:px-4 py-2">
-                            <div class="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
-                                <div data-dot class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
-                                <span data-title class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
-                            </div>
-                            <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-2 sm:ml-3">
-                                <span class="text-xs text-neutral-600 w-12 text-right flex-shrink-0">{{.PublishedAt.Format "Jan 02"}}</span>
-                                <button data-act-read onclick="markRead(this, {{.ID}}, '{{.URL}}')"
-                                        class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
-                                <button data-act-ignore onclick="markIgnore(this, {{.ID}})"
-                                        class="text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-400 px-2 py-1 rounded">Ignore</button>
-                            </div>
-                        </div>
-                        {{end}}
-                    </div>
-                    <div id="preview-{{.ID}}" class="hidden">
-                        <div class="mx-3 sm:mx-4 my-2 bg-neutral-900 border border-neutral-800 rounded-lg p-3 sm:p-4"
-                             hx-get="/api/chapters/{{.ID}}/preview" hx-trigger="intersect once" hx-swap="innerHTML">
-                            <div class="text-neutral-500 text-sm animate-pulse">Loading preview...</div>
-                        </div>
-                    </div>
-                    {{end}}
+                <div class="flex mt-1">
+                    {{range $i, $count := .RatingDist}}{{if eq (mod $i 10) 0}}<span class="text-center text-xs text-neutral-600" style="flex:0 0 calc({{$i}} / 100 * 100% + 0.5%)">{{$i}}</span>{{end}}{{end}}
                 </div>
             </div>
             {{end}}
+
+            <div class="mb-4 bg-neutral-900 rounded-lg border border-neutral-800 p-4 space-y-4">
+                <div class="flex flex-wrap gap-2">
+                    <a href="/series/add" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1.5 rounded text-sm">Add Series</a>
+                    <a href="/series/import" class="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded text-sm">Import OPML</a>
+                    <form method="POST" action="/series/backup" enctype="multipart/form-data" class="inline-flex items-center gap-2">
+                        <input type="file" name="backup_file" accept=".json" required
+                               class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-neutral-300 file:bg-neutral-700 file:border-0 file:text-neutral-200 file:rounded file:px-2 file:py-0.5 file:mr-2 file:text-xs file:cursor-pointer" />
+                        <button type="submit" class="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded text-sm">Import Backup</button>
+                    </form>
+                    <a href="/series/export" class="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded text-sm ml-auto">Export OPML</a>
+                    <a href="/series/backup" download class="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded text-sm">Export Backup</a>
+                </div>
+            </div>
+
+            <!-- Mobile: card layout -->
+            <div class="sm:hidden space-y-3">
+                {{range .AllSeries}}
+                <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-3 space-y-2" data-st="{{jsstr .Title}}" data-series-id="{{.ID}}">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                            {{if .ImageURL}}
+                            <img src="{{.ImageURL}}" alt="" class="w-8 h-11 object-cover rounded flex-shrink-0">
+                            {{else}}
+                            <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
+                            {{end}}
+                            <div class="min-w-0">
+                                <a href="{{.SourceURL}}" target="_blank" class="text-sm font-semibold text-neutral-200 hover:text-neutral-100 truncate block">{{.Title}}</a>
+                                <span class="text-xs text-neutral-500">{{.Author}} &middot; {{.ProviderName}}</span>
+                            </div>
+                        </div>
+                        <button hx-post="/api/series/{{.ID}}/delete" hx-swap="none" hx-confirm="Delete this series and all its chapters?"
+                                class="text-red-400/70 hover:text-red-400 text-xs flex-shrink-0">Delete</button>
+                    </div>
+                    {{if .Summary}}
+                    <p class="text-xs text-neutral-500" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{.Summary}}</p>
+                    {{end}}
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-0.5" data-rating-sid="{{.ID}}">
+                            <button onclick="ratingDown(this)"
+                                    class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
+                            <span data-rating-value="{{f64f .Rating}}" {{ratingStyle .Rating}}class="w-10 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 py-0 cursor-pointer inline-block">{{ratingText .Rating}}</span>
+                            <button onclick="ratingUp(this)"
+                                    class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
+                        </div>
+                        <select hx-post="/api/series/{{.ID}}/status" hx-include="this" hx-swap="none"
+                                name="status" class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-neutral-300">
+                            <option value="active" {{if eq .Status "active"}}selected{{end}}>Active</option>
+                            <option value="binge" {{if eq .Status "binge"}}selected{{end}}>Binge</option>
+                            <option value="hiatus" {{if eq .Status "hiatus"}}selected{{end}}>Hiatus</option>
+                            <option value="dropped" {{if eq .Status "dropped"}}selected{{end}}>Dropped</option>
+                        </select>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+
+            <!-- Desktop: table layout -->
+            <div class="hidden sm:block overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-neutral-500 border-b border-neutral-800">
+                            <th class="pb-2 pr-4"></th>
+                            <th class="pb-2 pr-4">Title</th>
+                            <th class="pb-2 pr-4">Author</th>
+                            <th class="pb-2 pr-4">Provider</th>
+                            <th class="pb-2 pr-4">Rating</th>
+                            <th class="pb-2 pr-4">Status</th>
+                            <th class="pb-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .AllSeries}}
+                        <tr class="border-b border-neutral-800/50 hover:bg-neutral-900/50" data-st="{{jsstr .Title}}" data-series-id="{{.ID}}">
+                            <td class="py-2 pr-4">
+                                {{if .ImageURL}}
+                                <img src="{{.ImageURL}}" alt="" class="w-8 h-11 object-cover rounded">
+                                {{else}}
+                                <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5">
+                                {{end}}
+                            </td>
+                            <td class="py-2 pr-4">
+                                <a href="{{.SourceURL}}" target="_blank" class="text-neutral-300 hover:text-neutral-100">{{.Title}}</a>
+                            </td>
+                            <td class="py-2 pr-4 text-neutral-500">{{.Author}}</td>
+                            <td class="py-2 pr-4 text-neutral-500">{{.ProviderName}}</td>
+                            <td class="py-2 pr-4">
+                                <div class="flex items-center gap-0.5" data-rating-sid="{{.ID}}">
+                                    <button onclick="ratingDown(this)"
+                                            class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
+                                    <span data-rating-value="{{f64f .Rating}}" {{ratingStyle .Rating}}class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 py-0 cursor-pointer inline-block">{{ratingText .Rating}}</span>
+                                    <button onclick="ratingUp(this)"
+                                            class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
+                                </div>
+                            </td>
+                            <td class="py-2 pr-4">
+                                <select hx-post="/api/series/{{.ID}}/status" hx-include="this" hx-swap="none"
+                                        name="status" class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-xs text-neutral-300">
+                                    <option value="active" {{if eq .Status "active"}}selected{{end}}>Active</option>
+                                    <option value="binge" {{if eq .Status "binge"}}selected{{end}}>Binge</option>
+                                    <option value="hiatus" {{if eq .Status "hiatus"}}selected{{end}}>Hiatus</option>
+                                    <option value="dropped" {{if eq .Status "dropped"}}selected{{end}}>Dropped</option>
+                                </select>
+                            </td>
+                            <td class="py-2">
+                                <button hx-post="/api/series/{{.ID}}/delete" hx-swap="none" hx-confirm="Delete this series and all its chapters?"
+                                        class="text-red-400/70 hover:text-red-400 text-xs">Delete</button>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     </main>
