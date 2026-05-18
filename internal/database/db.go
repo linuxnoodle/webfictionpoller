@@ -73,6 +73,9 @@ var migrations = []migration{
 	{"unrated_rating", "UPDATE series SET rating = -1 WHERE rating = 5.0 OR rating = 0"},
 	{"provider_credentials", "ALTER TABLE provider_configs ADD COLUMN username TEXT DEFAULT ''"},
 	{"provider_encrypted_password", "ALTER TABLE provider_configs ADD COLUMN encrypted_password TEXT DEFAULT ''"},
+	{"series_summary", "ALTER TABLE series ADD COLUMN summary TEXT DEFAULT ''"},
+	{"series_image_url", "ALTER TABLE series ADD COLUMN image_url TEXT DEFAULT ''"},
+	{"provider_login_tested", "ALTER TABLE provider_configs ADD COLUMN login_tested BOOLEAN DEFAULT 0"},
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {

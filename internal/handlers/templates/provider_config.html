@@ -10,6 +10,36 @@
     <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
     <script src="/static/alpine.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
+    <script>
+    function checkAuth(btn, name) {
+        var status = btn.parentElement.querySelector('[data-auth-status]');
+        btn.disabled = true;
+        btn.textContent = 'Checking...';
+        status.textContent = '';
+        status.className = 'text-xs px-2 py-0.5 rounded';
+        fetch('/api/providers/check-auth', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': _csrf},
+            body: 'provider_name=' + encodeURIComponent(name)
+        }).then(function(r){return r.json()}).then(function(d) {
+            btn.disabled = false;
+            btn.textContent = 'Check Auth';
+            if (d.success) {
+                status.textContent = 'Authenticated';
+                status.className = 'text-xs bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded';
+                btn.style.display = 'none';
+            } else {
+                status.textContent = d.error || 'Failed';
+                status.className = 'text-xs bg-red-900/30 text-red-400 px-2 py-0.5 rounded';
+            }
+        }).catch(function() {
+            btn.disabled = false;
+            btn.textContent = 'Check Auth';
+            status.textContent = 'Error';
+            status.className = 'text-xs bg-red-900/30 text-red-400 px-2 py-0.5 rounded';
+        });
+    }
+    </script>
 </head>
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
@@ -22,11 +52,17 @@
                 <input type="hidden" name="provider_name" value="{{$name}}" />
                 <div class="flex items-center justify-between">
                     <h3 class="font-semibold text-neutral-300">{{$name}}</h3>
-                    {{if $p.RequiresAuth}}
-                    <span class="text-xs bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded">Requires Auth</span>
-                    {{else}}
-                    <span class="text-xs bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded">Public</span>
-                    {{end}}
+                    <div class="flex items-center gap-2">
+                        {{if $p.RequiresAuth}}
+                            {{if and $p.SupportsLogin (index $.LoginTested $name)}}
+                            <span data-auth-status class="text-xs bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded">Authenticated</span>
+                            {{else}}
+                            <span data-auth-status class="text-xs bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded">Requires Auth</span>
+                            {{end}}
+                        {{else}}
+                        <span class="text-xs bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded">Public</span>
+                        {{end}}
+                    </div>
                 </div>
                 {{if $p.SupportsLogin}}
                 <div>
@@ -60,9 +96,17 @@
                            class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
                 </div>
                 {{end}}
-                <button type="submit" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1 rounded text-sm">
-                    Save
-                </button>
+                <div class="flex items-center gap-2">
+                    <button type="submit" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1 rounded text-sm">
+                        Save
+                    </button>
+                    {{if $p.SupportsLogin}}
+                    <button type="button" onclick="checkAuth(this, '{{$name}}')"
+                            class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1 rounded text-sm">
+                        Check Auth
+                    </button>
+                    {{end}}
+                </div>
             </form>
             {{end}}
         </div>

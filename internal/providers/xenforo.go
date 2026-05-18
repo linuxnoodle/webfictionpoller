@@ -179,6 +179,21 @@ func (p *XenForoProvider) FetchSeriesMetadata(rawURL string) (models.Series, err
 		ProviderName: p.Name(),
 		Status:       "active",
 	}
+
+	doc.Find(".threadmarkListing .threadmarkListing-header, .structItem-threadmark .structItem-title").Each(func(i int, s *goquery.Selection) {
+		if series.Summary == "" {
+			series.Summary = strings.TrimSpace(s.Text())
+		}
+	})
+
+	if metaDesc, ok := doc.Find("meta[property='og:description']").Attr("content"); ok && metaDesc != "" {
+		series.Summary = strings.TrimSpace(metaDesc)
+	}
+
+	if metaImg, ok := doc.Find("meta[property='og:image']").Attr("content"); ok && metaImg != "" {
+		series.ImageURL = metaImg
+	}
+
 	return series, nil
 }
 

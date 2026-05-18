@@ -205,7 +205,9 @@
                 <div class="px-3 sm:px-4 py-3 bg-neutral-800/40 border-b border-neutral-800">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2 min-w-0 overflow-hidden">
-                            <img src="{{faviconURL .Series.ProviderName}}" alt="" class="w-4 h-4 flex-shrink-0">
+                            {{if .Series.ImageURL}}
+                            <img src="{{.Series.ImageURL}}" alt="" class="w-10 h-14 object-cover rounded flex-shrink-0">
+                            {{end}}
                             <div class="min-w-0 overflow-hidden">
                                 <h2 class="text-sm sm:text-base font-semibold text-neutral-200 truncate">{{.Series.Title}}</h2>
                                 <span class="text-xs text-neutral-500">by {{.Series.Author}} &middot; {{.Series.ProviderName}}</span>
@@ -234,6 +236,9 @@
                                 class="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
                         <a href="{{.Series.SourceURL}}" target="_blank" class="text-xs text-neutral-500 hover:text-neutral-300 ml-auto">Source</a>
                     </div>
+                    {{if .Series.Summary}}
+                    <p class="text-xs text-neutral-500 mt-2" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{.Series.Summary}}</p>
+                    {{end}}
                 </div>
                 <div class="divide-y divide-neutral-800/50">
                     {{range .Chapters}}

@@ -387,17 +387,20 @@ func (h *Handler) ProviderConfigPage(w http.ResponseWriter, r *http.Request) {
 	providers := h.pool.AllProviders()
 	configs := make(map[string]string)
 	usernames := make(map[string]string)
+	loginTested := make(map[string]bool)
 	for name := range providers {
 		pc, _ := h.store.GetProviderConfig(name)
 		if pc != nil {
 			configs[name] = pc.CookieData
 			usernames[name] = pc.Username
+			loginTested[name] = pc.LoginTested
 		}
 	}
 	renderTemplate(w, r, "provider_config", map[string]interface{}{
-		"Providers": providers,
-		"Configs":   configs,
-		"Usernames": usernames,
+		"Providers":   providers,
+		"Configs":     configs,
+		"Usernames":   usernames,
+		"LoginTested": loginTested,
 	})
 }
 
@@ -454,6 +457,51 @@ func (h *Handler) SaveProviderConfig(w http.ResponseWriter, r *http.Request) {
 	logging.Info("[handler] updated provider config for %s", name)
 	w.Header().Set("HX-Redirect", "/admin/providers")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) CheckAuthProvider(w http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("provider_name")
+	if name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "provider_name required"})
+		return
+	}
+
+	p, ok := h.pool.GetProvider(name)
+	if !ok || !p.SupportsLogin() {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "provider does not support login"})
+		return
+	}
+
+	pc, err := h.store.GetProviderConfig(name)
+	if err != nil || pc == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "no credentials saved"})
+		return
+	}
+
+	if pc.Username == "" || pc.EncryptedPassword == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "username and password required"})
+		return
+	}
+
+	if h.vault == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": "encryption not available"})
+		return
+	}
+
+	plainPass, err := h.vault.Decrypt(pc.EncryptedPassword)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": "failed to decrypt password"})
+		return
+	}
+
+	if err := p.Login(pc.Username, plainPass); err != nil {
+		_ = h.store.SetLoginTested(name, false)
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "Login failed: invalid credentials"})
+		return
+	}
+
+	_ = h.store.SetLoginTested(name, true)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 }
 
 func (h *Handler) PollNow(w http.ResponseWriter, r *http.Request) {

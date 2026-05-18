@@ -12,6 +12,8 @@ type Series struct {
 	ProviderName string    `json:"provider_name"`
 	Rating       float64   `json:"rating"`
 	Status       string    `json:"status"`
+	Summary      string    `json:"summary"`
+	ImageURL     string    `json:"image_url"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -32,12 +34,13 @@ type User struct {
 }
 
 type ProviderConfig struct {
-	ID                 int64     `json:"id"`
-	ProviderName       string    `json:"provider_name"`
-	CookieData         string    `json:"cookie_data"`
-	Username           string    `json:"username"`
-	EncryptedPassword  string    `json:"-"`
-	LastPolled         time.Time `json:"last_polled"`
+	ID                int64     `json:"id"`
+	ProviderName      string    `json:"provider_name"`
+	CookieData        string    `json:"cookie_data"`
+	Username          string    `json:"username"`
+	EncryptedPassword string    `json:"-"`
+	LoginTested       bool      `json:"login_tested"`
+	LastPolled        time.Time `json:"last_polled"`
 }
 
 type SeriesWithChapters struct {
@@ -72,6 +75,8 @@ type SeriesBackup struct {
 	ProviderName string          `json:"provider_name"`
 	Rating       float64         `json:"rating"`
 	Status       string          `json:"status"`
+	Summary      string          `json:"summary,omitempty"`
+	ImageURL     string          `json:"image_url,omitempty"`
 	Chapters     []ChapterBackup `json:"chapters"`
 }
 

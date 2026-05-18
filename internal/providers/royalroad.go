@@ -69,6 +69,19 @@ func (p *RoyalRoadProvider) FetchSeriesMetadata(url string) (models.Series, erro
 	series.ProviderName = p.Name()
 	series.Status = "active"
 
+	doc.Find(".description").Each(func(i int, s *goquery.Selection) {
+		if i == 0 {
+			series.Summary = strings.TrimSpace(s.Text())
+		}
+	})
+
+	if cover, ok := doc.Find(".fic-header img").First().Attr("src"); ok && cover != "" {
+		if strings.HasPrefix(cover, "//") {
+			cover = "https:" + cover
+		}
+		series.ImageURL = cover
+	}
+
 	return series, nil
 }
 

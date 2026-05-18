@@ -55,7 +55,7 @@ func main() {
 
 	sessionManager := scs.New()
 	sessionManager.Store = sqlite3store.New(db)
-	sessionManager.Lifetime = 24 * time.Hour
+	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
 	sessionManager.Cookie.Secure = os.Getenv("COOKIE_SECURE") != "false"
@@ -147,6 +147,7 @@ func main() {
 		r.Post("/api/series/{id}/delete", h.DeleteSeries)
 		r.Post("/api/poll", h.PollNow)
 		r.Get("/api/poll/progress", h.PollProgress)
+		r.Post("/api/providers/check-auth", h.CheckAuthProvider)
 		r.Get("/api/search", h.SearchSeries)
 		r.Get("/api/version", h.VersionAPI)
 		r.Post("/api/version/check", h.VersionCheckNow)

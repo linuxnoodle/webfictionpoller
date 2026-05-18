@@ -120,6 +120,17 @@ func (p *FlareSolverrProvider) FetchSeriesMetadata(url string) (models.Series, e
 	series.ProviderName = p.Name()
 	series.Status = "active"
 
+	series.Summary = strings.TrimSpace(doc.Find("#profile_top .xgray").Text())
+
+	if imgSrc, ok := doc.Find("#profile_top img").First().Attr("src"); ok && imgSrc != "" {
+		if strings.HasPrefix(imgSrc, "//") {
+			imgSrc = "https:" + imgSrc
+		} else if strings.HasPrefix(imgSrc, "/") {
+			imgSrc = "https://www.fanfiction.net" + imgSrc
+		}
+		series.ImageURL = imgSrc
+	}
+
 	return series, nil
 }
 

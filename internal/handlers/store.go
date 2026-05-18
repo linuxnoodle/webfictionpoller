@@ -19,7 +19,7 @@ func NewStore(db *sql.DB) *Store {
 
 func (s *Store) GetSeriesView() ([]models.SeriesWithChapters, error) {
 	rows, err := s.db.Query(`
-		SELECT s.id, s.title, s.author, s.source_url, s.provider_name, s.rating, s.status, s.created_at
+		SELECT s.id, s.title, s.author, s.source_url, s.provider_name, s.rating, s.status, s.summary, s.image_url, s.created_at
 		FROM series s
 		WHERE s.status IN ('active', 'binge')
 		  AND EXISTS (SELECT 1 FROM chapters c WHERE c.series_id = s.id)
@@ -35,7 +35,7 @@ func (s *Store) GetSeriesView() ([]models.SeriesWithChapters, error) {
 		var swc models.SeriesWithChapters
 		if err := rows.Scan(&swc.Series.ID, &swc.Series.Title, &swc.Series.Author,
 			&swc.Series.SourceURL, &swc.Series.ProviderName, &swc.Series.Rating,
-			&swc.Series.Status, &swc.Series.CreatedAt); err != nil {
+			&swc.Series.Status, &swc.Series.Summary, &swc.Series.ImageURL, &swc.Series.CreatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, swc)
@@ -169,9 +169,9 @@ func (s *Store) InsertChapters(seriesID int64, chapters []models.Chapter) (int, 
 
 func (s *Store) AddSeries(series models.Series) (int64, error) {
 	result, err := s.db.Exec(`
-		INSERT OR IGNORE INTO series (title, author, source_url, provider_name, rating, status)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, series.Title, series.Author, series.SourceURL, series.ProviderName, series.Rating, series.Status)
+		INSERT OR IGNORE INTO series (title, author, source_url, provider_name, rating, status, summary, image_url)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, series.Title, series.Author, series.SourceURL, series.ProviderName, series.Rating, series.Status, series.Summary, series.ImageURL)
 	if err != nil {
 		return 0, err
 	}
@@ -181,9 +181,9 @@ func (s *Store) AddSeries(series models.Series) (int64, error) {
 func (s *Store) GetSeriesBySourceURL(sourceURL string) (*models.Series, error) {
 	var ser models.Series
 	err := s.db.QueryRow(`
-		SELECT id, title, author, source_url, provider_name, rating, status, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
 		FROM series WHERE source_url = ?
-	`, sourceURL).Scan(&ser.ID, &ser.Title, &ser.Author, &ser.SourceURL, &ser.ProviderName, &ser.Rating, &ser.Status, &ser.CreatedAt)
+	`, sourceURL).Scan(&ser.ID, &ser.Title, &ser.Author, &ser.SourceURL, &ser.ProviderName, &ser.Rating, &ser.Status, &ser.Summary, &ser.ImageURL, &ser.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -195,7 +195,7 @@ func (s *Store) GetSeriesBySourceURL(sourceURL string) (*models.Series, error) {
 
 func (s *Store) ListSeries() ([]models.Series, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, author, source_url, provider_name, rating, status, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
 		FROM series ORDER BY title ASC
 	`)
 	if err != nil {
@@ -206,7 +206,7 @@ func (s *Store) ListSeries() ([]models.Series, error) {
 	var series []models.Series
 	for rows.Next() {
 		var s models.Series
-		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		series = append(series, s)
@@ -250,7 +250,7 @@ func (s *Store) UpdateSeriesRating(id int64, rating float64) error {
 
 func (s *Store) GetAllActiveSeries() ([]models.Series, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, author, source_url, provider_name, rating, status, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
 		FROM series WHERE status IN ('active', 'binge')
 	`)
 	if err != nil {
@@ -261,7 +261,7 @@ func (s *Store) GetAllActiveSeries() ([]models.Series, error) {
 	var series []models.Series
 	for rows.Next() {
 		var s models.Series
-		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		series = append(series, s)
@@ -272,9 +272,9 @@ func (s *Store) GetAllActiveSeries() ([]models.Series, error) {
 func (s *Store) GetProviderConfig(name string) (*models.ProviderConfig, error) {
 	var pc models.ProviderConfig
 	err := s.db.QueryRow(`
-		SELECT id, provider_name, cookie_data, last_polled, username, encrypted_password
+		SELECT id, provider_name, cookie_data, last_polled, username, encrypted_password, login_tested
 		FROM provider_configs WHERE provider_name = ?
-	`, name).Scan(&pc.ID, &pc.ProviderName, &pc.CookieData, &pc.LastPolled, &pc.Username, &pc.EncryptedPassword)
+	`, name).Scan(&pc.ID, &pc.ProviderName, &pc.CookieData, &pc.LastPolled, &pc.Username, &pc.EncryptedPassword, &pc.LoginTested)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -286,15 +286,20 @@ func (s *Store) GetProviderConfig(name string) (*models.ProviderConfig, error) {
 
 func (s *Store) UpsertProviderConfig(name, cookieData, username, encryptedPassword string) error {
 	_, err := s.db.Exec(`
-		INSERT INTO provider_configs (provider_name, cookie_data, last_polled, username, encrypted_password)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(provider_name) DO UPDATE SET cookie_data = ?, last_polled = ?, username = ?, encrypted_password = ?
+		INSERT INTO provider_configs (provider_name, cookie_data, last_polled, username, encrypted_password, login_tested)
+		VALUES (?, ?, ?, ?, ?, 0)
+		ON CONFLICT(provider_name) DO UPDATE SET cookie_data = ?, last_polled = ?, username = ?, encrypted_password = ?, login_tested = 0
 	`, name, cookieData, time.Now(), username, encryptedPassword, cookieData, time.Now(), username, encryptedPassword)
 	return err
 }
 
 func (s *Store) UpdateLastPolled(name string) error {
 	_, err := s.db.Exec("UPDATE provider_configs SET last_polled = ? WHERE provider_name = ?", time.Now(), name)
+	return err
+}
+
+func (s *Store) SetLoginTested(name string, tested bool) error {
+	_, err := s.db.Exec("UPDATE provider_configs SET login_tested = ? WHERE provider_name = ?", tested, name)
 	return err
 }
 
@@ -311,9 +316,9 @@ func (s *Store) MarkAllChaptersRead() error {
 func (s *Store) GetSeriesByID(id int64) (*models.Series, error) {
 	var ser models.Series
 	err := s.db.QueryRow(`
-		SELECT id, title, author, source_url, provider_name, rating, status, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
 		FROM series WHERE id = ?
-	`, id).Scan(&ser.ID, &ser.Title, &ser.Author, &ser.SourceURL, &ser.ProviderName, &ser.Rating, &ser.Status, &ser.CreatedAt)
+	`, id).Scan(&ser.ID, &ser.Title, &ser.Author, &ser.SourceURL, &ser.ProviderName, &ser.Rating, &ser.Status, &ser.Summary, &ser.ImageURL, &ser.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -395,6 +400,8 @@ func (s *Store) ExportBackup() (*models.Backup, error) {
 			ProviderName: ser.ProviderName,
 			Rating:       ser.Rating,
 			Status:       ser.Status,
+			Summary:      ser.Summary,
+			ImageURL:     ser.ImageURL,
 			Chapters:     chapters,
 		})
 	}
@@ -438,6 +445,8 @@ func (s *Store) ImportBackup(backup *models.Backup) (imported, skipped int, err 
 			ProviderName: sb.ProviderName,
 			Rating:       sb.Rating,
 			Status:       sb.Status,
+			Summary:      sb.Summary,
+			ImageURL:     sb.ImageURL,
 		}
 		id, aerr := s.AddSeries(ser)
 		if aerr != nil {
@@ -481,7 +490,7 @@ func (s *Store) ImportBackup(backup *models.Backup) (imported, skipped int, err 
 func (s *Store) SearchSeries(query string) ([]models.Series, error) {
 	q := "%" + strings.ToLower(query) + "%"
 	rows, err := s.db.Query(`
-		SELECT id, title, author, source_url, provider_name, rating, status, created_at
+		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, created_at
 		FROM series WHERE LOWER(title) LIKE ? OR LOWER(author) LIKE ?
 		ORDER BY title ASC LIMIT 20
 	`, q, q)
@@ -493,7 +502,7 @@ func (s *Store) SearchSeries(query string) ([]models.Series, error) {
 	var series []models.Series
 	for rows.Next() {
 		var s models.Series
-		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		series = append(series, s)
