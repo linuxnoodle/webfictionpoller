@@ -1,6 +1,7 @@
 {{define "nav"}}
 <style>@keyframes spin{to{transform:rotate(360deg)}}.spinner{animation:spin 1s linear infinite;display:inline-block}</style>
 <script>
+window.addEventListener('pageshow',function(e){if(e.persisted){htmx.process(document.body)}});
 function ratingColor(v) {
     if (v < 0) return 'hsl(0,0%,50%)';
     var h = (v / 10) * 120;

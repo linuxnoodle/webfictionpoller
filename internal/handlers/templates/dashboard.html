@@ -213,7 +213,7 @@
                     {{end}}
                 </div>
                 <div class="flex mt-1">
-                    {{range $i, $count := .RatingDist}}{{if eq (mod $i 10) 0}}<span class="text-center text-xs text-neutral-600" style="flex:0 0 calc({{$i}} / 100 * 100% + 0.5%)">{{$i}}</span>{{end}}{{end}}
+                    {{range $i, $count := .RatingDist}}<div class="flex-1 min-w-0 text-center">{{if eq (mod $i 10) 0}}<span class="text-xs text-neutral-600">{{$i}}</span>{{end}}</div>{{end}}
                 </div>
             </div>
             {{end}}

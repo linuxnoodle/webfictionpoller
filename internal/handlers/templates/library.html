@@ -21,7 +21,10 @@
           x-data="{
               status: null,
               loadStatus() {
-                  fetch('/api/archive/status').then(r => r.json()).then(d => { status = d; });
+                  fetch('/api/archive/status')
+                      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+                      .then(d => { status = d; })
+                      .catch(() => { status = {active:false, total:0, done:0, last_run:null}; });
               }
           }"
           x-init="loadStatus(); setInterval(() => loadStatus(), 10000)">
@@ -86,21 +89,22 @@
             </div>
 
             <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-5">
-                <h2 class="text-lg font-semibold text-neutral-200 mb-3">Archive All Stories</h2>
-                <p class="text-sm text-neutral-400 mb-4">
-                    When enabled, all active and binge series are automatically archived. Content is stored with gzip compression to reduce storage size.
-                </p>
-                <form hx-post="/api/archive/all" hx-swap="none" hx-on::after-request="this.querySelector('button').dataset.state = JSON.parse(event.detail.xhr.response).enabled ? 'on' : 'off'; location.reload()">
-                    <input type="hidden" name="enabled" :value="document.getElementById('archive-all-toggle').checked ? 'false' : 'true'">
-                    <label class="flex items-center gap-3 cursor-pointer">
-                        <div class="relative">
-                            <input type="checkbox" id="archive-all-toggle" class="sr-only" {{if .ArchiveAll}}checked{{end}}>
-                            <div class="w-11 h-6 bg-neutral-700 rounded-full toggle-track transition-colors" :class="{'bg-emerald-600': $el.previousElementSibling.checked}"></div>
-                            <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-neutral-300 rounded-full transition-transform" :class="{'translate-x-5': $el.previousElementSibling.previousElementSibling.checked}"></div>
-                        </div>
-                        <span class="text-sm text-neutral-300" x-text="document.getElementById('archive-all-toggle').checked ? 'All stories are being archived' : 'Only individually selected series are archived'"></span>
-                    </label>
-                </form>
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-neutral-200">Archive All Stories</h2>
+                        <p class="text-sm text-neutral-400 mt-1">
+                            {{if .ArchiveAll}}All active series are being archived with gzip compression.{{else}}Only individually selected series are archived. Enable to archive everything.{{end}}
+                        </p>
+                    </div>
+                    <form hx-post="/api/archive/all" hx-swap="none" hx-on::after-request="location.reload()" class="flex-shrink-0">
+                        <input type="hidden" name="enabled" value="{{if not .ArchiveAll}}true{{else}}false{{end}}">
+                        <button type="submit"
+                                class="relative inline-flex items-center h-6 w-11 rounded-full transition-colors focus:outline-none {{if .ArchiveAll}}bg-emerald-600{{else}}bg-neutral-700{{end}}"
+                                id="archive-toggle-btn">
+                            <span class="inline-block w-5 h-5 bg-neutral-300 rounded-full transition-transform transform {{if .ArchiveAll}}translate-x-5{{else}}translate-x-0.5{{end}}"></span>
+                        </button>
+                    </form>
+                </div>
             </div>
 
             <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-5">
