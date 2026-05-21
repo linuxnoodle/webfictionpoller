@@ -150,6 +150,10 @@ func (p *XenForoProvider) FetchSeriesMetadata(rawURL string) (models.Series, err
 	var series models.Series
 	threadURL := p.normalizeThreadURL(rawURL)
 
+	if strings.Contains(rawURL, "threadmarks.rss") {
+		return p.fetchMetadataFromRSS(rawURL, threadURL)
+	}
+
 	resp, err := doGet(p.client, threadURL)
 	if err != nil {
 		return series, err
@@ -192,6 +196,48 @@ func (p *XenForoProvider) FetchSeriesMetadata(rawURL string) (models.Series, err
 
 	if metaImg, ok := doc.Find("meta[property='og:image']").Attr("content"); ok && metaImg != "" {
 		series.ImageURL = metaImg
+	}
+
+	return series, nil
+}
+
+func (p *XenForoProvider) fetchMetadataFromRSS(rssURL, threadURL string) (models.Series, error) {
+	var series models.Series
+
+	fp := gofeed.NewParser()
+	resp, err := doGet(p.client, rssURL)
+	if err != nil {
+		return series, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return series, fmt.Errorf("rss feed status %d for %s", resp.StatusCode, rssURL)
+	}
+
+	feed, err := fp.Parse(resp.Body)
+	if err != nil {
+		return series, fmt.Errorf("parsing rss: %w", err)
+	}
+
+	title := feed.Title
+	if title == "" {
+		title = p.extractTitleFromURL(threadURL)
+	}
+
+	series = models.Series{
+		Title:        title,
+		SourceURL:    threadURL,
+		ProviderName: p.Name(),
+		Status:       "active",
+	}
+
+	if feed.Description != "" {
+		series.Summary = feed.Description
+	}
+
+	if feed.Image != nil && feed.Image.URL != "" {
+		series.ImageURL = feed.Image.URL
 	}
 
 	return series, nil
