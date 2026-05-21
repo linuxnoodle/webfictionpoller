@@ -53,18 +53,26 @@
         if (actRead) { var a = document.createElement('a'); a.href = url || '#'; a.target = '_blank'; a.rel = 'noopener'; a.className = 'text-xs text-neutral-500 hover:text-neutral-300 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded'; a.textContent = 'open'; a.onclick = function(e){e.stopPropagation(); if(!url)e.preventDefault()}; actRead.replaceWith(a); }
         if (actIgnore) { var s = document.createElement('span'); s.className = 'invisible text-xs px-2 py-1'; s.textContent = 'Ignore'; actIgnore.replaceWith(s); }
     }
+    function _decrementUnread() {
+        var el = document.getElementById('unread-count');
+        if (!el) return;
+        var v = parseInt(el.textContent, 10);
+        if (!isNaN(v) && v > 0) { el.textContent = (v - 1) + ' unread'; }
+    }
     function markRead(btn, id, url) {
         event.stopPropagation();
         if (url) window.open(url, '_blank');
         htmx.ajax('POST', '/api/chapters/' + id + '/read', {swap:'none'});
         var row = document.getElementById('row-' + id);
         if (row) _markReadRow(row, id, url);
+        _decrementUnread();
     }
     function markIgnore(btn, id) {
         event.stopPropagation();
         htmx.ajax('POST', '/api/chapters/' + id + '/read', {swap:'none'});
         var row = document.getElementById('row-' + id);
         if (row) _markReadRow(row, id, null);
+        _decrementUnread();
     }
     function goToSeries(seriesId) {
         if (openPreviewId !== null) {
@@ -74,6 +82,11 @@
         }
         var ev = new CustomEvent('go-to-series', { detail: { id: seriesId } });
         window.dispatchEvent(ev);
+    }
+    function sortSeriesBy(key) {
+        var url = new URL(location.href);
+        url.searchParams.set('seriesSort', key);
+        location.href = url.toString();
     }
     </script>
 </head>
@@ -102,13 +115,20 @@
                             :class="sortBy === 'received' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
                             class="px-2 py-1.5 text-xs">received</button>
                 </div>
+                <div x-show="view === 'series'" class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
+                    <button onclick="sortSeriesBy('title')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "title"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">title</button>
+                    <button onclick="sortSeriesBy('author')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "author"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">author</button>
+                    <button onclick="sortSeriesBy('provider')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "provider"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">provider</button>
+                    <button onclick="sortSeriesBy('rating')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "rating"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">rating</button>
+                    <button onclick="sortSeriesBy('status')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "status"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">status</button>
+                </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 sm:gap-4">
                 {{if .Stats}}
                 <div class="flex gap-2 sm:gap-4 text-xs sm:text-sm text-neutral-500">
                     <span>{{.Stats.TotalSeries}} series</span>
                     <span>{{.Stats.ActiveSeries}} active</span>
-                    <span class="text-neutral-300">{{.Stats.UnreadChapter}} unread</span>
+                    <span id="unread-count" class="text-neutral-300">{{.Stats.UnreadChapter}} unread</span>
                 </div>
                 {{end}}
                 <button hx-post="/api/read-all" hx-swap="none" hx-confirm="Mark all chapters as read?"
@@ -217,20 +237,6 @@
                 </div>
             </div>
             {{end}}
-
-            <div class="mb-4 bg-neutral-900 rounded-lg border border-neutral-800 p-4 space-y-4">
-                <div class="flex flex-wrap gap-2">
-                    <a href="/series/add" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1.5 rounded text-sm">Add Series</a>
-                    <a href="/series/import" class="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded text-sm">Import OPML</a>
-                    <form method="POST" action="/series/backup" enctype="multipart/form-data" class="inline-flex items-center gap-2">
-                        <input type="file" name="backup_file" accept=".json" required
-                               class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-neutral-300 file:bg-neutral-700 file:border-0 file:text-neutral-200 file:rounded file:px-2 file:py-0.5 file:mr-2 file:text-xs file:cursor-pointer" />
-                        <button type="submit" class="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded text-sm">Import Backup</button>
-                    </form>
-                    <a href="/series/export" class="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded text-sm ml-auto">Export OPML</a>
-                    <a href="/series/backup" download class="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded text-sm">Export Backup</a>
-                </div>
-            </div>
 
             <!-- Mobile: card layout -->
             <div class="sm:hidden space-y-3">

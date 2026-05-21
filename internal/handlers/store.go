@@ -197,10 +197,25 @@ func (s *Store) GetSeriesBySourceURL(sourceURL string) (*models.Series, error) {
 }
 
 func (s *Store) ListSeries() ([]models.Series, error) {
-	rows, err := s.db.Query(`
+	return s.ListSeriesSorted("title")
+}
+
+func (s *Store) ListSeriesSorted(sortKey string) ([]models.Series, error) {
+	orderBy := "s.title ASC"
+	switch sortKey {
+	case "provider":
+		orderBy = "s.provider_name ASC, s.title ASC"
+	case "rating":
+		orderBy = "s.rating DESC, s.title ASC"
+	case "status":
+		orderBy = "s.status ASC, s.title ASC"
+	case "author":
+		orderBy = "s.author ASC, s.title ASC"
+	}
+	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, archive, created_at
-		FROM series ORDER BY title ASC
-	`)
+		FROM series s ORDER BY %s
+	`, orderBy))
 	if err != nil {
 		return nil, err
 	}

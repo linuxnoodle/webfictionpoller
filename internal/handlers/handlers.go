@@ -59,13 +59,15 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		sortBy = "published"
 	}
 
+	seriesSort := r.URL.Query().Get("seriesSort")
+
 	seriesView, err := h.store.GetSeriesView()
 	if err != nil {
 		internalError(w, r, err)
 		return
 	}
 
-	allSeries, err := h.store.ListSeries()
+	allSeries, err := h.store.ListSeriesSorted(seriesSort)
 	if err != nil {
 		internalError(w, r, err)
 		return
@@ -111,6 +113,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		"TimePage":    0,
 		"HasMoreTime": len(timeChapters) == 50,
 		"SortBy":      sortBy,
+		"SeriesSort":  seriesSort,
 	})
 }
 
@@ -302,6 +305,15 @@ func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, redirectURL)
+}
+
+func (h *Handler) UnreadCountAPI(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.store.GetDashboardStats()
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"unread": stats.UnreadChapter})
 }
 
 func (h *Handler) UpdateSeriesStatus(w http.ResponseWriter, r *http.Request) {

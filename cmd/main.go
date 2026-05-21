@@ -155,6 +155,7 @@ func main() {
 		r.Post("/api/series/{id}/rating", h.UpdateSeriesRating)
 		r.Post("/api/series/{id}/read-all", h.MarkAllRead)
 		r.Post("/api/read-all", h.MarkAllChaptersRead)
+		r.Get("/api/unread-count", h.UnreadCountAPI)
 		r.Post("/api/series/{id}/delete", h.DeleteSeries)
 		r.Post("/api/poll", h.PollNow)
 		r.Get("/api/poll/progress", h.PollProgress)
