@@ -88,6 +88,8 @@ var migrations = []migration{
 		UNIQUE(chapter_id, url)
 	)`},
 	{"chapter_images_idx", "CREATE INDEX IF NOT EXISTS idx_chapter_images_chapter ON chapter_images(chapter_id)"},
+	{"settings_table", `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`},
+	{"content_compressed", "ALTER TABLE chapters ADD COLUMN content_compressed BOOLEAN DEFAULT 0"},
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {

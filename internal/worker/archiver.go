@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"regexp"
 	"strings"
@@ -20,9 +21,11 @@ var imgSrcRegex = regexp.MustCompile(`(?i)src=["']([^"']+)["']`)
 
 type ArchiverStore interface {
 	GetArchivedSeries() ([]models.Series, error)
+	GetAllActiveSeries() ([]models.Series, error)
 	GetChaptersNeedingContent(seriesID int64) ([]models.Chapter, error)
 	SaveChapterContent(id int64, content string) error
 	SaveChapterImage(chapterID int64, url string, data []byte, contentType string) error
+	GetSetting(key string) string
 }
 
 type ArchiverStatus struct {
@@ -34,26 +37,38 @@ type ArchiverStatus struct {
 }
 
 type Archiver struct {
-	store     ArchiverStore
-	providers map[string]providers.Provider
-	policy    *bluemonday.Policy
+	store            ArchiverStore
+	providers        map[string]providers.Provider
+	policy           *bluemonday.Policy
+	archiveAllDefault bool
 
-	mu     chan struct{}
-	status ArchiverStatus
+	mu         chan struct{}
+	status     ArchiverStatus
+	lastRequest map[string]time.Time
 }
 
-func NewArchiver(store ArchiverStore, providerList []providers.Provider) *Archiver {
+func NewArchiver(store ArchiverStore, providerList []providers.Provider, archiveAllDefault bool) *Archiver {
 	a := &Archiver{
-		store:     store,
-		providers: make(map[string]providers.Provider),
-		policy:    bluemonday.UGCPolicy(),
-		mu:        make(chan struct{}, 1),
+		store:            store,
+		providers:        make(map[string]providers.Provider),
+		policy:           bluemonday.UGCPolicy(),
+		archiveAllDefault: archiveAllDefault,
+		mu:               make(chan struct{}, 1),
+		lastRequest:      make(map[string]time.Time),
 	}
 	a.policy.AllowImages()
 	for _, p := range providerList {
 		a.providers[p.Name()] = p
 	}
 	return a
+}
+
+func (a *Archiver) isArchiveAll() bool {
+	val := a.store.GetSetting("archive_all")
+	if val != "" {
+		return val == "true"
+	}
+	return a.archiveAllDefault
 }
 
 func (a *Archiver) Run(ctx context.Context, interval time.Duration) {
@@ -70,6 +85,23 @@ func (a *Archiver) Run(ctx context.Context, interval time.Duration) {
 	}
 }
 
+func (a *Archiver) waitForSiteRateLimit(providerName string) {
+	minDelay := 10 * time.Second
+	jitter := time.Duration(rand.IntN(5000)) * time.Millisecond
+
+	if last, ok := a.lastRequest[providerName]; ok {
+		elapsed := time.Since(last)
+		required := minDelay + jitter
+		if elapsed < required {
+			time.Sleep(required - elapsed)
+		}
+	} else {
+		time.Sleep(jitter)
+	}
+
+	a.lastRequest[providerName] = time.Now()
+}
+
 func (a *Archiver) runCycle(ctx context.Context) {
 	select {
 	case a.mu <- struct{}{}:
@@ -79,9 +111,16 @@ func (a *Archiver) runCycle(ctx context.Context) {
 	}
 	defer func() { <-a.mu }()
 
-	series, err := a.store.GetArchivedSeries()
+	var series []models.Series
+	var err error
+
+	if a.isArchiveAll() {
+		series, err = a.store.GetAllActiveSeries()
+	} else {
+		series, err = a.store.GetArchivedSeries()
+	}
 	if err != nil {
-		logging.Error("[archiver] error fetching archived series: %v", err)
+		logging.Error("[archiver] error fetching series: %v", err)
 		return
 	}
 	if len(series) == 0 {
@@ -130,10 +169,11 @@ func (a *Archiver) runCycle(ctx context.Context) {
 			default:
 			}
 
+			a.waitForSiteRateLimit(s.ProviderName)
+
 			content, err := p.FetchChapterContent(ch.URL)
 			if err != nil {
 				logging.Error("[archiver] error fetching chapter %d (%s): %v", ch.ID, ch.URL, err)
-				time.Sleep(5 * time.Second)
 				continue
 			}
 
@@ -146,9 +186,6 @@ func (a *Archiver) runCycle(ctx context.Context) {
 			} else {
 				logging.Info("[archiver] saved content for chapter %d (%s)", ch.ID, ch.Title)
 			}
-
-			delay := 8*time.Second + time.Duration(float64(4*time.Second)*float64(time.Now().UnixNano()%1000)/1000)
-			time.Sleep(delay)
 		}
 
 		a.status.Done++

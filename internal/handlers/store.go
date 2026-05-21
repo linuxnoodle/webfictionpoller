@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"bytes"
+	"compress/gzip"
 	"database/sql"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -540,7 +543,7 @@ func (s *Store) GetArchivedSeries() ([]models.Series, error) {
 
 func (s *Store) GetChaptersForArchive(seriesID int64) ([]models.Chapter, error) {
 	rows, err := s.db.Query(`
-		SELECT id, series_id, title, url, published_at, is_read, content_html, created_at
+		SELECT id, series_id, title, url, published_at, is_read, content_html, COALESCE(content_compressed, 0), created_at
 		FROM chapters WHERE series_id = ?
 		ORDER BY published_at ASC
 	`, seriesID)
@@ -552,8 +555,25 @@ func (s *Store) GetChaptersForArchive(seriesID int64) ([]models.Chapter, error) 
 	var chapters []models.Chapter
 	for rows.Next() {
 		var ch models.Chapter
-		if err := rows.Scan(&ch.ID, &ch.SeriesID, &ch.Title, &ch.URL, &ch.PublishedAt, &ch.IsRead, &ch.ContentHTML, &ch.CreatedAt); err != nil {
+		var contentBytes []byte
+		var compressed bool
+		if err := rows.Scan(&ch.ID, &ch.SeriesID, &ch.Title, &ch.URL, &ch.PublishedAt, &ch.IsRead, &contentBytes, &compressed, &ch.CreatedAt); err != nil {
 			return nil, err
+		}
+		if compressed && len(contentBytes) > 0 {
+			reader, err := gzip.NewReader(bytes.NewReader(contentBytes))
+			if err == nil {
+				decompressed, err := io.ReadAll(reader)
+				reader.Close()
+				if err == nil {
+					ch.ContentHTML = string(decompressed)
+				}
+			}
+			if ch.ContentHTML == "" {
+				ch.ContentHTML = string(contentBytes)
+			}
+		} else {
+			ch.ContentHTML = string(contentBytes)
 		}
 		chapters = append(chapters, ch)
 	}
@@ -561,7 +581,11 @@ func (s *Store) GetChaptersForArchive(seriesID int64) ([]models.Chapter, error) 
 }
 
 func (s *Store) SaveChapterContent(id int64, content string) error {
-	_, err := s.db.Exec("UPDATE chapters SET content_html = ? WHERE id = ?", content, id)
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	gw.Write([]byte(content))
+	gw.Close()
+	_, err := s.db.Exec("UPDATE chapters SET content_html = ?, content_compressed = 1 WHERE id = ?", buf.Bytes(), id)
 	return err
 }
 
@@ -610,15 +634,19 @@ func (s *Store) GetChapterImage(chapterID int64, url string) ([]byte, string, er
 	return data, contentType, nil
 }
 
-func (s *Store) GetArchiveStats() ([]models.ArchiveStat, error) {
-	rows, err := s.db.Query(`
+func (s *Store) GetArchiveStats(archiveAll bool) ([]models.ArchiveStat, error) {
+	where := "s.status IN ('active', 'binge')"
+	if !archiveAll {
+		where = "s.archive = 1 AND " + where
+	}
+	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT s.id, s.title,
 			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id),
 			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.content_html != '')
 		FROM series s
-		WHERE s.archive = 1 AND s.status IN ('active', 'binge')
+		WHERE %s
 		ORDER BY s.title ASC
-	`)
+	`, where))
 	if err != nil {
 		return nil, err
 	}
@@ -637,4 +665,18 @@ func (s *Store) GetArchiveStats() ([]models.ArchiveStat, error) {
 		stats = append(stats, st)
 	}
 	return stats, nil
+}
+
+func (s *Store) GetSetting(key string) string {
+	var value string
+	err := s.db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&value)
+	if err != nil {
+		return ""
+	}
+	return value
+}
+
+func (s *Store) SetSetting(key, value string) error {
+	_, err := s.db.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", key, value)
+	return err
 }

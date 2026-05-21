@@ -87,7 +87,7 @@ func main() {
 
 	h := handlers.NewHandler(store, pool, logDir, vault)
 
-	archiver := worker.NewArchiver(store, providerList)
+	archiver := worker.NewArchiver(store, providerList, envOrDefault("ARCHIVE_ALL", "false") == "true")
 	h.SetArchiver(archiver)
 
 	r := chi.NewRouter()
@@ -162,6 +162,8 @@ func main() {
 		r.Get("/api/providers/password", h.GetProviderPassword)
 		r.Post("/api/series/{id}/archive", h.UpdateSeriesArchive)
 		r.Get("/api/archive/status", h.ArchiverStatusAPI)
+		r.Get("/api/archive/all", h.ArchiveAllAPI)
+		r.Post("/api/archive/all", h.ArchiveAllAPI)
 		r.Get("/api/search", h.SearchSeries)
 		r.Get("/api/version", h.VersionAPI)
 		r.Post("/api/version/check", h.VersionCheckNow)

@@ -19,9 +19,11 @@ import (
 
 type Store interface {
 	GetArchivedSeries() ([]models.Series, error)
+	GetAllActiveSeries() ([]models.Series, error)
 	GetChaptersForArchive(seriesID int64) ([]models.Chapter, error)
 	GetChapterImage(chapterID int64, url string) ([]byte, string, error)
 	GetSeriesByID(id int64) (*models.Series, error)
+	GetSetting(key string) string
 }
 
 type Catalog struct {
@@ -33,7 +35,13 @@ func NewCatalog(store Store) *Catalog {
 }
 
 func (c *Catalog) ServeRoot(w http.ResponseWriter, r *http.Request) {
-	series, err := c.store.GetArchivedSeries()
+	var series []models.Series
+	var err error
+	if c.store.GetSetting("archive_all") == "true" {
+		series, err = c.store.GetAllActiveSeries()
+	} else {
+		series, err = c.store.GetArchivedSeries()
+	}
 	if err != nil {
 		logging.Error("[opds] error fetching archived series: %v", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

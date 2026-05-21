@@ -805,7 +805,8 @@ func (h *Handler) ArchiverStatusAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) LibraryPage(w http.ResponseWriter, r *http.Request) {
-	stats, err := h.store.GetArchiveStats()
+	archiveAll := h.store.GetSetting("archive_all") == "true"
+	stats, err := h.store.GetArchiveStats(archiveAll)
 	if err != nil {
 		internalError(w, r, err)
 		return
@@ -819,6 +820,22 @@ func (h *Handler) LibraryPage(w http.ResponseWriter, r *http.Request) {
 
 	renderTemplate(w, r, "library", map[string]interface{}{
 		"ArchiveStats": stats,
+		"ArchiveAll":   archiveAll,
 		"OPDSURL":      fmt.Sprintf("%s://USERNAME:PASSWORD@%s/opds", scheme, host),
 	})
+}
+
+func (h *Handler) ArchiveAllAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		archiveAll := h.store.GetSetting("archive_all") == "true"
+		writeJSON(w, http.StatusOK, map[string]interface{}{"enabled": archiveAll})
+		return
+	}
+	enabled := r.FormValue("enabled") == "true"
+	if err := h.store.SetSetting("archive_all", fmt.Sprintf("%v", enabled)); err != nil {
+		internalError(w, r, err)
+		return
+	}
+	logging.Info("[handler] archive_all setting updated to %v", enabled)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"enabled": enabled})
 }
