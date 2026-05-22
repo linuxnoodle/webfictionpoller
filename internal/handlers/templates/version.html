@@ -27,7 +27,8 @@
             setInterval(() => {
                 fetch('/api/version', {signal: AbortSignal.timeout(5000)}).then(r => { serverUp = r.ok; return r.json() }).then(d => { if(d && !updating && !updateDone) data = d }).catch(() => { if(!updating) serverUp = false });
             }, 15000);
-          ">
+          "
+          x-ref="vpage">
         <h1 class="text-2xl font-bold mb-6 text-neutral-100">Version & Updates</h1>
 
         <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-6 space-y-4">
@@ -63,9 +64,57 @@
                     <div x-show="data.update_available && !data.updating && !updating" class="mt-4 bg-emerald-900/30 border border-emerald-800/50 rounded-lg p-4">
                         <p class="text-emerald-300 text-sm font-semibold mb-1">Update available!</p>
                         <p class="text-xs text-neutral-400 mb-3">A newer version is available on GitHub.</p>
-                        <button @click="updating=true; updateDone=false; updateLog=null; serverUp=true; needsRestart=false; fetch('/api/version/update', {method:'POST',headers:{'X-CSRF-Token':_csrf}}).then(r=>r.json()).then(d=>{if(d.error){updating=false;alert(d.error)}}); logPoll=setInterval(()=>{
-                                fetch('/api/version',{signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(d=>{serverUp=true;data=d;$nextTick(()=>{if(logEl)logEl.scrollTop=logEl.scrollHeight});if(!d.updating){clearInterval(logPoll);logPoll=null;updateLog=data.update_log;if(updateLog&&updateLog.indexOf('ERROR')>=0){updating=false}else if(updateLog&&updateLog.indexOf('No restart needed')>=0){updating=false;updateDone=true}else{needsRestart=true;var sawDown=false;var retryCount=0;var w=setInterval(()=>{retryCount++;fetch('/api/version',{signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(d=>{if(sawDown){clearInterval(w);serverUp=true;data=d;updating=false;updateDone=true}}).catch(()=>{sawDown=true;serverUp=false;if(retryCount>60){clearInterval(w);updating=false;updateLog=(updateLog||'')+'\nTimed out waiting for server to come back.'}})},3000)}}}).catch(()=>{serverUp=false})
-                            }, 1000)"
+                        <button @click="
+                            updating=true; updateDone=false; updateLog=null; serverUp=true; needsRestart=false;
+                            fetch('/api/version/update', {method:'POST',headers:{'X-CSRF-Token':_csrf}}).then(r=>r.json()).then(d=>{if(d.error){updating=false;alert(d.error)}});
+                            logPoll=setInterval(function(){
+                                fetch('/api/version',{signal:AbortSignal.timeout(5000)}).then(function(r){
+                                    if(!r.ok) throw new Error(r.status);
+                                    return r.json();
+                                }).then(function(d){
+                                    serverUp=true;
+                                    data=d;
+                                    var logEl=document.getElementById('update-log');
+                                    if(logEl) logEl.scrollTop=logEl.scrollHeight;
+                                    if(!d.updating){
+                                        clearInterval(logPoll); logPoll=null;
+                                        updateLog=data.update_log;
+                                        if(updateLog && updateLog.indexOf('ERROR')>=0){
+                                            updating=false;
+                                        } else if(updateLog && updateLog.indexOf('No restart needed')>=0){
+                                            updating=false; updateDone=true;
+                                        } else {
+                                            needsRestart=true;
+                                            var sawDown=false;
+                                            var retryCount=0;
+                                            var w=setInterval(function(){
+                                                retryCount++;
+                                                fetch('/api/version',{signal:AbortSignal.timeout(5000)}).then(function(r){
+                                                    if(!r.ok) throw new Error(r.status);
+                                                    return r.json();
+                                                }).then(function(nd){
+                                                    if(sawDown){
+                                                        clearInterval(w);
+                                                        serverUp=true;
+                                                        data=nd;
+                                                        updating=false;
+                                                        updateDone=true;
+                                                    }
+                                                }).catch(function(){
+                                                    sawDown=true;
+                                                    serverUp=false;
+                                                    if(retryCount>60){
+                                                        clearInterval(w);
+                                                        updating=false;
+                                                        updateLog=(updateLog||'')+'\nTimed out waiting for server to come back.';
+                                                    }
+                                                });
+                                            },3000);
+                                        }
+                                    }
+                                }).catch(function(){serverUp=false});
+                            }, 1000);
+                        "
                                 class="w-full bg-emerald-700 hover:bg-emerald-600 text-white py-2 rounded text-sm font-semibold">
                             Update Now
                         </button>
