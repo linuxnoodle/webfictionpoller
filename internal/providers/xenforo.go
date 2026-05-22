@@ -255,15 +255,32 @@ func (p *XenForoProvider) FetchChapterContent(chapterURL string) (string, error)
 		return "", fmt.Errorf("parsing html: %w", err)
 	}
 
-	content := doc.Find(".message-body .bbWrapper")
-	if content.Length() == 0 {
-		content = doc.Find(".message-body")
+	var target *goquery.Selection
+
+	if u, parseErr := url.Parse(chapterURL); parseErr == nil {
+		fragment := strings.TrimPrefix(u.Fragment, "post-")
+		if fragment != "" {
+			target = doc.Find("#post-" + fragment + " .message-body .bbWrapper")
+			if target.Length() == 0 {
+				target = doc.Find("#js-post-" + fragment + " .message-body .bbWrapper")
+			}
+			if target.Length() == 0 {
+				target = doc.Find("li[data-content='post-" + fragment + "'] .message-body .bbWrapper")
+			}
+		}
 	}
-	if content.Length() == 0 {
+
+	if target == nil || target.Length() == 0 {
+		target = doc.Find(".message-body .bbWrapper")
+	}
+	if target.Length() == 0 {
+		target = doc.Find(".message-body")
+	}
+	if target.Length() == 0 {
 		return "", fmt.Errorf("no chapter content found at %s", chapterURL)
 	}
 
-	html, err := content.First().Html()
+	html, err := target.First().Html()
 	if err != nil {
 		return "", err
 	}
