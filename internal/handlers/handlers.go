@@ -957,7 +957,8 @@ func (h *Handler) ReaderPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderTemplate(w, r, "reader", map[string]interface{}{
-		"Series": series,
+		"Series":         series,
+		"InitChapterID":  r.URL.Query().Get("chapter"),
 	})
 }
 

@@ -49,11 +49,14 @@
           loading: false,
           init() {
               var self = this;
+              var initId = parseInt('{{.InitChapterID}}') || 0;
               fetch('/api/reader/{{.Series.ID}}/chapters').then(function(r){return r.json()}).then(function(d){
                   self.chapters = d.chapters || [];
                   self.progressChapterId = d.progress_chapter_id || 0;
                   self.savedScroll = d.scroll_position || 0;
-                  if (self.progressChapterId) {
+                  if (initId) {
+                      self.loadChapter(initId, 0);
+                  } else if (self.progressChapterId) {
                       self.loadChapter(self.progressChapterId, self.savedScroll);
                   } else if (self.chapters.length > 0) {
                       for (var i = 0; i < self.chapters.length; i++) {
@@ -78,6 +81,14 @@
               self.content = '';
               var el = document.getElementById('reader-scroll');
               if (el) el.scrollTop = 0;
+              fetch('/api/chapters/' + id + '/read', {method:'POST', headers:{'X-CSRF-Token': _csrf}}).catch(function(){});
+              for (var i = 0; i < self.chapters.length; i++) {
+                  if (self.chapters[i].id === id) {
+                      var c = self.chapters[i]; c.is_read = true;
+                      self.chapters.splice(i, 1, c);
+                      break;
+                  }
+              }
               fetch('/api/reader/chapter/' + id).then(function(r){return r.json()}).then(function(d){
                   self.content = d.content || '<p class=' + "'text-neutral-500'>No content available.</p>";
                   self.prevId = d.prev_id || null;
