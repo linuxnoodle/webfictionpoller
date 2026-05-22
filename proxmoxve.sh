@@ -28,9 +28,6 @@ function update_script() {
     exit
   fi
 
-  msg_info "Ensuring Docker is up to date"
-  curl -fsSL https://get.docker.com | sh >/dev/null 2>&1
-
   msg_info "Updating docker-compose.yml"
   cat > /opt/webfictionpoller/docker-compose.yml << 'DCEOF'
 services:
@@ -48,6 +45,7 @@ services:
     volumes:
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker-compose.yml:/opt/webfictionpoller/docker-compose.yml:ro
     depends_on:
       - flaresolverr
     restart: unless-stopped
@@ -95,6 +93,7 @@ services:
     volumes:
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker-compose.yml:/opt/webfictionpoller/docker-compose.yml:ro
     depends_on:
       - flaresolverr
     restart: unless-stopped
