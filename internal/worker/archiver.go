@@ -238,6 +238,10 @@ func (a *Archiver) fetchImage(url string) ([]byte, string, error) {
 	return data, contentType, nil
 }
 
+func (a *Archiver) RunOnce() {
+	a.runCycle(context.Background())
+}
+
 func (a *Archiver) GetStatus() ArchiverStatus {
 	return a.status
 }

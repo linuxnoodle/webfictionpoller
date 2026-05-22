@@ -261,61 +261,22 @@ func (p *XenForoProvider) fetchContentFromReader(chapterURL string) (string, err
 	for {
 		pageURL := readerURL
 		if pageNum > 1 {
-			pageURL = readerURL + "?page=" + strconv.Itoa(pageNum)
+			pageURL = readerURL + "/page-" + strconv.Itoa(pageNum)
 		}
 
-		resp, err := doGet(p.client, pageURL)
+		content, found, hasMore, isNonOK, err := p.scanReaderPage(pageURL, postID, pageNum)
 		if err != nil {
 			return "", err
 		}
-		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
+		if isNonOK {
+			logging.Info("[%s] reader page %d returned non-OK for post %s, falling back to direct fetch", p.name, pageNum, postID)
 			return p.fetchContentDirect(chapterURL)
 		}
-
-		doc, err := goquery.NewDocumentFromReader(resp.Body)
-		if err != nil {
-			return "", fmt.Errorf("parsing reader html: %w", err)
-		}
-
-		found := false
-		var content string
-		var hasMore bool
-
-		doc.Find("li.message").Each(func(i int, s *goquery.Selection) {
-			dataContent, _ := s.Attr("data-content")
-			messageID, _ := s.Attr("id")
-			if dataContent == "post-"+postID || messageID == "js-post-"+postID || messageID == "post-"+postID {
-				bb := s.Find(".message-body .bbWrapper")
-				if bb.Length() > 0 {
-					html, err := bb.Html()
-					if err == nil {
-						content = html
-						found = true
-					}
-				}
-			}
-		})
 
 		if found {
 			logging.Info("[%s] fetched chapter content from reader page %d for post %s (%d chars)", p.name, pageNum, postID, len(content))
 			return content, nil
-		}
-
-		pageNav := doc.Find(".PageNav")
-		if pageNav.Length() > 0 {
-			lastPageStr, _ := pageNav.Attr("data-last")
-			lastPage, _ := strconv.Atoi(lastPageStr)
-			if pageNum >= lastPage {
-				break
-			}
-			hasMore = true
-		} else {
-			if doc.Find("li.message").Length() == 0 {
-				break
-			}
-			hasMore = false
 		}
 
 		if !hasMore {
@@ -326,6 +287,65 @@ func (p *XenForoProvider) fetchContentFromReader(chapterURL string) (string, err
 
 	logging.Info("[%s] post %s not found in reader mode, falling back to direct fetch", p.name, postID)
 	return p.fetchContentDirect(chapterURL)
+}
+
+func (p *XenForoProvider) scanReaderPage(pageURL, postID string, currentPage int) (string, bool, bool, bool, error) {
+	resp, err := doGet(p.client, pageURL)
+	if err != nil {
+		return "", false, false, false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", false, false, true, nil
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return "", false, false, false, fmt.Errorf("parsing reader html: %w", err)
+	}
+
+	var content string
+	var found bool
+
+	doc.Find("article.message").Each(func(i int, s *goquery.Selection) {
+		if found {
+			return
+		}
+		dataContent, _ := s.Attr("data-content")
+		messageID, _ := s.Attr("id")
+		if dataContent == "post-"+postID || messageID == "js-post-"+postID || messageID == "post-"+postID {
+			bb := s.Find(".message-body .bbWrapper")
+			if bb.Length() > 0 {
+				html, err := bb.Html()
+				if err == nil {
+					content = html
+					found = true
+				}
+			}
+		}
+	})
+
+	if found {
+		return content, true, false, false, nil
+	}
+
+	lastPageNum := 0
+	doc.Find(".pageNav-page a").Each(func(i int, s *goquery.Selection) {
+		text := strings.TrimSpace(s.Text())
+		if n, err := strconv.Atoi(text); err == nil && n > lastPageNum {
+			lastPageNum = n
+		}
+	})
+
+	if lastPageNum > 0 {
+		return "", false, currentPage < lastPageNum, false, nil
+	}
+
+	if doc.Find("article.message").Length() == 0 {
+		return "", false, false, false, nil
+	}
+	return "", false, false, false, nil
 }
 
 func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) {
@@ -344,7 +364,7 @@ func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) 
 	var target *goquery.Selection
 
 	if postID != "" {
-		doc.Find("li.message").EachWithBreak(func(i int, s *goquery.Selection) bool {
+		doc.Find("article.message").EachWithBreak(func(i int, s *goquery.Selection) bool {
 			dataContent, _ := s.Attr("data-content")
 			messageID, _ := s.Attr("id")
 			if dataContent == "post-"+postID || messageID == "js-post-"+postID || messageID == "post-"+postID {

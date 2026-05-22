@@ -860,6 +860,88 @@ func (h *Handler) ArchiveAllAPI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"enabled": enabled})
 }
 
+func (h *Handler) DeleteSeriesArchive(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	series, err := h.store.GetSeriesByID(id)
+	if err != nil || series == nil {
+		http.Error(w, "series not found", http.StatusNotFound)
+		return
+	}
+
+	if err := h.store.DeleteSeriesArchive(id); err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	logging.Info("[handler] deleted archive for series %q (id=%d)", series.Title, id)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "title": series.Title})
+}
+
+func (h *Handler) DeleteChapterArchive(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.store.DeleteChapterArchive(id); err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	logging.Info("[handler] deleted archive for chapter id=%d", id)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+}
+
+func (h *Handler) ReArchiveSeries(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	series, err := h.store.GetSeriesByID(id)
+	if err != nil || series == nil {
+		http.Error(w, "series not found", http.StatusNotFound)
+		return
+	}
+
+	count, err := h.store.TriggerReArchive(id)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	logging.Info("[handler] triggered re-archive for series %q (id=%d, %d chapters)", series.Title, id, count)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "title": series.Title, "chapters": count})
+}
+
+func (h *Handler) StorageInfoAPI(w http.ResponseWriter, r *http.Request) {
+	info, err := h.store.GetStorageInfo()
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
+}
+
+func (h *Handler) TriggerArchiveNow(w http.ResponseWriter, r *http.Request) {
+	if h.archiver == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "archiver not available"})
+		return
+	}
+	go h.archiver.RunOnce()
+	writeJSON(w, http.StatusOK, map[string]interface{}{"started": true})
+}
+
 func (h *Handler) ReaderPage(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)

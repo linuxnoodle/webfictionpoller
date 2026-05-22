@@ -104,6 +104,27 @@ type ArchiveStat struct {
 	ArchivedChapters int
 	Percent          int
 	Complete         bool
+	StorageBytes     int64
+}
+
+type StorageInfo struct {
+	TotalBytes   int64           `json:"total_bytes"`
+	ContentBytes int64           `json:"content_bytes"`
+	PreviewBytes int64           `json:"preview_bytes"`
+	ImageBytes   int64           `json:"image_bytes"`
+	ChapterCount int             `json:"chapter_count"`
+	ImageCount   int             `json:"image_count"`
+	PerSeries    []SeriesStorage `json:"per_series"`
+}
+
+type SeriesStorage struct {
+	SeriesID         int64  `json:"series_id"`
+	SeriesTitle      string `json:"series_title"`
+	ArchivedChapters int    `json:"archived_chapters"`
+	TotalChapters    int    `json:"total_chapters"`
+	ContentBytes     int64  `json:"content_bytes"`
+	ImageCount       int    `json:"image_count"`
+	ImageBytes       int64  `json:"image_bytes"`
 }
 
 func ProviderFavicon(name string) string {

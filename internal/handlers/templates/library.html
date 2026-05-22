@@ -13,6 +13,7 @@
     <style>
         @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+        [x-cloak] { display: none !important; }
     </style>
 </head>
 <body class="min-h-screen bg-neutral-950">
@@ -20,15 +21,51 @@
     <main class="max-w-4xl mx-auto px-4 py-6"
           x-data="{
               status: null,
+              storage: null,
+              confirmingDelete: null,
+              confirmingReArchive: null,
               loadStatus() {
                   fetch('/api/archive/status')
                       .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
                       .then(d => { this.status = d; }.bind(this))
                       .catch(() => { this.status = {active:false, total:0, done:0, last_run:null}; }.bind(this));
+              },
+              loadStorage() {
+                  fetch('/api/archive/storage')
+                      .then(r => r.json())
+                      .then(d => { this.storage = d; }.bind(this))
+                      .catch(() => {}.bind(this));
+              },
+              formatBytes(b) {
+                  if (!b || b === 0) return '0 B';
+                  const u = ['B','KB','MB','GB'];
+                  const i = Math.floor(Math.log(b) / Math.log(1024));
+                  return (b / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + u[i];
+              },
+              deleteArchive(id, title) {
+                  if (this.confirmingDelete !== id) { this.confirmingDelete = id; return; }
+                  this.confirmingDelete = null;
+                  fetch('/api/series/' + id + '/archive/delete', {method:'POST', headers:{'X-CSRF-Token': _csrf}})
+                      .then(r => r.json())
+                      .then(() => { this.loadStorage(); this.loadStatus(); }.bind(this))
+                      .catch(() => {}.bind(this));
+              },
+              reArchive(id, title) {
+                  if (this.confirmingReArchive !== id) { this.confirmingReArchive = id; return; }
+                  this.confirmingReArchive = null;
+                  fetch('/api/series/' + id + '/archive/re-archive', {method:'POST', headers:{'X-CSRF-Token': _csrf}})
+                      .then(r => r.json())
+                      .then(() => { this.loadStorage(); this.loadStatus(); }.bind(this))
+                      .catch(() => {}.bind(this));
+              },
+              runNow() {
+                  fetch('/api/archive/run', {method:'POST', headers:{'X-CSRF-Token': _csrf}})
+                      .then(() => setTimeout(() => this.loadStatus(), 1000))
+                      .catch(() => {}.bind(this));
               }
           }"
-          x-init="loadStatus(); setInterval(() => loadStatus(), 10000)">
-        <h1 class="text-2xl font-bold mb-6 text-neutral-100">Library & OPDS</h1>
+          x-init="loadStatus(); loadStorage(); setInterval(() => loadStatus(), 10000)">
+        <h1 class="text-2xl font-bold mb-6 text-neutral-100">Library & Archive</h1>
 
         <div class="space-y-6">
 
@@ -55,7 +92,14 @@
             </div>
 
             <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-5">
-                <h2 class="text-lg font-semibold text-neutral-200 mb-3">Archiver Status</h2>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-neutral-200">Archiver</h2>
+                    <button @click="runNow()"
+                            :disabled="status && status.active"
+                            class="text-xs px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white transition-colors">
+                        Run Now
+                    </button>
+                </div>
                 <template x-if="status">
                     <div class="space-y-3">
                         <div class="flex justify-between items-center">
@@ -104,6 +148,67 @@
                             <span class="inline-block w-5 h-5 bg-neutral-300 rounded-full transition-transform transform {{if .ArchiveAll}}translate-x-5{{else}}translate-x-0.5{{end}}"></span>
                         </button>
                     </form>
+                </div>
+            </div>
+
+            <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-5" x-show="storage" x-cloak>
+                <h2 class="text-lg font-semibold text-neutral-200 mb-4">Storage</h2>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <div class="bg-neutral-800 rounded-lg p-3 text-center">
+                        <div class="text-lg font-semibold text-neutral-100" x-text="formatBytes(storage && storage.total_bytes)"></div>
+                        <div class="text-xs text-neutral-500 mt-1">Total</div>
+                    </div>
+                    <div class="bg-neutral-800 rounded-lg p-3 text-center">
+                        <div class="text-lg font-semibold text-neutral-100" x-text="formatBytes(storage && storage.content_bytes)"></div>
+                        <div class="text-xs text-neutral-500 mt-1">Chapters</div>
+                    </div>
+                    <div class="bg-neutral-800 rounded-lg p-3 text-center">
+                        <div class="text-lg font-semibold text-neutral-100" x-text="formatBytes(storage && storage.image_bytes)"></div>
+                        <div class="text-xs text-neutral-500 mt-1">Images</div>
+                    </div>
+                    <div class="bg-neutral-800 rounded-lg p-3 text-center">
+                        <div class="text-lg font-semibold text-neutral-100" x-text="storage && storage.chapter_count"></div>
+                        <div class="text-xs text-neutral-500 mt-1">Archived</div>
+                    </div>
+                </div>
+                <div x-show="storage && storage.per_series && storage.per_series.length > 0">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-neutral-500">Per-series breakdown</span>
+                        <span class="text-xs text-neutral-600">Sorted by size</span>
+                    </div>
+                    <div class="space-y-2">
+                        <template x-for="s in (storage && storage.per_series || [])" :key="s.series_id">
+                            <div class="bg-neutral-800 rounded-lg p-3">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <a :href="'/reader/' + s.series_id" class="text-sm text-neutral-200 font-medium truncate hover:text-emerald-300" x-text="s.series_title"></a>
+                                    </div>
+                                    <div class="flex items-center gap-2 flex-shrink-0">
+                                        <span class="text-xs text-neutral-400" x-text="s.archived_chapters + '/' + s.total_chapters + ' ch'"></span>
+                                        <span class="text-xs text-neutral-400" x-text="formatBytes(s.content_bytes + s.image_bytes)"></span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <div class="flex-1 bg-neutral-700 rounded-full h-1">
+                                        <div class="h-1 rounded-full bg-emerald-500" :style="'width:' + (s.total_chapters > 0 ? Math.round(s.archived_chapters / s.total_chapters * 100) : 0) + '%'"></div>
+                                    </div>
+                                    <button @click="reArchive(s.series_id, s.series_title)"
+                                            :class="confirmingReArchive === s.series_id ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-400'"
+                                            class="text-xs px-2 py-0.5 rounded transition-colors"
+                                            x-text="confirmingReArchive === s.series_id ? 'Confirm?' : 'Re-archive'">
+                                    </button>
+                                    <button @click="deleteArchive(s.series_id, s.series_title)"
+                                            :class="confirmingDelete === s.series_id ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-400'"
+                                            class="text-xs px-2 py-0.5 rounded transition-colors"
+                                            x-text="confirmingDelete === s.series_id ? 'Confirm?' : 'Delete'">
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <div x-show="storage && (!storage.per_series || storage.per_series.length === 0)" class="text-sm text-neutral-500 text-center py-2">
+                    No archived data yet.
                 </div>
             </div>
 
