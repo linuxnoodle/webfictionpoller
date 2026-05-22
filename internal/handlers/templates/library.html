@@ -23,8 +23,8 @@
               loadStatus() {
                   fetch('/api/archive/status')
                       .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-                      .then(d => { status = d; })
-                      .catch(() => { status = {active:false, total:0, done:0, last_run:null}; });
+                      .then(d => { this.status = d; }.bind(this))
+                      .catch(() => { this.status = {active:false, total:0, done:0, last_run:null}; }.bind(this));
               }
           }"
           x-init="loadStatus(); setInterval(() => loadStatus(), 10000)">

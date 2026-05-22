@@ -175,28 +175,24 @@ func (h *Handler) ChapterPreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if content == "" {
-		content = contentPolicy.Sanitize(ch.PreviewHTML)
+		p, ok := h.pool.GetProvider(ch.ProviderName)
+		if ok {
+			fetched, err := p.FetchChapterContent(ch.URL)
+			if err != nil {
+				logging.Error("[preview] error fetching content for chapter %d: %v", id, err)
+			} else {
+				content = contentPolicy.Sanitize(fetched)
+				go func() {
+					if saveErr := h.store.SavePreviewHTML(id, content); saveErr != nil {
+						logging.Error("[preview] error saving preview for chapter %d: %v", id, saveErr)
+					}
+				}()
+			}
+		}
 	}
 
 	if content == "" {
-		p, ok := h.pool.GetProvider(ch.ProviderName)
-		if !ok {
-			http.Error(w, "provider not found", http.StatusBadRequest)
-			return
-		}
-
-		fetched, err := p.FetchChapterContent(ch.URL)
-		if err != nil {
-			logging.Error("[preview] error fetching content for chapter %d: %v", id, err)
-			content = fmt.Sprintf("<p class='text-red-400 text-sm'>Failed to load content</p>")
-		} else {
-			content = contentPolicy.Sanitize(fetched)
-			go func() {
-				if saveErr := h.store.SavePreviewHTML(id, content); saveErr != nil {
-					logging.Error("[preview] error saving preview for chapter %d: %v", id, saveErr)
-				}
-			}()
-		}
+		content = contentPolicy.Sanitize(ch.PreviewHTML)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
