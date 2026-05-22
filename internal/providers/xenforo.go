@@ -244,6 +244,11 @@ func (p *XenForoProvider) fetchMetadataFromRSS(rssURL, threadURL string) (models
 }
 
 func (p *XenForoProvider) FetchChapterContent(chapterURL string) (string, error) {
+	content, err := p.fetchContentFromRSS(chapterURL)
+	if err == nil && content != "" {
+		return content, nil
+	}
+
 	resp, err := doGet(p.client, chapterURL)
 	if err != nil {
 		return "", err
@@ -285,8 +290,56 @@ func (p *XenForoProvider) FetchChapterContent(chapterURL string) (string, error)
 		return "", err
 	}
 
-	logging.Info("[%s] fetched chapter content from %s (%d chars)", p.name, chapterURL, len(html))
+	logging.Info("[%s] fetched chapter content from HTML %s (%d chars)", p.name, chapterURL, len(html))
 	return html, nil
+}
+
+func (p *XenForoProvider) fetchContentFromRSS(chapterURL string) (string, error) {
+	threadURL := p.normalizeThreadURL(chapterURL)
+	rssURL := p.buildThreadmarksRSSURL(threadURL)
+
+	fp := gofeed.NewParser()
+	resp, err := doGet(p.client, rssURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("rss status %d", resp.StatusCode)
+	}
+
+	feed, err := fp.Parse(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("parsing rss: %w", err)
+	}
+
+	postID := p.extractPostID(chapterURL)
+
+	for _, item := range feed.Items {
+		if postID != "" {
+			if strings.Contains(item.GUID, "/posts/"+postID) || strings.Contains(item.Link, "#post-"+postID) {
+				return item.Description, nil
+			}
+		}
+		if item.Link == chapterURL {
+			return item.Description, nil
+		}
+	}
+
+	return "", fmt.Errorf("chapter not found in rss")
+}
+
+func (p *XenForoProvider) extractPostID(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	fragment := strings.TrimPrefix(u.Fragment, "post-")
+	if fragment != "" {
+		return fragment
+	}
+	return ""
 }
 
 func (p *XenForoProvider) normalizeThreadURL(rawURL string) string {
