@@ -178,12 +178,35 @@ func (h *Handler) runWatchtowerUpdate() {
 
 	composeFile := projectDir + "/docker-compose.yml"
 
+	uc.mu.RLock()
+	targetCommit := uc.latestCommit
+	uc.mu.RUnlock()
+
+	if targetCommit != "" {
+		uc.appendLog("Checking if image for commit " + targetCommit[:7] + " exists on registry...")
+		imageTag := "ghcr.io/linuxnoodle/webfictionpoller:sha-" + targetCommit[:7]
+		manifestOut, manifestErr := exec.Command("docker", "manifest", "inspect", imageTag).CombinedOutput()
+		if manifestErr != nil {
+			uc.appendLog("WARNING: Image " + imageTag + " not found on registry yet.")
+			uc.appendLog("  The CI build may not have completed. Check: https://github.com/linuxnoodle/webfictionpoller/actions")
+			uc.appendLog("  Trying pull anyway in case latest tag is ahead...")
+			uc.appendLog(string(manifestOut))
+		} else {
+			uc.appendLog("Image " + imageTag + " found on registry.")
+		}
+	}
+
 	uc.appendLog("Pulling latest images...")
 	pullCmd := exec.Command("docker", "compose", "-f", composeFile, "pull")
 	pullOut, pullErr := pullCmd.CombinedOutput()
 	uc.appendLog(string(pullOut))
 	if pullErr != nil {
 		uc.appendLog("ERROR: pull failed: " + pullErr.Error())
+		return
+	}
+
+	if !strings.Contains(string(pullOut), "Downloaded newer image") && !strings.Contains(string(pullOut), "Pulled") {
+		uc.appendLog("Image is already up to date. No restart needed.")
 		return
 	}
 
