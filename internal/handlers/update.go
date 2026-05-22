@@ -196,8 +196,8 @@ func (h *Handler) runWatchtowerUpdate() {
 		}
 	}
 
-	uc.appendLog("Pulling latest images...")
-	pullCmd := exec.Command("docker", "compose", "-f", composeFile, "pull")
+	uc.appendLog("Pulling latest image...")
+	pullCmd := exec.Command("docker", "compose", "-f", composeFile, "pull", "app")
 	pullOut, pullErr := pullCmd.CombinedOutput()
 	uc.appendLog(string(pullOut))
 	if pullErr != nil {
