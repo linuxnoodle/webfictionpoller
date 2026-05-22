@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -185,16 +187,37 @@ func (h *Handler) runWatchtowerUpdate() {
 		return
 	}
 
-	uc.appendLog("Restarting with new images...")
-	upCmd := exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--remove-orphans")
-	upOut, upErr := upCmd.CombinedOutput()
-	uc.appendLog(string(upOut))
-	if upErr != nil {
-		uc.appendLog("ERROR: restart failed: " + upErr.Error())
+	uc.appendLog("Restarting via helper container...")
+
+	hostname, _ := os.Hostname()
+	imgOut, _ := exec.Command("docker", "inspect", hostname, "--format", "{{.Config.Image}}").Output()
+	image := strings.TrimSpace(string(imgOut))
+	if image == "" {
+		image = "docker:cli"
+	}
+
+	script := fmt.Sprintf(
+		"sleep 2 && docker compose -f %s up -d --force-recreate --remove-orphans",
+		composeFile,
+	)
+
+	cmd := exec.Command("docker", "run", "--rm", "-d",
+		"--name", "wfp-updater",
+		"-v", "/var/run/docker.sock:/var/run/docker.sock",
+		"-v", projectDir+":"+projectDir+":ro",
+		image,
+		"sh", "-c", script,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		uc.appendLog("Helper container failed: " + strings.TrimSpace(string(out)) + " (" + err.Error() + ")")
+		uc.appendLog("Attempting direct restart (container may stay down)...")
+		upCmd := exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--force-recreate", "--remove-orphans")
+		upCmd.CombinedOutput()
 		return
 	}
 
-	uc.appendLog("Update complete! Container is restarting...")
+	uc.appendLog("Update scheduled. Container is restarting...")
 	uc.appendLog("This page will auto-reconnect once the new container is ready.")
-	logging.Info("self-update: completed successfully")
+	logging.Info("self-update: restart scheduled via helper container")
 }
