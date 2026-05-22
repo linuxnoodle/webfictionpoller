@@ -90,7 +90,7 @@
                   }
               }
               fetch('/api/reader/chapter/' + id).then(function(r){return r.json()}).then(function(d){
-                  self.content = d.content || '<p class=' + "'text-neutral-500'>No content available.</p>";
+                  self.content = d.content || '<p class=' + String.fromCharCode(39) + 'text-neutral-500' + String.fromCharCode(39) + '>No content available.</p>';
                   self.prevId = d.prev_id || null;
                   self.nextId = d.next_id || null;
                   self.loading = false;
@@ -102,7 +102,7 @@
                       self.saveProgress();
                   });
               }).catch(function() {
-                  self.content = '<p class=' + "'text-red-400'>Failed to load chapter.</p>";
+                  self.content = '<p class=' + String.fromCharCode(39) + 'text-red-400' + String.fromCharCode(39) + '>Failed to load chapter.</p>';
                   self.loading = false;
               });
           },
