@@ -182,6 +182,8 @@ func main() {
 		r.Get("/api/reader/{id}/chapters", h.ReaderChaptersAPI)
 		r.Get("/api/reader/chapter/{id}", h.ReaderChapterContentAPI)
 		r.Post("/api/reader/progress", h.ReaderSaveProgressAPI)
+		r.Get("/api/reader/settings", h.ReaderSettingsAPI)
+		r.Put("/api/reader/settings", h.ReaderSettingsAPI)
 		})
 	})
 

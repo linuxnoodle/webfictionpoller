@@ -956,9 +956,15 @@ func (h *Handler) ReaderPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	settings, _ := h.store.GetReaderSettings()
+	if settings == "" {
+		settings = "{}"
+	}
+
 	renderTemplate(w, r, "reader", map[string]interface{}{
 		"Series":         series,
 		"InitChapterID":  r.URL.Query().Get("chapter"),
+		"ReaderSettings": settings,
 	})
 }
 
@@ -1072,6 +1078,38 @@ func (h *Handler) ReaderSaveProgressAPI(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.store.SaveReadingProgress(seriesID, chapterID, scrollPos); err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+}
+
+func (h *Handler) ReaderSettingsAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		settings, err := h.store.GetReaderSettings()
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(settings))
+		return
+	}
+
+	var settings map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid json"})
+		return
+	}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	if err := h.store.SaveReaderSettings(string(data)); err != nil {
 		internalError(w, r, err)
 		return
 	}

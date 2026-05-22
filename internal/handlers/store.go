@@ -930,3 +930,17 @@ func (s *Store) TriggerReArchive(seriesID int64) (int, error) {
 	}
 	return count, nil
 }
+
+func (s *Store) GetReaderSettings() (string, error) {
+	var val string
+	err := s.db.QueryRow("SELECT value FROM settings WHERE key = 'reader_settings'").Scan(&val)
+	if err == sql.ErrNoRows {
+		return "{}", nil
+	}
+	return val, err
+}
+
+func (s *Store) SaveReaderSettings(jsonStr string) error {
+	_, err := s.db.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('reader_settings', ?)", jsonStr)
+	return err
+}

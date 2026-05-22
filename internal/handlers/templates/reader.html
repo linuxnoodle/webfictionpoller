@@ -10,15 +10,47 @@
     <script src="/static/alpine.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
     <style>
-        .reader-content p { margin-bottom: 0.75em; line-height: 1.8; }
+        :root {
+            --reader-font: Georgia, serif;
+            --reader-size: 18px;
+            --reader-lh: 1.8;
+            --reader-width: 42rem;
+            --reader-bg: #0a0a0a;
+            --reader-fg: #e5e5e5;
+            --reader-muted: #a3a3a3;
+            --reader-border: #404040;
+            --reader-link: #6ee7b7;
+        }
+        .theme-light {
+            --reader-bg: #fafaf9;
+            --reader-fg: #1c1917;
+            --reader-muted: #78716c;
+            --reader-border: #d6d3d1;
+            --reader-link: #059669;
+        }
+        .theme-warm {
+            --reader-bg: #1c1917;
+            --reader-fg: #e7e5e4;
+            --reader-muted: #a8a29e;
+            --reader-border: #44403c;
+            --reader-link: #fbbf24;
+        }
+        .theme-sepia {
+            --reader-bg: #f4ecd8;
+            --reader-fg: #3c2415;
+            --reader-muted: #7c6a52;
+            --reader-border: #c9b99a;
+            --reader-link: #8b5e3c;
+        }
+        .reader-content p { margin-bottom: 0.75em; line-height: var(--reader-lh); }
         .reader-content img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.5em 0; }
-        .reader-content h1,.reader-content h2,.reader-content h3 { color: #e5e5e5; margin: 1em 0 0.5em; }
-        .reader-content blockquote { border-left: 3px solid #525252; padding-left: 1em; margin: 0.75em 0; color: #a3a3a3; }
-        .reader-content a { color: #6ee7b7; }
-        .reader-content hr { border-color: #404040; margin: 1.5em 0; }
+        .reader-content h1,.reader-content h2,.reader-content h3 { color: var(--reader-fg); margin: 1em 0 0.5em; }
+        .reader-content blockquote { border-left: 3px solid var(--reader-border); padding-left: 1em; margin: 0.75em 0; color: var(--reader-muted); }
+        .reader-content a { color: var(--reader-link); }
+        .reader-content hr { border-color: var(--reader-border); margin: 1.5em 0; }
         .reader-content table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
-        .reader-content td,.reader-content th { border: 1px solid #404040; padding: 0.4em 0.6em; }
-        .reader-content pre { background: #171717; padding: 0.75em 1em; border-radius: 4px; overflow-x: auto; }
+        .reader-content td,.reader-content th { border: 1px solid var(--reader-border); padding: 0.4em 0.6em; }
+        .reader-content pre { background: var(--reader-bg); padding: 0.75em 1em; border-radius: 4px; overflow-x: auto; border: 1px solid var(--reader-border); }
         .reader-content code { font-size: 0.9em; }
         .ch-list::-webkit-scrollbar { width: 4px; }
         .ch-list::-webkit-scrollbar-track { background: transparent; }
@@ -46,9 +78,15 @@
             display: none; position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,0.5);
         }
         .sidebar-overlay.open { display: block; }
+        .settings-panel {
+            position: fixed; right: 0; top: 0; bottom: 0; z-index: 30;
+            width: 16rem; transform: translateX(100%); transition: transform 0.2s;
+            overflow-y: auto;
+        }
+        .settings-panel.open { transform: translateX(0); }
     </style>
 </head>
-<body class="min-h-screen bg-neutral-950"
+<body class="min-h-screen"
       x-data="{
           chapters: [],
           currentId: null,
@@ -57,13 +95,35 @@
           nextId: null,
           scrollPos: 0,
           sidebarOpen: false,
+          settingsOpen: false,
           progressChapterId: 0,
           savedScroll: 0,
           loading: false,
           headerVisible: true,
           lastScrollTop: 0,
+          settings: {
+              font: 'serif',
+              size: 18,
+              theme: 'dark',
+              width: 42
+          },
+          saveTimer: null,
+          fonts: [
+              {id:'serif', name:'Serif', css:'Georgia, serif'},
+              {id:'sans', name:'Sans-serif', css:'system-ui, sans-serif'},
+              {id:'mono', name:'Monospace', css:'monospace'}
+          ],
+          themes: [
+              {id:'dark', name:'Dark'},
+              {id:'light', name:'Light'},
+              {id:'warm', name:'Warm'},
+              {id:'sepia', name:'Sepia'}
+          ],
           init() {
               var self = this;
+              var saved = localStorage.getItem('readerSettings');
+              if (saved) { try { var s = JSON.parse(saved); Object.assign(self.settings, s); } catch(e){} }
+              self.applySettings();
               var initId = parseInt('{{.InitChapterID}}') || 0;
               fetch('/api/reader/{{.Series.ID}}/chapters').then(function(r){return r.json()}).then(function(d){
                   self.chapters = d.chapters || [];
@@ -82,10 +142,9 @@
                       }
                   }
               });
-              var saveTimer = null;
               document.getElementById('reader-scroll').addEventListener('scroll', function() {
-                  clearTimeout(saveTimer);
-                  saveTimer = setTimeout(function() { self.saveProgress() }, 2000);
+                  clearTimeout(self.saveTimer);
+                  self.saveTimer = setTimeout(function() { self.saveProgress() }, 2000);
                   var st = document.getElementById('reader-scroll').scrollTop;
                   if (st > self.lastScrollTop && st > 60) {
                       self.headerVisible = false;
@@ -93,6 +152,32 @@
                       self.headerVisible = true;
                   }
                   self.lastScrollTop = st;
+              });
+          },
+          applySettings() {
+              var r = document.documentElement.style;
+              var font = this.fonts.find(function(f){return f.id===this.settings.font}.bind(this));
+              r.setProperty('--reader-font', font ? font.css : 'Georgia, serif');
+              r.setProperty('--reader-size', this.settings.size + 'px');
+              r.setProperty('--reader-width', this.settings.width + 'rem');
+              document.body.className = 'min-h-screen theme-' + this.settings.theme;
+              if (this.settings.theme === 'light' || this.settings.theme === 'sepia') {
+                document.body.classList.add('text-stone-800');
+              } else {
+                document.body.classList.add('text-neutral-200');
+              }
+          },
+          updateSetting(key, val) {
+              this.settings[key] = val;
+              this.applySettings();
+              this.persistSettings();
+          },
+          persistSettings() {
+              localStorage.setItem('readerSettings', JSON.stringify(this.settings));
+              fetch('/api/reader/settings', {
+                  method: 'PUT',
+                  headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrf},
+                  body: JSON.stringify(this.settings)
               });
           },
           loadChapter(id, scrollTo) {
@@ -158,27 +243,85 @@
         </div>
     </aside>
 
-    <div class="flex flex-col h-screen">
-        <header class="reader-header flex items-center justify-between px-3 sm:px-5 py-2 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur flex-shrink-0"
+    <div class="settings-panel bg-neutral-900 border-l border-neutral-800 p-4 space-y-5"
+         :class="settingsOpen ? 'open' : ''">
+        <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-neutral-200">Settings</h3>
+            <button @click="settingsOpen = false" class="text-neutral-500 hover:text-neutral-200 text-lg">&times;</button>
+        </div>
+        <div>
+            <label class="text-xs text-neutral-400 uppercase tracking-wider block mb-1.5">Font</label>
+            <div class="grid grid-cols-3 gap-1.5">
+                <template x-for="f in fonts" :key="f.id">
+                    <button @click="updateSetting('font', f.id)"
+                            class="px-2 py-1.5 rounded text-xs transition-colors"
+                            :class="settings.font === f.id ? 'bg-emerald-700 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'"
+                            :style="'font-family:' + f.css">
+                        <span x-text="f.name"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+        <div>
+            <label class="text-xs text-neutral-400 uppercase tracking-wider block mb-1.5">Size</label>
+            <div class="flex items-center gap-2">
+                <button @click="if(settings.size > 12) updateSetting('size', settings.size - 2)"
+                        class="w-8 h-8 flex items-center justify-center rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700 text-sm">A-</button>
+                <span class="text-sm text-neutral-300 w-8 text-center" x-text="settings.size"></span>
+                <button @click="if(settings.size < 32) updateSetting('size', settings.size + 2)"
+                        class="w-8 h-8 flex items-center justify-center rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700 text-sm">A+</button>
+            </div>
+        </div>
+        <div>
+            <label class="text-xs text-neutral-400 uppercase tracking-wider block mb-1.5">Theme</label>
+            <div class="grid grid-cols-2 gap-1.5">
+                <template x-for="t in themes" :key="t.id">
+                    <button @click="updateSetting('theme', t.id)"
+                            class="px-2 py-1.5 rounded text-xs transition-colors"
+                            :class="settings.theme === t.id ? 'bg-emerald-700 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'"
+                            x-text="t.name">
+                    </button>
+                </template>
+            </div>
+        </div>
+        <div>
+            <label class="text-xs text-neutral-400 uppercase tracking-wider block mb-1.5">Width</label>
+            <input type="range" min="28" max="64" step="2" x-model.number="settings.width"
+                   @input="applySettings(); persistSettings()"
+                   class="w-full accent-emerald-500">
+            <div class="flex justify-between text-xs text-neutral-500 mt-0.5">
+                <span>Narrow</span>
+                <span x-text="settings.width + 'rem'"></span>
+                <span>Wide</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex flex-col h-screen" style="background: var(--reader-bg); color: var(--reader-fg);">
+        <header class="reader-header flex items-center justify-between px-3 sm:px-5 py-2 border-b flex-shrink-0"
+                style="border-color: var(--reader-border); background: var(--reader-bg);"
                 :class="headerVisible ? '' : 'hidden-header'">
             <div class="flex items-center gap-2 min-w-0">
-                <button @click="sidebarOpen = !sidebarOpen" class="text-neutral-400 hover:text-neutral-200 p-1">
+                <button @click="sidebarOpen = !sidebarOpen" class="hover:opacity-80 p-1" style="color: var(--reader-muted)">
                     <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
                 </button>
-                <span class="text-sm text-neutral-400 truncate" x-text="chapters.find(c => c.id === currentId)?.title || ''"></span>
+                <span class="text-sm truncate" x-text="chapters.find(c => c.id === currentId)?.title || ''" style="color: var(--reader-muted)"></span>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
                 <button x-show="prevId" @click="prevId && loadChapter(prevId, 0)"
-                        class="text-neutral-400 hover:text-neutral-200 text-sm px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700">
+                        class="text-sm px-2 py-1 rounded hover:opacity-80" style="color: var(--reader-fg); background: var(--reader-border);">
                     &larr; Prev
                 </button>
                 <button x-show="nextId" @click="nextId && loadChapter(nextId, 0)"
-                        class="text-neutral-400 hover:text-neutral-200 text-sm px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700">
+                        class="text-sm px-2 py-1 rounded hover:opacity-80" style="color: var(--reader-fg); background: var(--reader-border);">
                     Next &rarr;
+                </button>
+                <button @click="settingsOpen = !settingsOpen" class="p-1 hover:opacity-80" style="color: var(--reader-muted)" title="Reader settings">
+                    <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
                 </button>
                 <template x-if="currentId">
                     <a :href="chapters.find(c => c.id === currentId)?.url || '#'" target="_blank" rel="noopener"
-                       class="text-neutral-500 hover:text-neutral-300 p-1" title="Open at source">
+                       class="p-1 hover:opacity-80" style="color: var(--reader-muted)" title="Open at source">
                         <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
                     </a>
                 </template>
@@ -186,21 +329,21 @@
         </header>
 
         <div id="reader-scroll" class="flex-1 overflow-y-auto">
-            <div class="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-10">
-                <div x-show="loading" class="text-neutral-500 text-center py-20 animate-pulse">Loading...</div>
-                <div x-show="!loading && content" class="reader-content prose prose-invert prose-base max-w-none" x-html="content"></div>
-                <div x-show="!loading && !content && chapters.length > 0" class="text-neutral-500 text-center py-20">
+            <div class="mx-auto px-4 sm:px-8 py-6 sm:py-10" :style="'max-width:' + settings.width + 'rem'">
+                <div x-show="loading" class="text-center py-20 animate-pulse" style="color: var(--reader-muted)">Loading...</div>
+                <div x-show="!loading && content" class="reader-content max-w-none" :style="'font-family:var(--reader-font);font-size:var(--reader-size);color:var(--reader-fg)'" x-html="content"></div>
+                <div x-show="!loading && !content && chapters.length > 0" class="text-center py-20" style="color: var(--reader-muted)">
                     Select a chapter from the sidebar to start reading.
                 </div>
             </div>
-            <div x-show="!loading && (prevId || nextId)" class="max-w-3xl mx-auto px-4 sm:px-8 pb-10 flex items-center justify-between">
+            <div x-show="!loading && (prevId || nextId)" class="mx-auto px-4 sm:px-8 pb-10 flex items-center justify-between" :style="'max-width:' + settings.width + 'rem'">
                 <button x-show="prevId" @click="prevId && loadChapter(prevId, 0)"
-                        class="text-neutral-400 hover:text-neutral-200 text-sm px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700">
+                        class="text-sm px-3 py-1.5 rounded hover:opacity-80" style="color: var(--reader-fg); background: var(--reader-border);">
                     &larr; Previous
                 </button>
                 <span x-show="!prevId"></span>
                 <button x-show="nextId" @click="nextId && loadChapter(nextId, 0)"
-                        class="text-neutral-400 hover:text-neutral-200 text-sm px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700">
+                        class="text-sm px-3 py-1.5 rounded hover:opacity-80" style="color: var(--reader-fg); background: var(--reader-border);">
                     Next &rarr;
                 </button>
             </div>
