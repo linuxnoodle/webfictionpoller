@@ -248,6 +248,82 @@ func (p *XenForoProvider) FetchChapterContent(chapterURL string) (string, error)
 	return p.fetchContentFromReader(chapterURL)
 }
 
+func (p *XenForoProvider) FetchComments(chapterURL string) ([]Comment, error) {
+	postID := p.extractPostID(chapterURL)
+	threadURL := p.normalizeThreadURL(chapterURL)
+
+	targetURL := chapterURL
+	if postID != "" {
+		targetURL = threadURL + "#post-" + postID
+	}
+
+	resp, err := doGet(p.client, targetURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var comments []Comment
+	doc.Find("article.message").Each(func(i int, s *goquery.Selection) {
+		dataContent, _ := s.Attr("data-content")
+		messageID, _ := s.Attr("id")
+		isChapterPost := false
+		if postID != "" {
+			isChapterPost = dataContent == "post-"+postID || messageID == "js-post-"+postID || messageID == "post-"+postID
+		}
+		if isChapterPost {
+			return
+		}
+
+		bb := s.Find(".message-body .bbWrapper")
+		if bb.Length() == 0 {
+			return
+		}
+		html, err := bb.Html()
+		if err != nil {
+			return
+		}
+		html = strings.TrimSpace(html)
+		if html == "" {
+			return
+		}
+
+		author := strings.TrimSpace(s.Find(".message-userArrow").Closest(".message-cell").Find(".message-name a").Text())
+		if author == "" {
+			author = strings.TrimSpace(s.Find(".message-name").Text())
+		}
+
+		date := strings.TrimSpace(s.Find("time").First().AttrOr("title", ""))
+		if date == "" {
+			date = strings.TrimSpace(s.Find(".message-date time").Text())
+		}
+
+		avatarSel := s.Find(".message-avatar img")
+		avatarURL, _ := avatarSel.Attr("src")
+		if avatarURL != "" && !strings.HasPrefix(avatarURL, "http") {
+			avatarURL = p.baseURL + "/" + strings.TrimPrefix(avatarURL, "/")
+		}
+
+		comments = append(comments, Comment{
+			Author:    author,
+			Content:   html,
+			Date:      date,
+			AvatarURL: avatarURL,
+		})
+	})
+
+	return comments, nil
+}
+
 func (p *XenForoProvider) fetchContentFromReader(chapterURL string) (string, error) {
 	postID := p.extractPostID(chapterURL)
 	threadURL := p.normalizeThreadURL(chapterURL)

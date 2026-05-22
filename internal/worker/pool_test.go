@@ -30,6 +30,9 @@ func (m *mockProvider) Login(_, _ string) error         { return fmt.Errorf("not
 func (m *mockProvider) FetchChapterContent(url string) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
+func (m *mockProvider) FetchComments(url string) ([]providers.Comment, error) {
+	return nil, nil
+}
 func (m *mockProvider) PollUpdates(series models.Series) ([]models.Chapter, error) {
 	m.pollCount.Add(1)
 	return m.pollResult, m.pollErr

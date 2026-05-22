@@ -18,6 +18,7 @@ import (
 	"github.com/justinas/nosurf"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
+	"github.com/linuxnoodle/webfictionpoller/internal/comics"
 	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
 	"github.com/linuxnoodle/webfictionpoller/internal/database"
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
@@ -67,6 +68,8 @@ func main() {
 		providers.NewQuestionableQuestingProvider(),
 		providers.NewFanfictionNetProvider(),
 	}
+
+	handlers.RegisterComicProvider(comics.NewMangaDexProvider())
 
 	store := handlers.NewStore(db)
 
@@ -181,9 +184,27 @@ func main() {
 		r.Get("/reader/{id}", h.ReaderPage)
 		r.Get("/api/reader/{id}/chapters", h.ReaderChaptersAPI)
 		r.Get("/api/reader/chapter/{id}", h.ReaderChapterContentAPI)
+		r.Get("/api/reader/chapter/{id}/comments", h.ReaderChapterCommentsAPI)
 		r.Post("/api/reader/progress", h.ReaderSaveProgressAPI)
 		r.Get("/api/reader/settings", h.ReaderSettingsAPI)
 		r.Put("/api/reader/settings", h.ReaderSettingsAPI)
+
+		r.Get("/comics", h.ComicBrowsePage)
+		r.Get("/comics/read/{id}", h.ComicReaderPage)
+		r.Get("/api/comics/search", h.ComicSearchAPI)
+		r.Post("/api/comics/series", h.ComicAddSeriesAPI)
+		r.Get("/api/comics/library", h.ComicLibraryAPI)
+		r.Get("/api/comics/series/{id}", h.ComicSeriesDetailAPI)
+		r.Delete("/api/comics/series/{id}", h.ComicDeleteSeriesAPI)
+		r.Post("/api/comics/series/{id}/refresh", h.ComicRefreshChaptersAPI)
+		r.Post("/api/comics/series/{id}/read-all", h.ComicMarkAllReadAPI)
+		r.Post("/api/comics/series/{id}/rating", h.ComicUpdateRatingAPI)
+		r.Post("/api/comics/series/{id}/status", h.ComicUpdateStatusAPI)
+		r.Get("/api/comics/chapter/{id}/pages", h.ComicChapterPagesAPI)
+		r.Post("/api/comics/chapter/{id}/read", h.ComicMarkReadAPI)
+		r.Post("/api/comics/chapter/{id}/download", h.ComicDownloadChapterAPI)
+		r.Get("/comics/page/{chapterId}/{pageIndex}", h.ComicServePage)
+		r.Post("/api/comics/progress", h.ComicSaveProgressAPI)
 		})
 	})
 
@@ -253,7 +274,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		"script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
 		"style-src 'self' 'unsafe-inline'; " +
 		"img-src 'self' data: https:; " +
-		"connect-src 'self'; " +
+		"connect-src 'self' https://api.mangadex.org https://*.mangadex.network; " +
 		"frame-ancestors 'none'"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", csp)

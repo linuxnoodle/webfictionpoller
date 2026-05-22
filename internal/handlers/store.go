@@ -311,11 +311,6 @@ func (s *Store) UpsertProviderConfig(name, cookieData, username, encryptedPasswo
 	return err
 }
 
-func (s *Store) UpdateLastPolled(name string) error {
-	_, err := s.db.Exec("UPDATE provider_configs SET last_polled = ? WHERE provider_name = ?", time.Now(), name)
-	return err
-}
-
 func (s *Store) SetLoginTested(name string, tested bool) error {
 	_, err := s.db.Exec("UPDATE provider_configs SET login_tested = ? WHERE provider_name = ?", tested, name)
 	return err
@@ -814,14 +809,6 @@ func (s *Store) GetAdjacentChapterIDs(chapterID int64) (prev, next int64, err er
 	s.db.QueryRow(`SELECT id FROM chapters WHERE series_id = ? AND published_at < ? ORDER BY published_at DESC LIMIT 1`, seriesID, publishedAt).Scan(&prev)
 	s.db.QueryRow(`SELECT id FROM chapters WHERE series_id = ? AND published_at > ? ORDER BY published_at ASC LIMIT 1`, seriesID, publishedAt).Scan(&next)
 	return prev, next, nil
-}
-
-func (s *Store) GetChapterCount(seriesID int64) (total, archived int, err error) {
-	err = s.db.QueryRow(`
-		SELECT COUNT(*), SUM(CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 ELSE 0 END)
-		FROM chapters WHERE series_id = ?
-	`, seriesID).Scan(&total, &archived)
-	return
 }
 
 func (s *Store) DeleteSeriesArchive(seriesID int64) error {

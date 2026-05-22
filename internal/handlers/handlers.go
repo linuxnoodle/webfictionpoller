@@ -1061,6 +1061,40 @@ func (h *Handler) ReaderChapterContentAPI(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (h *Handler) ReaderChapterCommentsAPI(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid id"})
+		return
+	}
+
+	ch, err := h.store.GetChapterWithProvider(id)
+	if err != nil || ch == nil {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "not found"})
+		return
+	}
+
+	p, ok := h.pool.GetProvider(ch.ProviderName)
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"comments": []interface{}{}})
+		return
+	}
+
+	comments, err := p.FetchComments(ch.URL)
+	if err != nil {
+		logging.Error("[handler] fetch comments for chapter %d: %v", id, err)
+		writeJSON(w, http.StatusOK, map[string]interface{}{"comments": []interface{}{}})
+		return
+	}
+
+	if comments == nil {
+		comments = []providers.Comment{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"comments": comments})
+}
+
 func (h *Handler) ReaderSaveProgressAPI(w http.ResponseWriter, r *http.Request) {
 	seriesID, err := strconv.ParseInt(r.FormValue("series_id"), 10, 64)
 	if err != nil {

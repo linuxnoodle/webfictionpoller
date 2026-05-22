@@ -147,6 +147,10 @@ function ratingSaveFromEl(el, r) {
 <nav class="bg-neutral-800 border-b border-neutral-700 px-4 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-bold text-neutral-200 hover:text-white">WebFiction Poller</a>
     <div class="hidden sm:flex items-center gap-2">
+        <a href="/comics" title="Comics & Manga"
+           class="text-neutral-300 hover:text-white bg-neutral-700 hover:bg-neutral-600 w-8 h-8 flex items-center justify-center rounded">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M2 8h20M8 2v20"/></svg>
+        </a>
         <a href="/series/add" title="Add series"
            class="text-neutral-300 hover:text-white bg-neutral-700 hover:bg-neutral-600 w-8 h-8 flex items-center justify-center rounded font-bold text-lg leading-none">+</a>
         <button id="poll-btn" title="Poll now" onclick="startPoll(this)"
@@ -192,6 +196,7 @@ function ratingSaveFromEl(el, r) {
         <span>Version & Updates</span>
         <span data-ua style="display:none" class="w-2 h-2 bg-emerald-400 rounded-full"></span>
     </a>
+    <a href="/comics" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Comics & Manga</a>
     <a href="/series/add" class="block px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Add Series</a>
     <button id="poll-btn-mobile" onclick="startPoll(document.getElementById('poll-btn'))" class="w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 rounded">Poll Now</button>
     <div id="poll-status-mobile" style="display:none" class="px-3 py-1 text-xs text-neutral-500"></div>

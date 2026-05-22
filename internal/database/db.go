@@ -98,6 +98,57 @@ var migrations = []migration{
 		FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE,
 		FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
 	)`},
+	{"comic_series", `CREATE TABLE IF NOT EXISTS comic_series (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		source_id TEXT NOT NULL,
+		title TEXT NOT NULL,
+		author TEXT DEFAULT '',
+		artist TEXT DEFAULT '',
+		description TEXT DEFAULT '',
+		cover_url TEXT DEFAULT '',
+		source_url TEXT NOT NULL UNIQUE,
+		provider_name TEXT NOT NULL DEFAULT 'mangadex',
+		status TEXT DEFAULT 'active',
+		genres TEXT DEFAULT '',
+		rating REAL DEFAULT -1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`},
+	{"comic_series_idx", `CREATE INDEX IF NOT EXISTS idx_comic_series_provider ON comic_series(provider_name)`},
+	{"comic_chapters", `CREATE TABLE IF NOT EXISTS comic_chapters (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		series_id INTEGER NOT NULL,
+		source_id TEXT NOT NULL UNIQUE,
+		title TEXT NOT NULL,
+		chapter_num TEXT DEFAULT '',
+		volume_num TEXT DEFAULT '',
+		source_url TEXT DEFAULT '',
+		pages INTEGER DEFAULT 0,
+		is_read BOOLEAN DEFAULT 0,
+		downloaded BOOLEAN DEFAULT 0,
+		published_at TEXT DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (series_id) REFERENCES comic_series(id) ON DELETE CASCADE
+	)`},
+	{"comic_chapters_idx", `CREATE INDEX IF NOT EXISTS idx_comic_chapters_series ON comic_chapters(series_id)`},
+	{"comic_pages", `CREATE TABLE IF NOT EXISTS comic_pages (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		chapter_id INTEGER NOT NULL,
+		page_index INTEGER NOT NULL,
+		image_url TEXT NOT NULL,
+		data BLOB,
+		content_type TEXT DEFAULT '',
+		FOREIGN KEY (chapter_id) REFERENCES comic_chapters(id) ON DELETE CASCADE,
+		UNIQUE(chapter_id, page_index)
+	)`},
+	{"comic_pages_idx", `CREATE INDEX IF NOT EXISTS idx_comic_pages_chapter ON comic_pages(chapter_id)`},
+	{"comic_reading_progress", `CREATE TABLE IF NOT EXISTS comic_reading_progress (
+		series_id INTEGER PRIMARY KEY,
+		chapter_id INTEGER NOT NULL,
+		page_index INTEGER DEFAULT 0,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (series_id) REFERENCES comic_series(id) ON DELETE CASCADE,
+		FOREIGN KEY (chapter_id) REFERENCES comic_chapters(id) ON DELETE CASCADE
+	)`},
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {

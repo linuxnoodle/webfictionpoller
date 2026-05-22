@@ -53,6 +53,10 @@ func (p *FlareSolverrProvider) SupportsLogin() bool { return false }
 
 func (p *FlareSolverrProvider) Login(_, _ string) error { return fmt.Errorf("not supported") }
 
+func (p *FlareSolverrProvider) FetchComments(_ string) ([]Comment, error) {
+	return nil, nil
+}
+
 func (p *FlareSolverrProvider) solve(url string) (string, error) {
 	payload := map[string]interface{}{
 		"cmd":        "request.get",

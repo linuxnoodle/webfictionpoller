@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,8 +16,6 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 	"github.com/linuxnoodle/webfictionpoller/internal/safefetch"
 )
-
-var brRegex = regexp.MustCompile(`(?i)<br\s*/?>`)
 
 type Store interface {
 	GetArchivedSeries() ([]models.Series, error)

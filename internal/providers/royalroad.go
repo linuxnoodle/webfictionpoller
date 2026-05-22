@@ -46,6 +46,44 @@ func (p *RoyalRoadProvider) SupportsLogin() bool { return false }
 
 func (p *RoyalRoadProvider) Login(_, _ string) error { return fmt.Errorf("not supported") }
 
+func (p *RoyalRoadProvider) FetchComments(url string) ([]Comment, error) {
+	resp, err := doGet(p.client, url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var comments []Comment
+	doc.Find(".comment, .review-card, .fiction-comment").Each(func(i int, s *goquery.Selection) {
+		author := strings.TrimSpace(s.Find(".comment-name, .username, .author a").First().Text())
+		content := strings.TrimSpace(s.Find(".comment-content, .comment-body, .text").First().Text())
+		date := strings.TrimSpace(s.Find("time").First().AttrOr("title", ""))
+		avatarURL, _ := s.Find("img.avatar, img.profile-pic").First().Attr("src")
+		if avatarURL != "" && strings.HasPrefix(avatarURL, "//") {
+			avatarURL = "https:" + avatarURL
+		}
+		if content != "" {
+			comments = append(comments, Comment{
+				Author:    author,
+				Content:   content,
+				Date:      date,
+				AvatarURL: avatarURL,
+			})
+		}
+	})
+
+	return comments, nil
+}
+
 func (p *RoyalRoadProvider) FetchSeriesMetadata(url string) (models.Series, error) {
 	var series models.Series
 	resp, err := doGet(p.client, url)

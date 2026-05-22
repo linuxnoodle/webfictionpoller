@@ -1,0 +1,251 @@
+{{define "comic_browse.html"}}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comics - WebFiction Poller</title>
+    <meta name="csrf-token" content="{{.CSRFToken}}">
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/alpine.min.js" defer></script>
+    <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
+    <style>
+        .grid-covers{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.75rem}
+        .cover-card{cursor:pointer;border-radius:0.5rem;overflow:hidden;background:#262626;transition:transform .15s}
+        .cover-card:hover{transform:scale(1.03)}
+        .cover-card img{width:100%;aspect-ratio:2/3;object-fit:cover}
+        .cover-card .title{padding:0.4rem 0.5rem;font-size:0.75rem;color:#d4d4d4;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .search-results{max-height:60vh;overflow-y:auto}
+        .search-item{display:flex;gap:0.75rem;padding:0.75rem;border-bottom:1px solid #404040;cursor:pointer}
+        .search-item:hover{background:#333}
+        .search-item img{width:60px;height:90px;object-fit:cover;border-radius:0.25rem;flex-shrink:0}
+        .search-item .info{min-width:0}
+        .search-item .info h4{font-size:0.875rem;color:#e5e5e5;margin:0 0 0.25rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .search-item .info p{font-size:0.75rem;color:#a3a3a3;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+        .tab-btn{padding:0.5rem 1rem;font-size:0.875rem;border-bottom:2px solid transparent;color:#a3a3a3;cursor:pointer;background:none;border-top:none;border-left:none;border-right:none}
+        .tab-btn.active{color:#e5e5e5;border-bottom-color:#60a5fa}
+        .tab-btn:hover{color:#e5e5e5}
+    </style>
+</head>
+<body class="bg-neutral-900 text-neutral-200 min-h-screen">
+{{template "nav"}}
+<div class="max-w-6xl mx-auto px-4 py-6" x-data="comicApp()">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-xl font-bold">Comics & Manga</h1>
+        <div class="flex gap-2">
+            <button class="tab-btn" :class="tab==='library'?'active':''" @click="tab='library'">Library</button>
+            <button class="tab-btn" :class="tab==='search'?'active':''" @click="tab='search';$refs.searchInput.focus()">Search</button>
+        </div>
+    </div>
+
+    <div x-show="tab==='search'">
+        <div class="flex gap-2 mb-4">
+            <input x-ref="searchInput" x-model="query" @keydown.enter="doSearch(1)"
+                   class="flex-1 bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm text-neutral-200 placeholder-neutral-500"
+                   placeholder="Search manga on MangaDex...">
+            <button @click="doSearch(1)" :disabled="searching"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium disabled:opacity-50">
+                <span x-show="!searching">Search</span>
+                <span x-show="searching">...</span>
+            </button>
+        </div>
+        <div class="search-results" x-show="results.length > 0">
+            <template x-for="item in results" :key="item.source_id">
+                <div class="search-item" @click="addSeries(item)">
+                    <img :src="item.cover_url || '/static/placeholder.png'" :alt="item.title" loading="lazy"
+                         @error="$event.target.style.display='none'">
+                    <div class="info">
+                        <h4 x-text="item.title"></h4>
+                        <p x-text="(item.genres || '') + (item.status ? ' · ' + item.status : '')"></p>
+                        <p x-text="item.description ? item.description.substring(0,120)+'...' : ''"></p>
+                        <button x-show="!item.adding && !item.added"
+                                class="mt-2 text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded">
+                            + Add to Library
+                        </button>
+                        <span x-show="item.added" class="mt-2 text-xs text-emerald-400">Added</span>
+                        <span x-show="item.adding && !item.added" class="mt-2 text-xs text-neutral-400">Adding...</span>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div x-show="results.length === 0 && searched && !searching" class="text-neutral-500 text-sm text-center py-8">
+            No results found
+        </div>
+        <div x-show="hasNextPage && results.length > 0" class="text-center py-4">
+            <button @click="doSearch(currentPage+1)" class="text-sm text-blue-400 hover:text-blue-300">Load more...</button>
+        </div>
+    </div>
+
+    <div x-show="tab==='library'">
+        <div x-show="loading" class="text-neutral-500 text-sm text-center py-8">Loading...</div>
+        <div x-show="!loading && library.length === 0" class="text-neutral-500 text-sm text-center py-8">
+            No comics in library. Search to add some!
+        </div>
+        <div class="grid-covers" x-show="library.length > 0">
+            <template x-for="s in library" :key="s.id">
+                <div class="cover-card" @click="viewSeries(s.id)">
+                    <img :src="s.cover_url" :alt="s.title" loading="lazy" @error="$event.target.style.display='none'">
+                    <div class="title" x-text="s.title"></div>
+                    <div class="px-2 pb-1 text-xs text-neutral-500" x-text="s.read_chapters + '/' + s.total_chapters + ' read'"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <div x-show="tab==='series'" x-cloak>
+        <div class="flex items-center gap-3 mb-4">
+            <button @click="tab='library'" class="text-neutral-400 hover:text-neutral-200 text-sm">&larr; Back</button>
+            <h2 class="text-lg font-bold" x-text="currentSeries.title"></h2>
+            <a :href="currentSeries.source_url" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs ml-auto">Source &rarr;</a>
+        </div>
+
+        <div class="flex gap-4 mb-4" x-show="currentSeries.cover_url">
+            <img :src="currentSeries.cover_url" class="w-32 rounded" @error="$event.target.style.display='none'">
+            <div class="text-sm text-neutral-400 space-y-1">
+                <p x-show="currentSeries.author"><span class="text-neutral-300">Author:</span> <span x-text="currentSeries.author"></span></p>
+                <p x-show="currentSeries.artist"><span class="text-neutral-300">Artist:</span> <span x-text="currentSeries.artist"></span></p>
+                <p x-show="currentSeries.genres"><span class="text-neutral-300">Genres:</span> <span x-text="currentSeries.genres"></span></p>
+                <p x-show="currentSeries.status"><span class="text-neutral-300">Status:</span> <span x-text="currentSeries.status"></span></p>
+                <p x-show="currentSeries.description" class="max-w-md" x-text="currentSeries.description"></p>
+            </div>
+        </div>
+
+        <div class="flex gap-2 mb-4">
+            <button @click="refreshChapters()" class="text-xs bg-neutral-700 hover:bg-neutral-600 px-3 py-1 rounded text-neutral-300">
+                Refresh Chapters
+            </button>
+            <button @click="markAllRead()" class="text-xs bg-neutral-700 hover:bg-neutral-600 px-3 py-1 rounded text-neutral-300">
+                Mark All Read
+            </button>
+            <button @click="deleteSeries()" class="text-xs bg-red-900 hover:bg-red-800 px-3 py-1 rounded text-red-300">
+                Delete
+            </button>
+        </div>
+
+        <div class="space-y-1">
+            <template x-for="ch in currentChapters" :key="ch.id">
+                <div class="flex items-center gap-3 px-3 py-2 rounded hover:bg-neutral-800 cursor-pointer"
+                     :class="ch.is_read ? 'opacity-60' : ''"
+                     @click="openReader(ch.id)">
+                    <span class="text-xs text-neutral-500 w-12 text-right" x-text="ch.chapter_num ? 'Ch.'+ch.chapter_num : ''"></span>
+                    <span class="text-sm flex-1" x-text="ch.title"></span>
+                    <span class="text-xs text-neutral-500" x-text="ch.pages + 'p'"></span>
+                    <span x-show="ch.downloaded" class="text-xs text-emerald-500">&#10003;</span>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+<script>
+function comicApp() {
+    return {
+        tab: 'library',
+        query: '',
+        results: [],
+        searching: false,
+        searched: false,
+        currentPage: 1,
+        hasNextPage: false,
+        library: [],
+        loading: false,
+        currentSeries: {},
+        currentChapters: [],
+        init() {
+            this.loadLibrary();
+        },
+        doSearch(page) {
+            if (!this.query.trim()) return;
+            this.searching = true;
+            this.currentPage = page;
+            fetch('/api/comics/search?q=' + encodeURIComponent(this.query) + '&page=' + page)
+                .then(function(r) { return r.json() })
+                .then(function(d) {
+                    var items = d.mangas || [];
+                    items.forEach(function(it) { it.adding = false; it.added = false; });
+                    if (page > 1) {
+                        this.results = this.results.concat(items);
+                    } else {
+                        this.results = items;
+                    }
+                    this.hasNextPage = d.has_next_page || false;
+                    this.searching = false;
+                    this.searched = true;
+                }.bind(this))
+                .catch(function() { this.searching = false; }.bind(this));
+        },
+        addSeries(item) {
+            item.adding = true;
+            fetch('/api/comics/series', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrf},
+                body: JSON.stringify({source_id: item.source_id, provider_name: item.provider_name || 'mangadex'})
+            })
+            .then(function(r) { return r.json() })
+            .then(function(d) {
+                item.adding = false;
+                item.added = true;
+                this.loadLibrary();
+            }.bind(this))
+            .catch(function() { item.adding = false; }.bind(this));
+        },
+        loadLibrary() {
+            this.loading = true;
+            fetch('/api/comics/library')
+                .then(function(r) { return r.json() })
+                .then(function(d) {
+                    this.library = d.series || [];
+                    this.loading = false;
+                }.bind(this))
+                .catch(function() { this.loading = false; }.bind(this));
+        },
+        viewSeries(id) {
+            fetch('/api/comics/series/' + id)
+                .then(function(r) { return r.json() })
+                .then(function(d) {
+                    this.currentSeries = d.series;
+                    this.currentChapters = d.chapters || [];
+                    this.tab = 'series';
+                }.bind(this));
+        },
+        refreshChapters() {
+            var id = this.currentSeries.id;
+            fetch('/api/comics/series/' + id + '/refresh', {
+                method: 'POST',
+                headers: {'X-CSRF-Token': _csrf}
+            })
+            .then(function(r) { return r.json() })
+            .then(function(d) {
+                this.viewSeries(id);
+            }.bind(this));
+        },
+        markAllRead() {
+            var id = this.currentSeries.id;
+            fetch('/api/comics/series/' + id + '/read-all', {
+                method: 'POST',
+                headers: {'X-CSRF-Token': _csrf}
+            })
+            .then(function(r) { return r.json() })
+            .then(function() { this.viewSeries(id); }.bind(this));
+        },
+        deleteSeries() {
+            if (!confirm('Delete this series and all its data?')) return;
+            var id = this.currentSeries.id;
+            fetch('/api/comics/series/' + id, {
+                method: 'DELETE',
+                headers: {'X-CSRF-Token': _csrf}
+            })
+            .then(function(r) { return r.json() })
+            .then(function() {
+                this.tab = 'library';
+                this.loadLibrary();
+            }.bind(this));
+        },
+        openReader(chapterId) {
+            window.location.href = '/comics/read/' + chapterId;
+        }
+    };
+}
+</script>
+</body>
+</html>
+{{end}}

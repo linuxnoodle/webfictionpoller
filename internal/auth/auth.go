@@ -32,18 +32,6 @@ func Authenticate(db *sql.DB, username, password string) (int64, error) {
 	return id, nil
 }
 
-func EnsureDefaultUser(db *sql.DB, defaultUser, defaultPass string) error {
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", defaultUser).Scan(&count)
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		return CreateUser(db, defaultUser, defaultPass)
-	}
-	return nil
-}
-
 func HasUsers(db *sql.DB) (bool, error) {
 	var count int
 	err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)

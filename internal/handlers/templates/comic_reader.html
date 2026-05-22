@@ -1,0 +1,253 @@
+{{define "comic_reader.html"}}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Reader - WebFiction Poller</title>
+    <meta name="csrf-token" content="{{.CSRFToken}}">
+    <script>var _csrf="{{.CSRFToken}}"</script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{background:#111;color:#e5e5e5;font-family:system-ui,-apple-system,sans-serif;overflow-x:hidden}
+        .top-bar{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(17,17,17,0.95);
+                 backdrop-filter:blur(8px);border-bottom:1px solid #333;padding:0.5rem 1rem;
+                 display:flex;align-items:center;gap:0.75rem;transform:translateY(-100%);
+                 transition:transform 0.25s ease}
+        .top-bar.visible{transform:translateY(0)}
+        .top-bar a{color:#a3a3a3;text-decoration:none;font-size:0.875rem}
+        .top-bar a:hover{color:#e5e5e5}
+        .top-bar .chapter-title{flex:1;font-size:0.8rem;color:#d4d4d4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .top-bar .page-info{font-size:0.75rem;color:#737373;white-space:nowrap}
+        .pages-container{max-width:100%;margin:0 auto;padding-top:0}
+        .pages-container img{display:block;width:100%;max-width:800px;margin:0 auto}
+        .loading-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+                        background:#111;z-index:200}
+        .loading-screen .spinner{width:32px;height:32px;border:3px solid #333;border-top-color:#60a5fa;
+                                 border-radius:50%;animation:spin 0.8s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .nav-btn{position:fixed;bottom:1rem;z-index:90;background:rgba(38,38,38,0.9);border:1px solid #404040;
+                 color:#d4d4d4;padding:0.5rem 1rem;border-radius:0.375rem;font-size:0.8rem;cursor:pointer;
+                 backdrop-filter:blur(4px)}
+        .nav-btn:hover{background:#333;color:#fff}
+        .nav-btn.prev{left:1rem}
+        .nav-btn.next{right:1rem}
+        .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(17,17,17,0.95);
+                    backdrop-filter:blur(8px);border-top:1px solid #333;padding:0.5rem 1rem;
+                    display:flex;align-items:center;gap:0.75rem;transform:translateY(100%);
+                    transition:transform 0.25s ease}
+        .bottom-bar.visible{transform:translateY(0)}
+        .bottom-bar .progress-bar{flex:1;height:4px;background:#333;border-radius:2px;overflow:hidden;cursor:pointer}
+        .bottom-bar .progress-fill{height:100%;background:#60a5fa;transition:width 0.2s}
+    </style>
+</head>
+<body>
+    <div class="loading-screen" id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="top-bar" id="top-bar">
+        <a href="/comics">&larr; Back</a>
+        <span class="chapter-title" id="chapter-title">Loading...</span>
+        <span class="page-info" id="page-info">0/0</span>
+    </div>
+
+    <div class="pages-container" id="pages"></div>
+
+    <div class="bottom-bar" id="bottom-bar">
+        <span style="font-size:0.75rem;color:#737373" id="bottom-info">0/0</span>
+        <div class="progress-bar" id="progress-bar">
+            <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var chapterId = '{{.ChapterID}}';
+        var pages = [];
+        var chapter = null;
+        var prevChapter = 0;
+        var nextChapter = 0;
+        var seriesId = 0;
+        var loadedImages = 0;
+        var lastScrollY = 0;
+        var barTimeout = null;
+
+        function showBars() {
+            document.getElementById('top-bar').classList.add('visible');
+            document.getElementById('bottom-bar').classList.add('visible');
+            clearTimeout(barTimeout);
+            barTimeout = setTimeout(hideBars, 3000);
+        }
+
+        function hideBars() {
+            document.getElementById('top-bar').classList.remove('visible');
+            document.getElementById('bottom-bar').classList.remove('visible');
+        }
+
+        function updateProgress() {
+            if (pages.length === 0) return;
+            var container = document.getElementById('pages');
+            var imgs = container.querySelectorAll('img');
+            if (imgs.length === 0) return;
+
+            var scrollTop = window.scrollY;
+            var viewH = window.innerHeight;
+            var current = 0;
+
+            for (var i = 0; i < imgs.length; i++) {
+                var rect = imgs[i].getBoundingClientRect();
+                if (rect.top < viewH * 0.5) {
+                    current = i;
+                }
+            }
+
+            loadedImages = Math.max(loadedImages, current + 1);
+            var info = (current + 1) + '/' + pages.length;
+            document.getElementById('page-info').textContent = info;
+            document.getElementById('bottom-info').textContent = info;
+            var pct = ((current + 1) / pages.length * 100);
+            document.getElementById('progress-fill').style.width = pct + '%';
+
+            if (seriesId > 0) {
+                fetch('/api/comics/progress', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrf},
+                    body: JSON.stringify({series_id: seriesId, chapter_id: parseInt(chapterId), page_index: current})
+                });
+            }
+        }
+
+        function loadChapter() {
+            document.getElementById('loading').style.display = 'flex';
+            fetch('/api/comics/chapter/' + chapterId + '/pages')
+                .then(function(r) { return r.json() })
+                .then(function(d) {
+                    chapter = d.chapter;
+                    pages = d.pages || [];
+                    prevChapter = d.prev_chapter || 0;
+                    nextChapter = d.next_chapter || 0;
+                    seriesId = chapter ? chapter.series_id : 0;
+
+                    document.getElementById('chapter-title').textContent = chapter ? chapter.title : '';
+
+                    if (chapter) {
+                        fetch('/api/comics/chapter/' + chapterId + '/read', {
+                            method: 'POST',
+                            headers: {'X-CSRF-Token': _csrf}
+                        });
+                    }
+
+                    renderPages();
+                })
+                .catch(function(e) {
+                    document.getElementById('chapter-title').textContent = 'Error loading chapter';
+                    document.getElementById('loading').style.display = 'none';
+                });
+        }
+
+        function renderPages() {
+            var container = document.getElementById('pages');
+            container.innerHTML = '';
+
+            if (pages.length === 0) {
+                container.innerHTML = '<p style="text-align:center;padding:4rem;color:#737373">No pages found</p>';
+                document.getElementById('loading').style.display = 'none';
+                return;
+            }
+
+            var loaded = 0;
+            pages.forEach(function(pg, i) {
+                var img = document.createElement('img');
+                img.loading = (i < 3) ? 'eager' : 'lazy';
+                img.dataset.index = i;
+                img.alt = 'Page ' + (i + 1);
+                img.style.opacity = '0';
+                img.style.transition = 'opacity 0.3s';
+                img.onload = function() {
+                    img.style.opacity = '1';
+                    loaded++;
+                    if (loaded === pages.length) {
+                        document.getElementById('loading').style.display = 'none';
+                        updateProgress();
+                    }
+                };
+                img.onerror = function() {
+                    img.style.opacity = '0.3';
+                    img.alt = 'Failed to load page ' + (i + 1);
+                    loaded++;
+                    if (loaded === pages.length) {
+                        document.getElementById('loading').style.display = 'none';
+                    }
+                };
+                img.src = pg.url;
+                container.appendChild(img);
+            });
+
+            if (pages.length > 0) {
+                var prevBtn = document.createElement('button');
+                prevBtn.className = 'nav-btn prev';
+                prevBtn.innerHTML = '&larr; Prev';
+                prevBtn.style.display = prevChapter ? '' : 'none';
+                prevBtn.onclick = function() { chapterId = String(prevChapter); loadChapter(); window.scrollTo(0, 0); };
+                container.appendChild(prevBtn);
+
+                var nextBtn = document.createElement('button');
+                nextBtn.className = 'nav-btn next';
+                nextBtn.innerHTML = 'Next &rarr;';
+                nextBtn.style.display = nextChapter ? '' : 'none';
+                nextBtn.onclick = function() { chapterId = String(nextChapter); loadChapter(); window.scrollTo(0, 0); };
+                container.appendChild(nextBtn);
+
+                var spacer = document.createElement('div');
+                spacer.style.height = '4rem';
+                container.appendChild(spacer);
+            }
+        }
+
+        window.addEventListener('scroll', function() {
+            var sy = window.scrollY;
+            if (Math.abs(sy - lastScrollY) > 50) {
+                showBars();
+            }
+            lastScrollY = sy;
+            updateProgress();
+        });
+
+        window.addEventListener('click', function(e) {
+            if (e.target.tagName === 'IMG' || e.target === document.getElementById('pages')) {
+                showBars();
+            }
+        });
+
+        document.getElementById('progress-bar').addEventListener('click', function(e) {
+            if (pages.length === 0) return;
+            var rect = this.getBoundingClientRect();
+            var pct = (e.clientX - rect.left) / rect.width;
+            var idx = Math.floor(pct * pages.length);
+            var imgs = document.getElementById('pages').querySelectorAll('img');
+            if (imgs[idx]) {
+                imgs[idx].scrollIntoView({behavior: 'smooth', block: 'start'});
+            }
+        });
+
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowLeft' && prevChapter) {
+                chapterId = String(prevChapter);
+                loadChapter();
+                window.scrollTo(0, 0);
+            } else if (e.key === 'ArrowRight' && nextChapter) {
+                chapterId = String(nextChapter);
+                loadChapter();
+                window.scrollTo(0, 0);
+            } else if (e.key === 'Escape') {
+                window.location.href = '/comics';
+            }
+        });
+
+        loadChapter();
+    })();
+    </script>
+</body>
+</html>
+{{end}}
