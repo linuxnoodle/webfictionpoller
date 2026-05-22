@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -244,11 +245,90 @@ func (p *XenForoProvider) fetchMetadataFromRSS(rssURL, threadURL string) (models
 }
 
 func (p *XenForoProvider) FetchChapterContent(chapterURL string) (string, error) {
-	content, err := p.fetchContentFromRSS(chapterURL)
-	if err == nil && content != "" {
-		return content, nil
+	return p.fetchContentFromReader(chapterURL)
+}
+
+func (p *XenForoProvider) fetchContentFromReader(chapterURL string) (string, error) {
+	postID := p.extractPostID(chapterURL)
+	threadURL := p.normalizeThreadURL(chapterURL)
+	readerURL := strings.TrimSuffix(threadURL, "/") + "/reader"
+
+	if postID == "" {
+		return p.fetchContentDirect(chapterURL)
 	}
 
+	pageNum := 1
+	for {
+		pageURL := readerURL
+		if pageNum > 1 {
+			pageURL = readerURL + "?page=" + strconv.Itoa(pageNum)
+		}
+
+		resp, err := doGet(p.client, pageURL)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return p.fetchContentDirect(chapterURL)
+		}
+
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("parsing reader html: %w", err)
+		}
+
+		found := false
+		var content string
+		var hasMore bool
+
+		doc.Find("li.message").Each(func(i int, s *goquery.Selection) {
+			dataContent, _ := s.Attr("data-content")
+			messageID, _ := s.Attr("id")
+			if dataContent == "post-"+postID || messageID == "js-post-"+postID || messageID == "post-"+postID {
+				bb := s.Find(".message-body .bbWrapper")
+				if bb.Length() > 0 {
+					html, err := bb.Html()
+					if err == nil {
+						content = html
+						found = true
+					}
+				}
+			}
+		})
+
+		if found {
+			logging.Info("[%s] fetched chapter content from reader page %d for post %s (%d chars)", p.name, pageNum, postID, len(content))
+			return content, nil
+		}
+
+		pageNav := doc.Find(".PageNav")
+		if pageNav.Length() > 0 {
+			lastPageStr, _ := pageNav.Attr("data-last")
+			lastPage, _ := strconv.Atoi(lastPageStr)
+			if pageNum >= lastPage {
+				break
+			}
+			hasMore = true
+		} else {
+			if doc.Find("li.message").Length() == 0 {
+				break
+			}
+			hasMore = false
+		}
+
+		if !hasMore {
+			break
+		}
+		pageNum++
+	}
+
+	logging.Info("[%s] post %s not found in reader mode, falling back to direct fetch", p.name, postID)
+	return p.fetchContentDirect(chapterURL)
+}
+
+func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) {
 	resp, err := doGet(p.client, chapterURL)
 	if err != nil {
 		return "", err
@@ -260,19 +340,22 @@ func (p *XenForoProvider) FetchChapterContent(chapterURL string) (string, error)
 		return "", fmt.Errorf("parsing html: %w", err)
 	}
 
+	postID := p.extractPostID(chapterURL)
 	var target *goquery.Selection
 
-	if u, parseErr := url.Parse(chapterURL); parseErr == nil {
-		fragment := strings.TrimPrefix(u.Fragment, "post-")
-		if fragment != "" {
-			target = doc.Find("#post-" + fragment + " .message-body .bbWrapper")
-			if target.Length() == 0 {
-				target = doc.Find("#js-post-" + fragment + " .message-body .bbWrapper")
+	if postID != "" {
+		doc.Find("li.message").EachWithBreak(func(i int, s *goquery.Selection) bool {
+			dataContent, _ := s.Attr("data-content")
+			messageID, _ := s.Attr("id")
+			if dataContent == "post-"+postID || messageID == "js-post-"+postID || messageID == "post-"+postID {
+				bb := s.Find(".message-body .bbWrapper")
+				if bb.Length() > 0 {
+					target = bb
+					return false
+				}
 			}
-			if target.Length() == 0 {
-				target = doc.Find("li[data-content='post-" + fragment + "'] .message-body .bbWrapper")
-			}
-		}
+			return true
+		})
 	}
 
 	if target == nil || target.Length() == 0 {
@@ -290,44 +373,8 @@ func (p *XenForoProvider) FetchChapterContent(chapterURL string) (string, error)
 		return "", err
 	}
 
-	logging.Info("[%s] fetched chapter content from HTML %s (%d chars)", p.name, chapterURL, len(html))
+	logging.Info("[%s] fetched chapter content from direct HTML %s (%d chars)", p.name, chapterURL, len(html))
 	return html, nil
-}
-
-func (p *XenForoProvider) fetchContentFromRSS(chapterURL string) (string, error) {
-	threadURL := p.normalizeThreadURL(chapterURL)
-	rssURL := p.buildThreadmarksRSSURL(threadURL)
-
-	fp := gofeed.NewParser()
-	resp, err := doGet(p.client, rssURL)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("rss status %d", resp.StatusCode)
-	}
-
-	feed, err := fp.Parse(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("parsing rss: %w", err)
-	}
-
-	postID := p.extractPostID(chapterURL)
-
-	for _, item := range feed.Items {
-		if postID != "" {
-			if strings.Contains(item.GUID, "/posts/"+postID) || strings.Contains(item.Link, "#post-"+postID) {
-				return item.Description, nil
-			}
-		}
-		if item.Link == chapterURL {
-			return item.Description, nil
-		}
-	}
-
-	return "", fmt.Errorf("chapter not found in rss")
 }
 
 func (p *XenForoProvider) extractPostID(rawURL string) string {
