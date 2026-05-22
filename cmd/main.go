@@ -93,35 +93,6 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(sessionManager.LoadAndSave)
-	r.Use(securityHeaders)
-
-	r.Get("/login", loginPage)
-	r.Post("/login", loginBanMiddleware(loginHandler(db, sessionManager)))
-	r.Get("/setup", setupPage(db))
-	r.Post("/setup", setupHandler(db, sessionManager))
-
-	r.Get("/static/app.css", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		w.Header().Set("Cache-Control", "public, max-age=86400")
-		w.Write(static.CSS)
-	})
-
-	r.Get("/static/htmx.min.js", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		w.Header().Set("Cache-Control", "public, max-age=86400")
-		w.Write(static.HTMX)
-	})
-
-	r.Get("/static/alpine.min.js", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		w.Header().Set("Cache-Control", "public, max-age=86400")
-		w.Write(static.Alpine)
-	})
-
-	r.Get("/static/favicons/{provider}", faviconCache.ServeHTTP)
-
-	r.Post("/logout", logoutHandler(sessionManager))
 
 	r.Group(func(r chi.Router) {
 		r.Use(opdsBasicAuth(db))
@@ -132,7 +103,38 @@ func main() {
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware(sessionManager, db))
+		r.Use(sessionManager.LoadAndSave)
+		r.Use(securityHeaders)
+
+		r.Get("/login", loginPage)
+		r.Post("/login", loginBanMiddleware(loginHandler(db, sessionManager)))
+		r.Get("/setup", setupPage(db))
+		r.Post("/setup", setupHandler(db, sessionManager))
+
+		r.Get("/static/app.css", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			w.Write(static.CSS)
+		})
+
+		r.Get("/static/htmx.min.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			w.Write(static.HTMX)
+		})
+
+		r.Get("/static/alpine.min.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			w.Write(static.Alpine)
+		})
+
+		r.Get("/static/favicons/{provider}", faviconCache.ServeHTTP)
+
+		r.Post("/logout", logoutHandler(sessionManager))
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware(sessionManager, db))
 
 		r.Get("/", h.Dashboard)
 		r.Get("/series/add", h.AddSeriesPage)
@@ -175,6 +177,7 @@ func main() {
 		r.Get("/api/reader/{id}/chapters", h.ReaderChaptersAPI)
 		r.Get("/api/reader/chapter/{id}", h.ReaderChapterContentAPI)
 		r.Post("/api/reader/progress", h.ReaderSaveProgressAPI)
+		})
 	})
 
 	csrfHandler := nosurf.New(r)

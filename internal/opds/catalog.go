@@ -193,7 +193,10 @@ func (c *Catalog) generateEPUB(series *models.Series, chapters []models.Chapter)
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
-	mimetypeFile, _ := zw.Create("mimetype")
+	mimetypeFile, _ := zw.CreateRaw(&zip.FileHeader{
+		Name:   "mimetype",
+		Method: zip.Store,
+	})
 	mimetypeFile.Write([]byte("application/epub+zip"))
 
 	containerFile, _ := zw.Create("META-INF/container.xml")
