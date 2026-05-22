@@ -1,16 +1,18 @@
 {{define "chapter_preview"}}
-<div class="flex items-start gap-2 sm:gap-3 mb-3 pb-3 border-b border-neutral-700">
-    {{if .FaviconURL}}<img src="{{.FaviconURL}}" alt="" class="w-4 h-4 mt-1 flex-shrink-0 hidden sm:block">{{end}}
-    <div class="min-w-0 flex-1">
-        <h4 class="text-sm sm:text-base font-semibold text-neutral-100 leading-tight">{{.Chapter.Title}}</h4>
-        <div class="flex items-center gap-2 mt-1">
-            <span class="text-xs text-neutral-400 cursor-pointer hover:text-neutral-200" onclick="goToSeries({{.Chapter.SeriesID}})">{{.Chapter.SeriesTitle}}</span>
-            <span class="text-neutral-700">&middot;</span>
-            <span class="text-xs text-neutral-500">{{.Chapter.PublishedAt.Format "Jan 02, 2006 15:04"}}</span>
+<div class="flex items-center justify-between gap-2 px-3 sm:px-5 pt-3 sm:pt-4 pb-2 border-b border-neutral-800">
+    <div class="flex items-center gap-2 min-w-0">
+        {{if .FaviconURL}}<img src="{{.FaviconURL}}" alt="" class="w-4 h-4 flex-shrink-0">{{end}}
+        <div class="min-w-0">
+            <h4 class="text-sm sm:text-base font-semibold text-neutral-100 leading-tight truncate">{{.Chapter.Title}}</h4>
+            <span class="text-xs text-neutral-500 cursor-pointer hover:text-neutral-300" onclick="goToSeries({{.Chapter.SeriesID}})">{{.Chapter.SeriesTitle}}</span>
         </div>
     </div>
+    <button onclick="toggleFullReader(this)" title="Expand"
+            class="icon-btn text-neutral-500 bg-neutral-800 hover:bg-neutral-700 flex-shrink-0">
+        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 11-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm12.707 2.707a1 1 0 01-1.414-1.414L16.586 13H15a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0v-1.586l-2.293 2.293z" clip-rule="evenodd"/></svg>
+    </button>
 </div>
-<div class="preview-content prose prose-invert prose-sm max-w-none">
+<div class="preview-content prose prose-invert prose-sm sm:prose-base max-w-none px-3 sm:px-5 py-3 sm:py-4">
 {{.Content}}
 </div>
 {{end}}

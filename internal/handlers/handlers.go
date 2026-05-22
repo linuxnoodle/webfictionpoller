@@ -165,7 +165,17 @@ func (h *Handler) ChapterPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content := contentPolicy.Sanitize(ch.PreviewHTML)
+	var content string
+
+	archived, _ := h.store.GetChapterArchivedContent(id)
+	if archived != "" {
+		content = contentPolicy.Sanitize(archived)
+	}
+
+	if content == "" {
+		content = contentPolicy.Sanitize(ch.PreviewHTML)
+	}
+
 	if content == "" {
 		p, ok := h.pool.GetProvider(ch.ProviderName)
 		if !ok {
@@ -176,7 +186,7 @@ func (h *Handler) ChapterPreview(w http.ResponseWriter, r *http.Request) {
 		fetched, err := p.FetchChapterContent(ch.URL)
 		if err != nil {
 			logging.Error("[preview] error fetching content for chapter %d: %v", id, err)
-			content = fmt.Sprintf("<p class='text-red-400 text-sm'>Failed to load preview</p>")
+			content = fmt.Sprintf("<p class='text-red-400 text-sm'>Failed to load content</p>")
 		} else {
 			content = contentPolicy.Sanitize(fetched)
 			go func() {

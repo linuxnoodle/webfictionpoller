@@ -11,11 +11,14 @@
     <script src="/static/alpine.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
     <style>
-        .preview-content p { margin-bottom: 0.5em; }
-        .preview-content img { max-width: 100%; }
-        .preview-content { max-height: 40vh; overflow-y: auto; }
+        .preview-content p { margin-bottom: 0.75em; line-height: 1.7; }
+        .preview-content img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.5em 0; }
+        .preview-content { max-height: 75vh; overflow-y: auto; }
+        .preview-content.reader-full { max-height: none; }
         @keyframes series-highlight { 0% { box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.6); } 100% { box-shadow: none; } }
         .series-highlight { animation: series-highlight 1.5s ease-out; }
+        .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 0.25rem; transition: all 0.15s; }
+        .icon-btn svg { width: 0.875rem; height: 0.875rem; }
     </style>
     <script>
     (function(){if(!location.search||!new URLSearchParams(location.search).has('sort')){var _ds=localStorage.getItem('dashSort');if(_ds&&_ds!=='published')location.replace('/?sort='+_ds)}})();
@@ -34,10 +37,20 @@
             if (opening) {
                 htmx.process(el);
                 openPreviewId = id;
+                autoMarkRead(id);
             } else {
                 openPreviewId = null;
             }
         }
+    }
+    function autoMarkRead(id) {
+        var row = document.getElementById('row-' + id);
+        if (!row) return;
+        var dot = row.querySelector('[data-dot]');
+        if (!dot || !dot.classList.contains('bg-amber-500/70')) return;
+        htmx.ajax('POST', '/api/chapters/' + id + '/read', {swap:'none'});
+        _markReadRow(row, id, null);
+        _decrementUnread();
     }
     function _markReadRow(row, id, url) {
         var dot = row.querySelector('[data-dot]');
@@ -48,10 +61,10 @@
         if (title) { title.className = 'text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0'; if (url) { var a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.className = title.className; a.textContent = title.textContent; a.onclick = function(e){e.stopPropagation()}; title.replaceWith(a); } }
         var badge = row.querySelector('[data-badge]');
         if (badge) badge.className = 'text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]';
-        var actRead = row.querySelector('[data-act-read]');
-        var actIgnore = row.querySelector('[data-act-ignore]');
-        if (actRead) { var a = document.createElement('a'); a.href = url || '#'; a.target = '_blank'; a.rel = 'noopener'; a.className = 'text-xs text-neutral-500 hover:text-neutral-300 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded'; a.textContent = 'open'; a.onclick = function(e){e.stopPropagation(); if(!url)e.preventDefault()}; actRead.replaceWith(a); }
-        if (actIgnore) { var s = document.createElement('span'); s.className = 'invisible text-xs px-2 py-1'; s.textContent = 'Ignore'; actIgnore.replaceWith(s); }
+        var check = row.querySelector('[data-act-check]');
+        if (check) { check.classList.remove('text-emerald-400','bg-emerald-900/40','hover:bg-emerald-800'); check.classList.add('text-neutral-700','bg-neutral-800'); check.onclick = null; }
+        var ext = row.querySelector('[data-act-ext]');
+        if (ext) { ext.classList.remove('text-emerald-300','bg-emerald-900/50'); ext.classList.add('text-neutral-400','bg-neutral-800','hover:bg-neutral-700'); }
     }
     function _decrementUnread() {
         var el = document.getElementById('unread-count');
@@ -59,19 +72,19 @@
         var v = parseInt(el.textContent, 10);
         if (!isNaN(v) && v > 0) { el.textContent = (v - 1) + ' unread'; }
     }
-    function markRead(btn, id, url) {
+    function markCheck(btn, id) {
+        event.stopPropagation();
+        htmx.ajax('POST', '/api/chapters/' + id + '/read', {swap:'none'});
+        var row = document.getElementById('row-' + id);
+        if (row) _markReadRow(row, id, null);
+        _decrementUnread();
+    }
+    function openExt(id, url) {
         event.stopPropagation();
         if (url) window.open(url, '_blank');
         htmx.ajax('POST', '/api/chapters/' + id + '/read', {swap:'none'});
         var row = document.getElementById('row-' + id);
         if (row) _markReadRow(row, id, url);
-        _decrementUnread();
-    }
-    function markIgnore(btn, id) {
-        event.stopPropagation();
-        htmx.ajax('POST', '/api/chapters/' + id + '/read', {swap:'none'});
-        var row = document.getElementById('row-' + id);
-        if (row) _markReadRow(row, id, null);
         _decrementUnread();
     }
     function goToSeries(seriesId) {
@@ -82,6 +95,12 @@
         }
         var ev = new CustomEvent('go-to-series', { detail: { id: seriesId } });
         window.dispatchEvent(ev);
+    }
+    function toggleFullReader(btn) {
+        var content = btn.closest('[id^="preview-"]').querySelector('.preview-content');
+        if (content) content.classList.toggle('reader-full');
+        var icon = btn.querySelector('svg');
+        if (icon) { var isFull = content.classList.contains('reader-full'); btn.title = isFull ? 'Collapse' : 'Expand'; }
     }
     function sortSeriesBy(key) {
         var url = new URL(location.href);
@@ -161,22 +180,22 @@
                         <div data-content class="flex-1 min-w-0 overflow-hidden opacity-40">
                             <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                                 <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
-                                 <span data-badge class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem] cursor-pointer hover:text-neutral-400" onclick="event.stopPropagation();goToSeries({{.SeriesID}})">{{.SeriesTitle}}</span>
-                                 <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
-                             </div>
-                         </div>
-                         {{else}}
-                         <div data-dot class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
-                         <div data-content class="flex-1 min-w-0 overflow-hidden">
-                             <div class="flex items-center gap-1 sm:gap-2 min-w-0">
-                                 <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
-                                 <span data-badge class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem] cursor-pointer hover:text-neutral-200" onclick="event.stopPropagation();goToSeries({{.SeriesID}})">{{.SeriesTitle}}</span>
+                                <span data-badge class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem] cursor-pointer hover:text-neutral-400" onclick="event.stopPropagation();goToSeries({{.SeriesID}})">{{.SeriesTitle}}</span>
+                                <a href="{{.URL}}" target="_blank" rel="noopener" class="text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0" onclick="event.stopPropagation()">{{.Title}}</a>
+                            </div>
+                        </div>
+                        {{else}}
+                        <div data-dot class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
+                        <div data-content class="flex-1 min-w-0 overflow-hidden">
+                            <div class="flex items-center gap-1 sm:gap-2 min-w-0">
+                                <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
+                                <span data-badge class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem] cursor-pointer hover:text-neutral-200" onclick="event.stopPropagation();goToSeries({{.SeriesID}})">{{.SeriesTitle}}</span>
                                 <span data-title class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
                             </div>
                         </div>
                         {{end}}
                     </div>
-                    <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-2 sm:ml-3">
+                    <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 ml-2 sm:ml-3">
                         <div class="hidden sm:flex items-center gap-0.5"
                              data-rating-sid="{{.SeriesID}}"
                              onclick="event.stopPropagation()">
@@ -187,23 +206,22 @@
                                     class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
                         </div>
                         <span class="text-xs text-neutral-600 w-10 text-right flex-shrink-0">{{.PublishedAt.Format "15:04"}}</span>
-                        {{if .IsRead}}
-                        <a href="{{.URL}}" target="_blank" rel="noopener"
-                           onclick="event.stopPropagation()"
-                           class="text-xs text-neutral-500 hover:text-neutral-300 bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded">open</a>
-                        <span class="invisible text-xs px-2 py-1">Ignore</span>
-                        {{else}}
-                        <button data-act-read onclick="markRead(this, {{.ID}}, '{{.URL}}')"
-                                class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-2 py-1 rounded">Read</button>
-                        <button data-act-ignore onclick="markIgnore(this, {{.ID}})"
-                                class="text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-400 px-2 py-1 rounded">Ignore</button>
+                        <button data-act-ext onclick="openExt({{.ID}}, '{{.URL}}')" title="Open at source"
+                                class="icon-btn {{if .IsRead}}text-neutral-500 bg-neutral-800 hover:bg-neutral-700{{else}}text-emerald-300 bg-emerald-900/50 hover:bg-emerald-800{{end}}">
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
+                        </button>
+                        {{if not .IsRead}}
+                        <button data-act-check onclick="markCheck(this, {{.ID}})" title="Mark read"
+                                class="icon-btn text-emerald-400 bg-emerald-900/40 hover:bg-emerald-800">
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                        </button>
                         {{end}}
                     </div>
                 </div>
                 <div id="preview-{{.ID}}" class="hidden">
-                    <div class="mx-2 sm:mx-4 mb-2 bg-neutral-900 border border-neutral-800 rounded-lg p-3 sm:p-4"
+                    <div class="mx-2 sm:mx-4 mb-2 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden"
                          hx-get="/api/chapters/{{.ID}}/preview" hx-trigger="intersect once" hx-swap="innerHTML">
-                        <div class="text-neutral-500 text-sm animate-pulse">Loading preview...</div>
+                        <div class="p-3 sm:p-4 text-neutral-500 text-sm animate-pulse">Loading...</div>
                     </div>
                 </div>
                 {{end}}

@@ -595,6 +595,34 @@ func (s *Store) GetChaptersForArchive(seriesID int64) ([]models.Chapter, error) 
 	return chapters, nil
 }
 
+func (s *Store) GetChapterArchivedContent(id int64) (string, error) {
+	var contentBytes []byte
+	var compressed bool
+	err := s.db.QueryRow(`
+		SELECT content_html, COALESCE(content_compressed, 0) FROM chapters WHERE id = ?
+	`, id).Scan(&contentBytes, &compressed)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if len(contentBytes) == 0 {
+		return "", nil
+	}
+	if compressed {
+		reader, err := gzip.NewReader(bytes.NewReader(contentBytes))
+		if err == nil {
+			decompressed, err := io.ReadAll(reader)
+			reader.Close()
+			if err == nil {
+				return string(decompressed), nil
+			}
+		}
+	}
+	return string(contentBytes), nil
+}
+
 func (s *Store) SaveChapterContent(id int64, content string) error {
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)
