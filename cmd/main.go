@@ -170,6 +170,11 @@ func main() {
 		r.Post("/api/version/check", h.VersionCheckNow)
 		r.Post("/api/version/update", h.SelfUpdate)
 		r.Get("/admin/version", h.VersionPage)
+
+		r.Get("/reader/{id}", h.ReaderPage)
+		r.Get("/api/reader/{id}/chapters", h.ReaderChaptersAPI)
+		r.Get("/api/reader/chapter/{id}", h.ReaderChapterContentAPI)
+		r.Post("/api/reader/progress", h.ReaderSaveProgressAPI)
 	})
 
 	csrfHandler := nosurf.New(r)

@@ -116,8 +116,13 @@
                     {{range .ArchiveStats}}
                     <div class="bg-neutral-800 rounded-lg p-3">
                         <div class="flex items-center justify-between mb-2">
-                            <span class="text-sm text-neutral-200 font-medium truncate mr-3">{{.SeriesTitle}}</span>
-                            <span class="text-xs text-neutral-400 flex-shrink-0">{{.ArchivedChapters}}/{{.TotalChapters}} chapters</span>
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="text-sm text-neutral-200 font-medium truncate">{{.SeriesTitle}}</span>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <a href="/reader/{{.SeriesID}}" class="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-2 py-0.5 rounded">Read</a>
+                                <span class="text-xs text-neutral-400">{{.ArchivedChapters}}/{{.TotalChapters}}</span>
+                            </div>
                         </div>
                         <div class="w-full bg-neutral-700 rounded-full h-1.5">
                             {{if .Percent}}

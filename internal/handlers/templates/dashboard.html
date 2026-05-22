@@ -297,6 +297,7 @@
                         </select>
                         <button hx-post="/api/series/{{.ID}}/archive" hx-vals='{"archive":"{{if .Archive}}false{{else}}true{{end}}"}' hx-swap="none"
                                 class="text-xs px-1.5 py-0.5 rounded {{if .Archive}}bg-emerald-900/30 text-emerald-400{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">Archive {{if .Archive}}On{{else}}Off{{end}}</button>
+                        <a href="/reader/{{.ID}}" class="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-1.5 py-0.5 rounded">Read</a>
                     </div>
                 </div>
                 {{end}}
@@ -314,6 +315,7 @@
                             <th class="pb-2 pr-4">Rating</th>
                             <th class="pb-2 pr-4">Status</th>
                             <th class="pb-2 pr-4">Archive</th>
+                            <th class="pb-2 pr-4">Read</th>
                             <th class="pb-2">Actions</th>
                         </tr>
                     </thead>
@@ -353,6 +355,9 @@
                             <td class="py-2 pr-4">
                                 <button hx-post="/api/series/{{.ID}}/archive" hx-vals='{"archive":"{{if .Archive}}false{{else}}true{{end}}"}' hx-swap="none"
                                         class="text-xs px-1.5 py-0.5 rounded {{if .Archive}}bg-emerald-900/30 text-emerald-400{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">{{if .Archive}}On{{else}}Off{{end}}</button>
+                            </td>
+                            <td class="py-2 pr-4">
+                                <a href="/reader/{{.ID}}" class="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-1.5 py-0.5 rounded">Read</a>
                             </td>
                             <td class="py-2">
                                 <button hx-post="/api/series/{{.ID}}/delete" hx-swap="none" hx-confirm="Delete this series and all its chapters?"

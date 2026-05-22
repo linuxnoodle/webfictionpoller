@@ -1,0 +1,181 @@
+{{define "reader.html"}}
+<!DOCTYPE html>
+<html lang="en" class="bg-neutral-950 text-neutral-200">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Series.Title}} - Reader</title>
+    <meta name="csrf-token" content="{{.CSRFToken}}">
+    <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
+    <script src="/static/alpine.min.js" defer></script>
+    <link rel="stylesheet" href="/static/app.css">
+    <style>
+        .reader-content p { margin-bottom: 0.75em; line-height: 1.8; }
+        .reader-content img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.5em 0; }
+        .reader-content h1,.reader-content h2,.reader-content h3 { color: #e5e5e5; margin: 1em 0 0.5em; }
+        .reader-content blockquote { border-left: 3px solid #525252; padding-left: 1em; margin: 0.75em 0; color: #a3a3a3; }
+        .reader-content a { color: #6ee7b7; }
+        .reader-content hr { border-color: #404040; margin: 1.5em 0; }
+        .reader-content table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
+        .reader-content td,.reader-content th { border: 1px solid #404040; padding: 0.4em 0.6em; }
+        .reader-content pre { background: #171717; padding: 0.75em 1em; border-radius: 4px; overflow-x: auto; }
+        .reader-content code { font-size: 0.9em; }
+        .ch-list::-webkit-scrollbar { width: 4px; }
+        .ch-list::-webkit-scrollbar-track { background: transparent; }
+        .ch-list::-webkit-scrollbar-thumb { background: #404040; border-radius: 2px; }
+        .ch-item { transition: background 0.1s; }
+        .ch-item.active { background: #292524; }
+        .ch-item.read { opacity: 0.45; }
+        .ch-item.read.active { opacity: 1; }
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 40; transform: translateX(-100%); transition: transform 0.2s; }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-overlay { display: none; position: fixed; inset: 0; z-index: 35; background: rgba(0,0,0,0.5); }
+            .sidebar-overlay.open { display: block; }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-neutral-950"
+      x-data="{
+          chapters: [],
+          currentId: null,
+          content: '',
+          prevId: null,
+          nextId: null,
+          scrollPos: 0,
+          sidebarOpen: false,
+          progressChapterId: 0,
+          savedScroll: 0,
+          loading: false,
+          init() {
+              var self = this;
+              fetch('/api/reader/{{.Series.ID}}/chapters').then(function(r){return r.json()}).then(function(d){
+                  self.chapters = d.chapters || [];
+                  self.progressChapterId = d.progress_chapter_id || 0;
+                  self.savedScroll = d.scroll_position || 0;
+                  if (self.progressChapterId) {
+                      self.loadChapter(self.progressChapterId, self.savedScroll);
+                  } else if (self.chapters.length > 0) {
+                      for (var i = 0; i < self.chapters.length; i++) {
+                          if (self.chapters[i].has_content) {
+                              self.loadChapter(self.chapters[i].id, 0);
+                              break;
+                          }
+                      }
+                  }
+              });
+              var saveTimer = null;
+              document.getElementById('reader-scroll').addEventListener('scroll', function() {
+                  clearTimeout(saveTimer);
+                  saveTimer = setTimeout(function() { self.saveProgress() }, 2000);
+              });
+          },
+          loadChapter(id, scrollTo) {
+              var self = this;
+              if (self.currentId === id) return;
+              self.currentId = id;
+              self.loading = true;
+              self.content = '';
+              var el = document.getElementById('reader-scroll');
+              if (el) el.scrollTop = 0;
+              fetch('/api/reader/chapter/' + id).then(function(r){return r.json()}).then(function(d){
+                  self.content = d.content || '<p class=\"text-neutral-500\">No content available.</p>';
+                  self.prevId = d.prev_id || null;
+                  self.nextId = d.next_id || null;
+                  self.loading = false;
+                  self.$nextTick(function() {
+                      if (scrollTo && scrollTo > 0) {
+                          var scr = document.getElementById('reader-scroll');
+                          if (scr) scr.scrollTop = scrollTo;
+                      }
+                      self.saveProgress();
+                  });
+              }).catch(function() {
+                  self.content = '<p class=\"text-red-400\">Failed to load chapter.</p>';
+                  self.loading = false;
+              });
+          },
+          saveProgress() {
+              if (!this.currentId) return;
+              var scr = document.getElementById('reader-scroll');
+              var pos = scr ? scr.scrollTop : 0;
+              fetch('/api/reader/progress', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': _csrf},
+                  body: 'series_id={{.Series.ID}}&chapter_id=' + this.currentId + '&scroll_position=' + pos
+              });
+          }
+      }">
+    <div class="flex h-screen">
+        <div class="sidebar-overlay" x-show="sidebarOpen" @click="sidebarOpen = false"></div>
+        <aside class="sidebar w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col flex-shrink-0"
+               :class="sidebarOpen ? 'open' : ''"
+               :class="{ 'open': sidebarOpen }">
+            <div class="p-3 border-b border-neutral-800 flex-shrink-0">
+                <a href="/" class="text-xs text-neutral-500 hover:text-neutral-300 block mb-1">&larr; Dashboard</a>
+                <h2 class="text-sm font-semibold text-neutral-200 truncate">{{.Series.Title}}</h2>
+                <p class="text-xs text-neutral-500 truncate">{{.Series.Author}}</p>
+            </div>
+            <div class="ch-list flex-1 overflow-y-auto p-1.5">
+                <template x-for="ch in chapters" :key="ch.id">
+                    <button class="ch-item w-full text-left px-2.5 py-1.5 rounded text-sm truncate"
+                            :class="{ 'active': currentId === ch.id, 'read': ch.is_read && currentId !== ch.id }"
+                            :title="ch.title"
+                            @click="loadChapter(ch.id, 0); sidebarOpen = false">
+                        <span x-text="ch.title" class="text-neutral-300"></span>
+                    </button>
+                </template>
+            </div>
+        </aside>
+
+        <div class="flex-1 flex flex-col min-w-0">
+            <header class="flex items-center justify-between px-3 sm:px-5 py-2 border-b border-neutral-800 bg-neutral-900/50 flex-shrink-0">
+                <div class="flex items-center gap-2 min-w-0">
+                    <button @click="sidebarOpen = !sidebarOpen" class="md:hidden text-neutral-400 hover:text-neutral-200 p-1">
+                        <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+                    </button>
+                    <span class="text-sm text-neutral-400 truncate" x-text="chapters.find(c => c.id === currentId)?.title || ''"></span>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <button x-show="prevId" @click="prevId && loadChapter(prevId, 0)"
+                            class="text-neutral-400 hover:text-neutral-200 text-sm px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700">
+                        &larr; Prev
+                    </button>
+                    <button x-show="nextId" @click="nextId && loadChapter(nextId, 0)"
+                            class="text-neutral-400 hover:text-neutral-200 text-sm px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700">
+                        Next &rarr;
+                    </button>
+                    <template x-if="currentId">
+                        <a :href="chapters.find(c => c.id === currentId)?.url || '#'" target="_blank" rel="noopener"
+                           class="text-neutral-500 hover:text-neutral-300 p-1" title="Open at source">
+                            <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
+                        </a>
+                    </template>
+                </div>
+            </header>
+
+            <div id="reader-scroll" class="flex-1 overflow-y-auto">
+                <div class="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-10">
+                    <div x-show="loading" class="text-neutral-500 text-center py-20 animate-pulse">Loading...</div>
+                    <div x-show="!loading && content" class="reader-content prose prose-invert prose-base max-w-none" x-html="content"></div>
+                    <div x-show="!loading && !content && chapters.length > 0" class="text-neutral-500 text-center py-20">
+                        Select a chapter from the sidebar to start reading.
+                    </div>
+                </div>
+                <div x-show="!loading && (prevId || nextId)" class="max-w-3xl mx-auto px-4 sm:px-8 pb-10 flex items-center justify-between">
+                    <button x-show="prevId" @click="prevId && loadChapter(prevId, 0)"
+                            class="text-neutral-400 hover:text-neutral-200 text-sm px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700">
+                        &larr; Previous
+                    </button>
+                    <span x-show="!prevId"></span>
+                    <button x-show="nextId" @click="nextId && loadChapter(nextId, 0)"
+                            class="text-neutral-400 hover:text-neutral-200 text-sm px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700">
+                        Next &rarr;
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+{{end}}

@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/microcosm-cc/bluemonday"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
@@ -860,4 +862,140 @@ func (h *Handler) ArchiveAllAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	logging.Info("[handler] archive_all setting updated to %v", enabled)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"enabled": enabled})
+}
+
+func (h *Handler) ReaderPage(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	series, err := h.store.GetSeriesByID(id)
+	if err != nil || series == nil {
+		http.Error(w, "series not found", http.StatusNotFound)
+		return
+	}
+
+	renderTemplate(w, r, "reader", map[string]interface{}{
+		"Series": series,
+	})
+}
+
+func (h *Handler) ReaderChaptersAPI(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid id"})
+		return
+	}
+
+	chapters, err := h.store.GetReaderChapters(id)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	progressChapterID, scrollPos, err := h.store.GetReadingProgress(id)
+	if err != nil {
+		progressChapterID = 0
+		scrollPos = 0
+	}
+
+	type chapterJSON struct {
+		ID          int64     `json:"id"`
+		Title       string    `json:"title"`
+		URL         string    `json:"url"`
+		PublishedAt time.Time `json:"published_at"`
+		IsRead      bool      `json:"is_read"`
+		HasContent  bool      `json:"has_content"`
+	}
+
+	result := make([]chapterJSON, len(chapters))
+	for i, ch := range chapters {
+		result[i] = chapterJSON{
+			ID:          ch.ID,
+			Title:       ch.Title,
+			URL:         ch.URL,
+			PublishedAt: ch.PublishedAt,
+			IsRead:      ch.IsRead,
+			HasContent:  ch.ContentHTML != "",
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"chapters":           result,
+		"progress_chapter_id": progressChapterID,
+		"scroll_position":    scrollPos,
+	})
+}
+
+func (h *Handler) ReaderChapterContentAPI(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid id"})
+		return
+	}
+
+	content, seriesID, err := h.store.GetReaderChapterContent(id)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	prevID, nextID, _ := h.store.GetAdjacentChapterIDs(id)
+
+	if content == "" {
+		ch, err := h.store.GetChapterWithProvider(id)
+		if err != nil || ch == nil {
+			writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "not found"})
+			return
+		}
+		p, ok := h.pool.GetProvider(ch.ProviderName)
+		if !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "provider not found"})
+			return
+		}
+		fetched, fetchErr := p.FetchChapterContent(ch.URL)
+		if fetchErr != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "failed to fetch"})
+			return
+		}
+		content = contentPolicy.Sanitize(fetched)
+	} else {
+		content = contentPolicy.Sanitize(content)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"content":   content,
+		"series_id": seriesID,
+		"prev_id":   prevID,
+		"next_id":   nextID,
+	})
+}
+
+func (h *Handler) ReaderSaveProgressAPI(w http.ResponseWriter, r *http.Request) {
+	seriesID, err := strconv.ParseInt(r.FormValue("series_id"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid series_id"})
+		return
+	}
+	chapterID, err := strconv.ParseInt(r.FormValue("chapter_id"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid chapter_id"})
+		return
+	}
+	scrollPos := 0.0
+	if sp := r.FormValue("scroll_position"); sp != "" {
+		scrollPos, _ = strconv.ParseFloat(sp, 64)
+	}
+
+	if err := h.store.SaveReadingProgress(seriesID, chapterID, scrollPos); err != nil {
+		internalError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
 }

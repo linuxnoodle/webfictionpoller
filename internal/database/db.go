@@ -90,6 +90,14 @@ var migrations = []migration{
 	{"chapter_images_idx", "CREATE INDEX IF NOT EXISTS idx_chapter_images_chapter ON chapter_images(chapter_id)"},
 	{"settings_table", `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`},
 	{"content_compressed", "ALTER TABLE chapters ADD COLUMN content_compressed BOOLEAN DEFAULT 0"},
+	{"reading_progress", `CREATE TABLE IF NOT EXISTS reading_progress (
+		series_id INTEGER PRIMARY KEY,
+		chapter_id INTEGER NOT NULL,
+		scroll_position REAL DEFAULT 0,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE,
+		FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
+	)`},
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {

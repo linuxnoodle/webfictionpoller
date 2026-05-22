@@ -21,11 +21,11 @@
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
     <main class="max-w-xl mx-auto px-4 py-6"
-          x-data="{ checking: false, updating: false, data: null, logPoll: null, serverUp: true }"
+          x-data="{ checking: false, updating: false, data: null, logPoll: null, serverUp: true, updateLog: null, updateDone: false }"
           x-init="
             fetch('/api/version').then(r=>r.json()).then(d=>data=d).catch(()=>serverUp=false);
             setInterval(() => {
-                fetch('/api/version', {signal: AbortSignal.timeout(5000)}).then(r => { serverUp = r.ok; return r.json() }).then(d => { if(d && !updating) data = d }).catch(() => { serverUp = false });
+                fetch('/api/version', {signal: AbortSignal.timeout(5000)}).then(r => { serverUp = r.ok; return r.json() }).then(d => { if(d && !updating && !updateDone) data = d }).catch(() => { if(!updating) serverUp = false });
             }, 15000);
           ">
         <h1 class="text-2xl font-bold mb-6 text-neutral-100">Version & Updates</h1>
@@ -63,9 +63,9 @@
                     <div x-show="data.update_available && !data.updating && !updating" class="mt-4 bg-emerald-900/30 border border-emerald-800/50 rounded-lg p-4">
                         <p class="text-emerald-300 text-sm font-semibold mb-1">Update available!</p>
                         <p class="text-xs text-neutral-400 mb-3">A newer version is available on GitHub.</p>
-                        <button @click="updating=true; serverUp=true; fetch('/api/version/update', {method:'POST',headers:{'X-CSRF-Token':_csrf}}).then(r=>r.json()).then(d=>{if(d.error){updating=false;alert(d.error)}}); logPoll=setInterval(()=>{
+                        <button @click="updating=true; updateDone=false; updateLog=null; serverUp=true; fetch('/api/version/update', {method:'POST',headers:{'X-CSRF-Token':_csrf}}).then(r=>r.json()).then(d=>{if(d.error){updating=false;alert(d.error)}}); logPoll=setInterval(()=>{
                                 var logEl = document.getElementById('update-log');
-                                fetch('/api/version',{signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(d=>{serverUp=true;data=d;$nextTick(()=>{if(logEl)logEl.scrollTop=logEl.scrollHeight});if(!d.updating){clearInterval(logPoll);if(data.update_log&&data.update_log.indexOf('ERROR')>=0){updating=false}else{logPoll=null;var w=setInterval(()=>{fetch('/',{signal:AbortSignal.timeout(5000)}).then(r=>{if(r.ok){clearInterval(w);location.reload()}}).catch(()=>{})},3000)}}}).catch(()=>{serverUp=false})
+                                fetch('/api/version',{signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(d=>{serverUp=true;data=d;$nextTick(()=>{if(logEl)logEl.scrollTop=logEl.scrollHeight});if(!d.updating){clearInterval(logPoll);logPoll=null;updateLog=data.update_log;if(updateLog&&updateLog.indexOf('ERROR')>=0){updating=false}else{var sawDown=false;var w=setInterval(()=>{fetch('/api/version',{signal:AbortSignal.timeout(3000)}).then(()=>{if(sawDown){clearInterval(w);serverUp=true;fetch('/api/version').then(r=>r.json()).then(nd=>{data=nd;updating=false;updateDone=true})}}).catch(()=>{sawDown=true;serverUp=false})},2000)}}}).catch(()=>{serverUp=false})
                             }, 1000)"
                                 class="w-full bg-emerald-700 hover:bg-emerald-600 text-white py-2 rounded text-sm font-semibold">
                             Update Now
@@ -79,15 +79,16 @@
                         </details>
                     </div>
 
-                    <div x-show="updating || data.updating || (data.update_log && data.update_log.length > 0)" class="mt-4 bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                    <div x-show="updating || data.updating || updateLog" class="mt-4 bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                         <div class="flex items-center gap-2 mb-3">
-                            <svg x-show="data.updating || updating" class="spinner w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg>
-                            <p class="text-sm font-semibold" :class="(data.updating || updating) ? 'text-amber-300' : 'text-neutral-400'" x-text="(data.updating || updating) ? 'Updating...' : 'Update Log'"></p>
+                            <svg x-show="!updateDone" class="spinner w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg>
+                            <p class="text-sm font-semibold" :class="updateDone ? 'text-emerald-300' : 'text-amber-300'" x-text="updateDone ? 'Update complete!' : 'Updating...'"></p>
                         </div>
                         <div id="update-log" class="bg-neutral-950 rounded p-3 max-h-72 overflow-y-auto">
-                            <pre class="update-log text-neutral-300" x-text="data.update_log || 'Preparing...'"></pre>
+                            <pre class="update-log text-neutral-300" x-text="updateLog || data.update_log || 'Preparing...'"></pre>
                         </div>
-                        <p x-show="data.updating || updating" class="text-xs text-neutral-600 mt-2" x-text="serverUp ? 'Waiting for update to complete...' : 'Waiting for server to come back online...'"></p>
+                        <p x-show="!updateDone" class="text-xs text-neutral-600 mt-2" x-text="serverUp ? 'Waiting for update to complete...' : 'Container restarting, waiting for server...'"></p>
+                        <p x-show="updateDone" class="text-xs text-emerald-500 mt-2">Restart complete. Version info updated above.</p>
                     </div>
 
                     <div x-show="!data.update_available && !data.updating && data.latest_commit" class="mt-4 bg-neutral-800/50 rounded-lg p-3">
@@ -98,7 +99,7 @@
                         <p class="text-xs text-red-300" x-text="data.error"></p>
                     </div>
 
-                    <button x-show="!updating"
+                    <button x-show="!updating && !updateDone"
                             @click="checking=true; fetch('/api/version/check', {method:'POST',headers:{'X-CSRF-Token':_csrf}}).then(r=>r.json()).then(d=>{data=d;checking=false})"
                             :disabled="checking"
                             class="mt-4 w-full bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 text-neutral-200 py-2 rounded text-sm">
