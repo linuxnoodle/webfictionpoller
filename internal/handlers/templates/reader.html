@@ -27,12 +27,25 @@
         .ch-item.active { background: #292524; }
         .ch-item.read { opacity: 0.45; }
         .ch-item.read.active { opacity: 1; }
-        @media (max-width: 768px) {
-            .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 40; transform: translateX(-100%); transition: transform 0.2s; }
-            .sidebar.open { transform: translateX(0); }
-            .sidebar-overlay { display: none; position: fixed; inset: 0; z-index: 35; background: rgba(0,0,0,0.5); }
-            .sidebar-overlay.open { display: block; }
+        .reader-header {
+            position: sticky; top: 0; z-index: 20;
+            transition: opacity 0.3s, transform 0.3s;
         }
+        .reader-header.hidden-header {
+            opacity: 0; transform: translateY(-100%); pointer-events: none;
+        }
+        .reader-header:hover {
+            opacity: 1 !important; transform: translateY(0) !important; pointer-events: auto !important;
+        }
+        .sidebar {
+            position: fixed; left: 0; top: 0; bottom: 0; z-index: 30;
+            width: 14rem; transform: translateX(-100%); transition: transform 0.2s;
+        }
+        .sidebar.open { transform: translateX(0); }
+        .sidebar-overlay {
+            display: none; position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,0.5);
+        }
+        .sidebar-overlay.open { display: block; }
     </style>
 </head>
 <body class="min-h-screen bg-neutral-950"
@@ -47,6 +60,8 @@
           progressChapterId: 0,
           savedScroll: 0,
           loading: false,
+          headerVisible: true,
+          lastScrollTop: 0,
           init() {
               var self = this;
               var initId = parseInt('{{.InitChapterID}}') || 0;
@@ -71,6 +86,13 @@
               document.getElementById('reader-scroll').addEventListener('scroll', function() {
                   clearTimeout(saveTimer);
                   saveTimer = setTimeout(function() { self.saveProgress() }, 2000);
+                  var st = document.getElementById('reader-scroll').scrollTop;
+                  if (st > self.lastScrollTop && st > 60) {
+                      self.headerVisible = false;
+                  } else {
+                      self.headerVisible = true;
+                  }
+                  self.lastScrollTop = st;
               });
           },
           loadChapter(id, scrollTo) {
@@ -117,73 +139,70 @@
               });
           }
       }">
-    <div class="flex h-screen">
-        <div class="sidebar-overlay" x-show="sidebarOpen" @click="sidebarOpen = false"></div>
-        <aside class="sidebar w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col flex-shrink-0"
-               :class="sidebarOpen ? 'open' : ''"
-               :class="{ 'open': sidebarOpen }">
-            <div class="p-3 border-b border-neutral-800 flex-shrink-0">
-                <a href="/" class="text-xs text-neutral-500 hover:text-neutral-300 block mb-1">&larr; Dashboard</a>
-                <h2 class="text-sm font-semibold text-neutral-200 truncate">{{.Series.Title}}</h2>
-                <p class="text-xs text-neutral-500 truncate">{{.Series.Author}}</p>
+    <div class="sidebar-overlay" :class="sidebarOpen ? 'open' : ''" @click="sidebarOpen = false"></div>
+    <aside class="sidebar bg-neutral-900 border-r border-neutral-800 flex flex-col"
+           :class="sidebarOpen ? 'open' : ''">
+        <div class="p-3 border-b border-neutral-800 flex-shrink-0">
+            <a href="/" class="text-xs text-neutral-500 hover:text-neutral-300 block mb-1">&larr; Dashboard</a>
+            <h2 class="text-sm font-semibold text-neutral-200 truncate">{{.Series.Title}}</h2>
+        </div>
+        <div class="ch-list flex-1 overflow-y-auto p-1.5">
+            <template x-for="ch in chapters" :key="ch.id">
+                <button class="ch-item w-full text-left px-2.5 py-1.5 rounded text-sm truncate"
+                        :class="{ 'active': currentId === ch.id, 'read': ch.is_read && currentId !== ch.id }"
+                        :title="ch.title"
+                        @click="loadChapter(ch.id, 0); sidebarOpen = false">
+                    <span x-text="ch.title" class="text-neutral-300"></span>
+                </button>
+            </template>
+        </div>
+    </aside>
+
+    <div class="flex flex-col h-screen">
+        <header class="reader-header flex items-center justify-between px-3 sm:px-5 py-2 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur flex-shrink-0"
+                :class="headerVisible ? '' : 'hidden-header'">
+            <div class="flex items-center gap-2 min-w-0">
+                <button @click="sidebarOpen = !sidebarOpen" class="text-neutral-400 hover:text-neutral-200 p-1">
+                    <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+                </button>
+                <span class="text-sm text-neutral-400 truncate" x-text="chapters.find(c => c.id === currentId)?.title || ''"></span>
             </div>
-            <div class="ch-list flex-1 overflow-y-auto p-1.5">
-                <template x-for="ch in chapters" :key="ch.id">
-                    <button class="ch-item w-full text-left px-2.5 py-1.5 rounded text-sm truncate"
-                            :class="{ 'active': currentId === ch.id, 'read': ch.is_read && currentId !== ch.id }"
-                            :title="ch.title"
-                            @click="loadChapter(ch.id, 0); sidebarOpen = false">
-                        <span x-text="ch.title" class="text-neutral-300"></span>
-                    </button>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button x-show="prevId" @click="prevId && loadChapter(prevId, 0)"
+                        class="text-neutral-400 hover:text-neutral-200 text-sm px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700">
+                    &larr; Prev
+                </button>
+                <button x-show="nextId" @click="nextId && loadChapter(nextId, 0)"
+                        class="text-neutral-400 hover:text-neutral-200 text-sm px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700">
+                    Next &rarr;
+                </button>
+                <template x-if="currentId">
+                    <a :href="chapters.find(c => c.id === currentId)?.url || '#'" target="_blank" rel="noopener"
+                       class="text-neutral-500 hover:text-neutral-300 p-1" title="Open at source">
+                        <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
+                    </a>
                 </template>
             </div>
-        </aside>
+        </header>
 
-        <div class="flex-1 flex flex-col min-w-0">
-            <header class="flex items-center justify-between px-3 sm:px-5 py-2 border-b border-neutral-800 bg-neutral-900/50 flex-shrink-0">
-                <div class="flex items-center gap-2 min-w-0">
-                    <button @click="sidebarOpen = !sidebarOpen" class="md:hidden text-neutral-400 hover:text-neutral-200 p-1">
-                        <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
-                    </button>
-                    <span class="text-sm text-neutral-400 truncate" x-text="chapters.find(c => c.id === currentId)?.title || ''"></span>
+        <div id="reader-scroll" class="flex-1 overflow-y-auto">
+            <div class="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-10">
+                <div x-show="loading" class="text-neutral-500 text-center py-20 animate-pulse">Loading...</div>
+                <div x-show="!loading && content" class="reader-content prose prose-invert prose-base max-w-none" x-html="content"></div>
+                <div x-show="!loading && !content && chapters.length > 0" class="text-neutral-500 text-center py-20">
+                    Select a chapter from the sidebar to start reading.
                 </div>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                    <button x-show="prevId" @click="prevId && loadChapter(prevId, 0)"
-                            class="text-neutral-400 hover:text-neutral-200 text-sm px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700">
-                        &larr; Prev
-                    </button>
-                    <button x-show="nextId" @click="nextId && loadChapter(nextId, 0)"
-                            class="text-neutral-400 hover:text-neutral-200 text-sm px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700">
-                        Next &rarr;
-                    </button>
-                    <template x-if="currentId">
-                        <a :href="chapters.find(c => c.id === currentId)?.url || '#'" target="_blank" rel="noopener"
-                           class="text-neutral-500 hover:text-neutral-300 p-1" title="Open at source">
-                            <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
-                        </a>
-                    </template>
-                </div>
-            </header>
-
-            <div id="reader-scroll" class="flex-1 overflow-y-auto">
-                <div class="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-10">
-                    <div x-show="loading" class="text-neutral-500 text-center py-20 animate-pulse">Loading...</div>
-                    <div x-show="!loading && content" class="reader-content prose prose-invert prose-base max-w-none" x-html="content"></div>
-                    <div x-show="!loading && !content && chapters.length > 0" class="text-neutral-500 text-center py-20">
-                        Select a chapter from the sidebar to start reading.
-                    </div>
-                </div>
-                <div x-show="!loading && (prevId || nextId)" class="max-w-3xl mx-auto px-4 sm:px-8 pb-10 flex items-center justify-between">
-                    <button x-show="prevId" @click="prevId && loadChapter(prevId, 0)"
-                            class="text-neutral-400 hover:text-neutral-200 text-sm px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700">
-                        &larr; Previous
-                    </button>
-                    <span x-show="!prevId"></span>
-                    <button x-show="nextId" @click="nextId && loadChapter(nextId, 0)"
-                            class="text-neutral-400 hover:text-neutral-200 text-sm px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700">
-                        Next &rarr;
-                    </button>
-                </div>
+            </div>
+            <div x-show="!loading && (prevId || nextId)" class="max-w-3xl mx-auto px-4 sm:px-8 pb-10 flex items-center justify-between">
+                <button x-show="prevId" @click="prevId && loadChapter(prevId, 0)"
+                        class="text-neutral-400 hover:text-neutral-200 text-sm px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700">
+                    &larr; Previous
+                </button>
+                <span x-show="!prevId"></span>
+                <button x-show="nextId" @click="nextId && loadChapter(nextId, 0)"
+                        class="text-neutral-400 hover:text-neutral-200 text-sm px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700">
+                    Next &rarr;
+                </button>
             </div>
         </div>
     </div>
