@@ -14,7 +14,6 @@
         .preview-content p { margin-bottom: 0.75em; line-height: 1.7; }
         .preview-content img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.5em 0; }
         .preview-content { max-height: 75vh; overflow-y: auto; }
-        .preview-content.reader-full { max-height: none; }
         @keyframes series-highlight { 0% { box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.6); } 100% { box-shadow: none; } }
         .series-highlight { animation: series-highlight 1.5s ease-out; }
         .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 0.25rem; transition: all 0.15s; }
@@ -97,10 +96,13 @@
         window.dispatchEvent(ev);
     }
     function toggleFullReader(btn) {
-        var content = btn.closest('[id^="preview-"]').querySelector('.preview-content');
-        if (content) content.classList.toggle('reader-full');
-        var icon = btn.querySelector('svg');
-        if (icon) { var isFull = content.classList.contains('reader-full'); btn.title = isFull ? 'Collapse' : 'Expand'; }
+        var content = btn.closest('.preview-content') || btn.parentElement.parentElement.querySelector('.preview-content');
+        if (!content) return;
+        var isFull = content.style.maxHeight === 'none';
+        content.style.maxHeight = isFull ? '75vh' : 'none';
+        var wrapper = content.parentElement;
+        if (wrapper) wrapper.style.overflow = isFull ? '' : 'visible';
+        btn.title = isFull ? 'Expand' : 'Collapse';
     }
     function sortSeriesBy(key) {
         var url = new URL(location.href);

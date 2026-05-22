@@ -65,7 +65,7 @@
                         <p class="text-xs text-neutral-400 mb-3">A newer version is available on GitHub.</p>
                         <button @click="updating=true; serverUp=true; fetch('/api/version/update', {method:'POST',headers:{'X-CSRF-Token':_csrf}}).then(r=>r.json()).then(d=>{if(d.error){updating=false;alert(d.error)}}); logPoll=setInterval(()=>{
                                 var logEl = document.getElementById('update-log');
-                                fetch('/api/version').then(r=>r.json()).then(d=>{data=d; $nextTick(()=>{if(logEl)logEl.scrollTop=logEl.scrollHeight}); if(!d.updating){clearInterval(logPoll); if(data.update_log && data.update_log.indexOf('ERROR')>=0){updating=false}else{setTimeout(()=>location.reload(),2000)}}})
+                                fetch('/api/version',{signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(d=>{serverUp=true;data=d;$nextTick(()=>{if(logEl)logEl.scrollTop=logEl.scrollHeight});if(!d.updating){clearInterval(logPoll);if(data.update_log&&data.update_log.indexOf('ERROR')>=0){updating=false}else{logPoll=null;var w=setInterval(()=>{fetch('/',{signal:AbortSignal.timeout(5000)}).then(r=>{if(r.ok){clearInterval(w);location.reload()}}).catch(()=>{})},3000)}}}).catch(()=>{serverUp=false})
                             }, 1000)"
                                 class="w-full bg-emerald-700 hover:bg-emerald-600 text-white py-2 rounded text-sm font-semibold">
                             Update Now
@@ -87,7 +87,7 @@
                         <div id="update-log" class="bg-neutral-950 rounded p-3 max-h-72 overflow-y-auto">
                             <pre class="update-log text-neutral-300" x-text="data.update_log || 'Preparing...'"></pre>
                         </div>
-                        <p x-show="data.updating || updating" class="text-xs text-neutral-600 mt-2">Page will auto-reconnect when the new container starts.</p>
+                        <p x-show="data.updating || updating" class="text-xs text-neutral-600 mt-2" x-text="serverUp ? 'Waiting for update to complete...' : 'Waiting for server to come back online...'"></p>
                     </div>
 
                     <div x-show="!data.update_available && !data.updating && data.latest_commit" class="mt-4 bg-neutral-800/50 rounded-lg p-3">
