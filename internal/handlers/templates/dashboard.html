@@ -211,12 +211,10 @@
                                 class="icon-btn {{if .IsRead}}text-neutral-500 bg-neutral-800 hover:bg-neutral-700{{else}}text-emerald-300 bg-emerald-900/50 hover:bg-emerald-800{{end}}">
                             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
                         </button>
-                        {{if not .IsRead}}
-                        <button data-act-check onclick="markCheck(this, {{.ID}})" title="Mark read"
-                                class="icon-btn text-emerald-400 bg-emerald-900/40 hover:bg-emerald-800">
+                        <button data-act-check {{if .IsRead}}disabled{{else}}onclick="markCheck(this, {{.ID}})"{{end}} title="Mark read"
+                                class="icon-btn {{if .IsRead}}text-neutral-700 bg-neutral-800 cursor-default{{else}}text-emerald-400 bg-emerald-900/40 hover:bg-emerald-800{{end}}">
                             <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
                         </button>
-                        {{end}}
                     </div>
                 </div>
                 <div id="preview-{{.ID}}" class="hidden">
