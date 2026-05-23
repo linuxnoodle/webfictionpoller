@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 

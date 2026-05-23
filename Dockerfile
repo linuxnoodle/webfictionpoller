@@ -22,8 +22,7 @@ COPY --from=css /app/app.css ./internal/static/app.css
 
 ARG VERSION_COMMIT=dev
 RUN CGO_ENABLED=1 GOOS=linux go build \
-    -ldflags "-X github.com/linuxnoodle/webfictionpoller/internal/version.BuildCommit=${VERSION_COMMIT} \
-              -X github.com/linuxnoodle/webfictionpoller/internal/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -ldflags "-X github.com/linuxnoodle/webfictionpoller/internal/version.BuildCommit=${VERSION_COMMIT}" \
     -o /webfiction_poller ./cmd/main.go
 
 FROM alpine:3.19

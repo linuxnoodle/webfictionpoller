@@ -20,6 +20,28 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
+func decompressGzip(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return string(data)
+	}
+	defer reader.Close()
+	decompressed, err := io.ReadAll(reader)
+	if err != nil {
+		return string(data)
+	}
+	return string(decompressed)
+}
+
+func scanSeries(rows *sql.Rows) (models.Series, error) {
+	var s models.Series
+	err := rows.Scan(&s.ID, &s.Title, &s.Author, &s.SourceURL, &s.ProviderName, &s.Rating, &s.Status, &s.Summary, &s.ImageURL, &s.Archive, &s.CreatedAt)
+	return s, err
+}
+
 func (s *Store) GetSeriesView() ([]models.SeriesWithChapters, error) {
 	rows, err := s.db.Query(`
 		SELECT s.id, s.title, s.author, s.source_url, s.provider_name, s.rating, s.status, s.summary, s.image_url, s.archive, s.created_at
@@ -571,17 +593,7 @@ func (s *Store) GetChaptersForArchive(seriesID int64) ([]models.Chapter, error) 
 			return nil, err
 		}
 		if compressed && len(contentBytes) > 0 {
-			reader, err := gzip.NewReader(bytes.NewReader(contentBytes))
-			if err == nil {
-				decompressed, err := io.ReadAll(reader)
-				reader.Close()
-				if err == nil {
-					ch.ContentHTML = string(decompressed)
-				}
-			}
-			if ch.ContentHTML == "" {
-				ch.ContentHTML = string(contentBytes)
-			}
+			ch.ContentHTML = decompressGzip(contentBytes)
 		} else {
 			ch.ContentHTML = string(contentBytes)
 		}
@@ -606,14 +618,7 @@ func (s *Store) GetChapterArchivedContent(id int64) (string, error) {
 		return "", nil
 	}
 	if compressed {
-		reader, err := gzip.NewReader(bytes.NewReader(contentBytes))
-		if err == nil {
-			decompressed, err := io.ReadAll(reader)
-			reader.Close()
-			if err == nil {
-				return string(decompressed), nil
-			}
-		}
+		return decompressGzip(contentBytes), nil
 	}
 	return string(contentBytes), nil
 }
@@ -764,14 +769,7 @@ func (s *Store) GetReaderChapterContent(id int64) (string, int64, error) {
 		return "", seriesID, nil
 	}
 	if compressed {
-		reader, err := gzip.NewReader(bytes.NewReader(contentBytes))
-		if err == nil {
-			decompressed, err := io.ReadAll(reader)
-			reader.Close()
-			if err == nil {
-				return string(decompressed), seriesID, nil
-			}
-		}
+		return decompressGzip(contentBytes), seriesID, nil
 	}
 	return string(contentBytes), seriesID, nil
 }

@@ -4,13 +4,11 @@ import "net/http"
 
 type ComicProvider interface {
 	Name() string
-	MatchURL(url string) bool
 
 	SearchManga(query string, page int) (*MangasPage, error)
 	MangaDetails(sourceID string) (*ComicSeries, error)
 	ChapterList(sourceID string) ([]ComicChapter, error)
 	PageList(chapterSourceID string) ([]ComicPage, error)
-	CoverURL(sourceID string) (string, error)
 }
 
 func doGet(client *http.Client, url string) (*http.Response, error) {

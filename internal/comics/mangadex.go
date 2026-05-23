@@ -20,14 +20,6 @@ func NewMangaDexProvider() *MangaDexProvider {
 
 func (m *MangaDexProvider) Name() string { return "mangadex" }
 
-func (m *MangaDexProvider) MatchURL(rawURL string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return false
-	}
-	return u.Host == "mangadex.org" || u.Host == "www.mangadex.org" || u.Host == "api.mangadex.org"
-}
-
 func (m *MangaDexProvider) SearchManga(query string, page int) (*MangasPage, error) {
 	limit := 20
 	offset := (page - 1) * limit
@@ -292,39 +284,6 @@ func (m *MangaDexProvider) PageList(chapterSourceID string) ([]ComicPage, error)
 		}
 	}
 	return pages, nil
-}
-
-func (m *MangaDexProvider) CoverURL(sourceID string) (string, error) {
-	u := fmt.Sprintf("https://api.mangadex.org/manga/%s?includes[]=cover_art", sourceID)
-
-	resp, err := doGet(m.client, u)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data struct {
-			ID            string `json:"id"`
-			Relationships []struct {
-				Type       string `json:"type"`
-				Attributes *struct {
-					FileName string `json:"fileName"`
-				} `json:"attributes,omitempty"`
-			} `json:"relationships"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
-	}
-
-	for _, rel := range result.Data.Relationships {
-		if rel.Type == "cover_art" && rel.Attributes != nil {
-			return fmt.Sprintf("https://uploads.mangadex.org/covers/%s/%s.512.jpg", result.Data.ID, rel.Attributes.FileName), nil
-		}
-	}
-	return "", nil
 }
 
 func firstVal(m map[string]string) string {

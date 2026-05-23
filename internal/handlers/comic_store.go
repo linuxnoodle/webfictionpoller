@@ -258,8 +258,5 @@ func (s *Store) RefreshComicChapters(seriesID int64, provider comics.ComicProvid
 		return 0, err
 	}
 
-	var total int
-	s.db.QueryRow("SELECT COUNT(*) FROM comic_chapters WHERE series_id = ?", seriesID).Scan(&total)
-
 	return n, nil
 }

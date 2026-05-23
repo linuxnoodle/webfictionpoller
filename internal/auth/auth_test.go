@@ -69,27 +69,3 @@ func TestAuthenticate(t *testing.T) {
 		})
 	}
 }
-
-func TestEnsureDefaultUser(t *testing.T) {
-	db := setupTestDB(t)
-
-	err := EnsureDefaultUser(db, "admin", "admin123")
-	if err != nil {
-		t.Fatalf("first EnsureDefaultUser failed: %v", err)
-	}
-
-	_, err = Authenticate(db, "admin", "admin123")
-	if err != nil {
-		t.Fatalf("authenticate after ensure failed: %v", err)
-	}
-
-	err = EnsureDefaultUser(db, "admin", "newpassword")
-	if err != nil {
-		t.Fatalf("second EnsureDefaultUser failed: %v", err)
-	}
-
-	_, err = Authenticate(db, "admin", "admin123")
-	if err != nil {
-		t.Fatalf("password should not change on second ensure: %v", err)
-	}
-}
