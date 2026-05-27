@@ -486,7 +486,10 @@ func (h *Handler) SaveProviderConfig(w http.ResponseWriter, r *http.Request) {
 		} else if err := p.Login(username, plainPass); err != nil {
 			logging.Error("[handler] login failed for %s: %v", name, err)
 		}
-	} else if p.RequiresAuth() && cookieData != "" {
+	}
+	
+	// Always apply cookies if they exist, either as a primary auth mechanism or a fallback for a failed/blocked login
+	if p.RequiresAuth() && cookieData != "" {
 		_ = p.SetCookies(cookieData)
 	}
 

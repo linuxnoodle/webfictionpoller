@@ -143,6 +143,19 @@ func (p *XenForoProvider) Login(username, password string) error {
 		return fmt.Errorf("login failed: invalid credentials")
 	}
 
+	u, _ := url.Parse(p.baseURL)
+	hasUserCookie := false
+	for _, cookie := range p.client.Jar.Cookies(u) {
+		if cookie.Name == "xf_user" {
+			hasUserCookie = true
+			break
+		}
+	}
+
+	if !hasUserCookie {
+		return fmt.Errorf("login failed silently: xf_user cookie not set (blocked by CAPTCHA or Cloudflare?)")
+	}
+
 	logging.Info("[%s] successfully logged in as %s", p.name, username)
 	return nil
 }
@@ -601,6 +614,9 @@ func (p *XenForoProvider) pollUpdatesHTML(series models.Series) ([]models.Chapte
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusForbidden && p.RequiresAuth() {
+			return nil, fmt.Errorf("authentication required, cookies may have expired")
+		}
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 
