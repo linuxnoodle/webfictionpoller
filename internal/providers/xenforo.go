@@ -502,7 +502,19 @@ func (p *XenForoProvider) normalizeThreadURL(rawURL string) string {
 	if u.Path == "" || u.Path == "/" {
 		return rawURL
 	}
-	u.RawQuery = ""
+
+	q := u.Query()
+	newQ := url.Values{}
+	if uid := q.Get("uid"); uid != "" {
+		newQ.Set("uid", uid)
+	}
+	if auth := q.Get("auth"); auth != "" {
+		newQ.Set("auth", auth)
+	}
+	if rss := q.Get("rss"); rss != "" {
+		newQ.Set("rss", rss)
+	}
+	u.RawQuery = newQ.Encode()
 	u.Fragment = ""
 	return u.String()
 }
@@ -522,8 +534,13 @@ func (p *XenForoProvider) extractTitleFromURL(rawURL string) string {
 }
 
 func (p *XenForoProvider) buildThreadmarksRSSURL(threadURL string) string {
-	clean := strings.TrimSuffix(threadURL, "/")
-	return clean + "/threadmarks.rss"
+	u, err := url.Parse(threadURL)
+	if err != nil {
+		clean := strings.TrimSuffix(threadURL, "/")
+		return clean + "/threadmarks.rss"
+	}
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/threadmarks.rss"
+	return u.String()
 }
 
 func (p *XenForoProvider) PollUpdates(series models.Series) ([]models.Chapter, error) {

@@ -60,6 +60,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	if sortBy != "received" {
 		sortBy = "published"
 	}
+	unreadOnly := r.URL.Query().Get("unread") == "true"
 
 	seriesSort := r.URL.Query().Get("seriesSort")
 
@@ -92,7 +93,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	timeChapters, err := h.store.GetTimeView(0, 50, sortBy)
+	timeChapters, err := h.store.GetTimeView(0, 50, sortBy, unreadOnly)
 	if err != nil {
 		internalError(w, r, err)
 		return
@@ -115,6 +116,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		"TimePage":    0,
 		"HasMoreTime": len(timeChapters) == 50,
 		"SortBy":      sortBy,
+		"UnreadOnly":  unreadOnly,
 		"SeriesSort":  seriesSort,
 	})
 }
@@ -128,8 +130,9 @@ func (h *Handler) TimePagePartial(w http.ResponseWriter, r *http.Request) {
 	if sortBy != "received" {
 		sortBy = "published"
 	}
+	unreadOnly := r.URL.Query().Get("unread") == "true"
 
-	chapters, err := h.store.GetTimeView(page, 50, sortBy)
+	chapters, err := h.store.GetTimeView(page, 50, sortBy, unreadOnly)
 	if err != nil {
 		internalError(w, r, err)
 		return
@@ -140,6 +143,7 @@ func (h *Handler) TimePagePartial(w http.ResponseWriter, r *http.Request) {
 		"TimePage":    page,
 		"HasMoreTime": len(chapters) == 50,
 		"SortBy":      sortBy,
+		"UnreadOnly":  unreadOnly,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

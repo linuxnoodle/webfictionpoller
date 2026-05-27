@@ -50,7 +50,7 @@
 </div>
 {{end}}
 {{if .HasMoreTime}}
-<div hx-get="/api/chapters/time?page={{add .TimePage 1}}&sort={{.SortBy}}" hx-trigger="intersect once" hx-swap="outerHTML"
+<div hx-get="/api/chapters/time?page={{add .TimePage 1}}&sort={{.SortBy}}&unread={{.UnreadOnly}}" hx-trigger="intersect once" hx-swap="outerHTML"
      class="py-4 text-center text-neutral-600 text-sm">
     Loading more...
 </div>

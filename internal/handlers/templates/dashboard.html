@@ -17,7 +17,7 @@
         .icon-btn svg { width: 0.875rem; height: 0.875rem; }
     </style>
     <script>
-    (function(){if(!location.search||!new URLSearchParams(location.search).has('sort')){var _ds=localStorage.getItem('dashSort');if(_ds&&_ds!=='published')location.replace('/?sort='+_ds)}})();
+    (function(){if(!location.search||(!new URLSearchParams(location.search).has('sort') && !new URLSearchParams(location.search).has('unread'))){var _ds=localStorage.getItem('dashSort');var _du=localStorage.getItem('dashUnread');if((_ds&&_ds!=='published')||(_du&&_du!=='false'))location.replace('/?sort='+(_ds||'published')+'&unread='+(_du||'false'))}})();
     </script>
     <script>
     function _markReadRow(row, id, url) {
@@ -69,9 +69,9 @@
 <body class="min-h-screen bg-neutral-950">
     {{template "nav" .}}
     <main class="max-w-6xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
-    <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published' }"
+    <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published', unreadOnly: localStorage.getItem('dashUnread') === 'true' }"
          @go-to-series.window="view='series';$nextTick(()=>{var c=document.querySelector('[data-series-id=\''+$event.detail.id+'\']');if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('series-highlight');setTimeout(function(){c.classList.remove('series-highlight')},1500)}})"
-         x-init="$watch('view',function(v){localStorage.setItem('dashView',v)});$watch('sortBy',function(v){localStorage.setItem('dashSort',v)});var _sRows=null,_sTimer=null;$watch('search',function(q){if(!_sRows)_sRows=document.querySelectorAll('[data-st]');clearTimeout(_sTimer);_sTimer=setTimeout(function(){q=q.toLowerCase();for(var i=0;i<_sRows.length;i++){_sRows[i].style.display=!q||_sRows[i].dataset.st.toLowerCase().indexOf(q)>=0?'':'none'}},150)})">
+         x-init="$watch('view',function(v){localStorage.setItem('dashView',v)});$watch('sortBy',function(v){localStorage.setItem('dashSort',v)});$watch('unreadOnly',function(v){localStorage.setItem('dashUnread',v)});var _sRows=null,_sTimer=null;$watch('search',function(q){if(!_sRows)_sRows=document.querySelectorAll('[data-st]');clearTimeout(_sTimer);_sTimer=setTimeout(function(){q=q.toLowerCase();for(var i=0;i<_sRows.length;i++){_sRows[i].style.display=!q||_sRows[i].dataset.st.toLowerCase().indexOf(q)>=0?'':'none'}},150)})">
         <div class="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between mb-4 sm:mb-6">
             <div class="flex flex-wrap items-center gap-2 sm:gap-4">
                 <h1 class="text-xl sm:text-2xl font-bold text-neutral-100">Dashboard</h1>
@@ -83,13 +83,19 @@
                             :class="view === 'series' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
                             class="px-3 py-1.5 text-sm">Series</button>
                 </div>
-                <div x-show="view === 'time'" class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
-                    <button @click="sortBy = 'published'"
-                            :class="sortBy === 'published' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
-                            class="px-2 py-1.5 text-xs">published</button>
-                    <button @click="sortBy = 'received'"
-                            :class="sortBy === 'received' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
-                            class="px-2 py-1.5 text-xs">received</button>
+                <div x-show="view === 'time'" class="flex items-center gap-2 sm:gap-4">
+                    <div class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
+                        <button @click="sortBy = 'published'"
+                                :class="sortBy === 'published' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                                class="px-2 py-1.5 text-xs">published</button>
+                        <button @click="sortBy = 'received'"
+                                :class="sortBy === 'received' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                                class="px-2 py-1.5 text-xs">received</button>
+                    </div>
+                    <label class="flex items-center gap-1.5 text-xs text-neutral-400 cursor-pointer hover:text-neutral-200">
+                        <input type="checkbox" x-model="unreadOnly" class="rounded border-neutral-700 bg-neutral-800 text-emerald-500 focus:ring-emerald-500">
+                        Unread
+                    </label>
                 </div>
                 <div x-show="view === 'series'" class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
                     <button onclick="sortSeriesBy('title')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "title"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">title</button>
@@ -123,7 +129,7 @@
 
         <!-- TIME VIEW -->
         <div x-show="view === 'time'"
-             x-init="$watch('sortBy',function(){location.href='/?sort='+sortBy})">
+             x-init="$watch('sortBy',function(){location.href='/?sort='+sortBy+'&unread='+unreadOnly}); $watch('unreadOnly',function(){location.href='/?sort='+sortBy+'&unread='+unreadOnly})">
             {{range .TimeGroups}}
             <div class="mt-4"
                  data-st="{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}">
@@ -176,7 +182,7 @@
             {{end}}
 
             {{if .HasMoreTime}}
-            <div hx-get="/api/chapters/time?page={{add .TimePage 1}}&sort={{.SortBy}}" hx-trigger="intersect once" hx-swap="outerHTML"
+            <div hx-get="/api/chapters/time?page={{add .TimePage 1}}&sort={{.SortBy}}&unread={{.UnreadOnly}}" hx-trigger="intersect once" hx-swap="outerHTML"
                  class="py-4 text-center text-neutral-600 text-sm">
                 Loading more...
             </div>
