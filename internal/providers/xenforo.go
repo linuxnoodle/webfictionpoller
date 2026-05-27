@@ -558,6 +558,10 @@ func (p *XenForoProvider) PollUpdates(series models.Series) ([]models.Chapter, e
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		if p.RequiresAuth() {
+			logging.Info("[%s] RSS feed status %d for %s, falling back to HTML", p.name, resp.StatusCode, rssURL)
+			return p.pollUpdatesHTML(series)
+		}
 		return nil, fmt.Errorf("rss feed status %d for %s", resp.StatusCode, rssURL)
 	}
 
