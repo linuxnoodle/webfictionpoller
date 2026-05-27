@@ -614,6 +614,47 @@ func (h *Handler) SearchSeries(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(results)
 }
 
+func (h *Handler) SyncSeriesNow(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/series/")
+	idStr = strings.TrimSuffix(idStr, "/sync")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "invalid id"})
+		return
+	}
+
+	series, err := h.store.GetSeriesByID(id)
+	if err != nil || series == nil {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"success": false, "error": "series not found"})
+		return
+	}
+
+	p, ok := h.pool.GetProvider(series.ProviderName)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "provider not found"})
+		return
+	}
+
+	chapters, err := p.PollUpdates(*series)
+	if err != nil {
+		logging.Error("[sync] manual sync for %s failed: %v", series.Title, err)
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+		return
+	}
+
+	inserted := 0
+	if len(chapters) > 0 {
+		inserted, err = h.store.InsertChapters(series.ID, chapters)
+		if err != nil {
+			logging.Error("[sync] inserting chapters for %s failed: %v", series.Title, err)
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": "failed to save chapters"})
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "inserted": inserted})
+}
+
 func (h *Handler) ImportOPMLPage(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, "import_opml", nil)
 }

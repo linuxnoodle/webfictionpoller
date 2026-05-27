@@ -162,6 +162,7 @@ func main() {
 		r.Post("/api/read-all", h.MarkAllChaptersRead)
 		r.Get("/api/unread-count", h.UnreadCountAPI)
 		r.Post("/api/series/{id}/delete", h.DeleteSeries)
+		r.Post("/api/series/{id}/sync", h.SyncSeriesNow)
 		r.Post("/api/poll", h.PollNow)
 		r.Get("/api/poll/progress", h.PollProgress)
 		r.Post("/api/providers/check-auth", h.CheckAuthProvider)
