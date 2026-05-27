@@ -132,28 +132,6 @@
               {id:'warm', name:'Warm'},
               {id:'sepia', name:'Sepia'}
           ],
-          syncing: false,
-          syncSeries() {
-              var self = this;
-              if (self.syncing) return;
-              self.syncing = true;
-              fetch('/api/series/{{.Series.ID}}/sync', {method: 'POST', headers: {'X-CSRF-Token': _csrf}})
-                .then(function(r) { return r.json() })
-                .then(function(d) {
-                    self.syncing = false;
-                    if (d.success) {
-                        fetch('/api/reader/{{.Series.ID}}/chapters').then(function(r){return r.json()}).then(function(d){
-                            self.chapters = d.chapters || [];
-                        });
-                    } else {
-                        alert('Sync failed: ' + d.error);
-                    }
-                })
-                .catch(function(e) {
-                    self.syncing = false;
-                    alert('Sync failed: ' + e);
-                });
-          },
           init() {
               var self = this;
               var saved = localStorage.getItem('readerSettings');
@@ -291,12 +269,7 @@
            :class="sidebarOpen ? 'open' : ''">
         <div class="p-3 border-b border-neutral-800 flex-shrink-0">
             <h2 class="text-sm font-semibold text-neutral-200 truncate">{{.Series.Title}}</h2>
-            <div class="flex items-center justify-between mt-0.5">
-                <p class="text-xs text-neutral-500" x-text="chapters.length + ' chapters'"></p>
-                <button @click="syncSeries()" :class="syncing ? 'animate-spin text-emerald-500' : 'text-neutral-500 hover:text-neutral-200'" title="Sync Series">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                </button>
-            </div>
+            <p class="text-xs text-neutral-500 mt-0.5" x-text="chapters.length + ' chapters'"></p>
         </div>
         <div class="ch-list flex-1 overflow-y-auto p-1.5">
             <template x-for="ch in chapters" :key="ch.id">

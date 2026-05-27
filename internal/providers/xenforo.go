@@ -563,6 +563,10 @@ func (p *XenForoProvider) PollUpdates(series models.Series) ([]models.Chapter, e
 
 	feed, err := fp.Parse(resp.Body)
 	if err != nil {
+		if p.RequiresAuth() {
+			logging.Info("[%s] RSS parsing failed (%v), falling back to HTML", p.name, err)
+			return p.pollUpdatesHTML(series)
+		}
 		return nil, fmt.Errorf("parsing rss: %w", err)
 	}
 
@@ -579,5 +583,67 @@ func (p *XenForoProvider) PollUpdates(series models.Series) ([]models.Chapter, e
 			PublishedAt: pubAt,
 		})
 	}
+	return chapters, nil
+}
+
+func (p *XenForoProvider) pollUpdatesHTML(series models.Series) ([]models.Chapter, error) {
+	threadmarksURL := p.normalizeThreadURL(series.SourceURL)
+	threadmarksURL = strings.TrimSuffix(threadmarksURL, "/") + "/threadmarks"
+
+	resp, err := doGet(p.client, threadmarksURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if doc.Find("input[name='login']").Length() > 0 || doc.Find("a[href*='/login/']").Length() > 0 {
+		if strings.Contains(doc.Find("title").Text(), "Log in") {
+			return nil, fmt.Errorf("authentication required, cookies may have expired")
+		}
+	}
+
+	var chapters []models.Chapter
+	doc.Find(".structItem--threadmark").Each(func(i int, s *goquery.Selection) {
+		a := s.Find(".structItem-title a").First()
+		title := strings.TrimSpace(a.Text())
+		link, _ := a.Attr("href")
+		if title == "" || link == "" {
+			return
+		}
+		if !strings.HasPrefix(link, "http") {
+			link = p.baseURL + "/" + strings.TrimPrefix(link, "/")
+		}
+
+		timeStr, _ := s.Find("time").Attr("datetime")
+		pubAt := time.Now()
+		if t, err := time.Parse(time.RFC3339, timeStr); err == nil {
+			pubAt = t
+		} else if timeData, _ := s.Find("time").Attr("data-time"); timeData != "" {
+			if unix, err := strconv.ParseInt(timeData, 10, 64); err == nil {
+				pubAt = time.Unix(unix, 0)
+			}
+		}
+
+		chapters = append(chapters, models.Chapter{
+			SeriesID:    series.ID,
+			Title:       title,
+			URL:         link,
+			PublishedAt: pubAt,
+		})
+	})
+
+	if len(chapters) == 0 {
+		return nil, fmt.Errorf("no chapters found in HTML fallback")
+	}
+
 	return chapters, nil
 }

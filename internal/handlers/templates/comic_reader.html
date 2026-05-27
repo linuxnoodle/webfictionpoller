@@ -7,59 +7,36 @@
     <title>Comic Reader - WebFiction Poller</title>
     <meta name="csrf-token" content="{{.CSRFToken}}">
     <script>var _csrf="{{.CSRFToken}}"</script>
+    <link rel="stylesheet" href="/static/app.css">
     <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{background:#111;color:#e5e5e5;font-family:system-ui,-apple-system,sans-serif;overflow-x:hidden}
-        .top-bar{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(17,17,17,0.95);
-                 backdrop-filter:blur(8px);border-bottom:1px solid #333;padding:0.5rem 1rem;
-                 display:flex;align-items:center;gap:0.75rem;transform:translateY(-100%);
-                 transition:transform 0.25s ease}
-        .top-bar.visible{transform:translateY(0)}
-        .top-bar a{color:#a3a3a3;text-decoration:none;font-size:0.875rem}
-        .top-bar a:hover{color:#e5e5e5}
-        .top-bar .chapter-title{flex:1;font-size:0.8rem;color:#d4d4d4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .top-bar .page-info{font-size:0.75rem;color:#737373;white-space:nowrap}
-        .pages-container{max-width:100%;margin:0 auto;padding-top:0}
-        .pages-container img{display:block;width:100%;max-width:800px;margin:0 auto}
-        .loading-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-                        background:#111;z-index:200}
-        .loading-screen .spinner{width:32px;height:32px;border:3px solid #333;border-top-color:#60a5fa;
-                                 border-radius:50%;animation:spin 0.8s linear infinite}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        .nav-btn{position:fixed;bottom:1rem;z-index:90;background:rgba(38,38,38,0.9);border:1px solid #404040;
-                 color:#d4d4d4;padding:0.5rem 1rem;border-radius:0.375rem;font-size:0.8rem;cursor:pointer;
-                 backdrop-filter:blur(4px)}
-        .nav-btn:hover{background:#333;color:#fff}
-        .nav-btn.prev{left:1rem}
-        .nav-btn.next{right:1rem}
-        .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(17,17,17,0.95);
-                    backdrop-filter:blur(8px);border-top:1px solid #333;padding:0.5rem 1rem;
-                    display:flex;align-items:center;gap:0.75rem;transform:translateY(100%);
-                    transition:transform 0.25s ease}
-        .bottom-bar.visible{transform:translateY(0)}
-        .bottom-bar .progress-bar{flex:1;height:4px;background:#333;border-radius:2px;overflow:hidden;cursor:pointer}
-        .bottom-bar .progress-fill{height:100%;background:#60a5fa;transition:width 0.2s}
+        .bars-visible { transform: translateY(0) !important; }
+        .bar-top { transform: translateY(-100%); transition: transform 0.25s ease; }
+        .bar-bottom { transform: translateY(100%); transition: transform 0.25s ease; }
     </style>
 </head>
-<body>
-    <div class="loading-screen" id="loading">
-        <div class="spinner"></div>
+<body class="bg-[#0a0a0a] text-neutral-200 min-h-screen font-sans overflow-x-hidden">
+    <div class="fixed inset-0 flex items-center justify-center bg-[#0a0a0a] z-[200]" id="loading">
+        <div class="w-8 h-8 border-4 border-neutral-800 border-t-blue-500 rounded-full animate-spin"></div>
     </div>
 
-    <div class="top-bar" id="top-bar">
-        <a href="/comics">&larr; Back</a>
-        <span class="chapter-title" id="chapter-title">Loading...</span>
-        <span class="page-info" id="page-info">0/0</span>
+    <div class="bar-top fixed top-0 left-0 right-0 z-[100] bg-neutral-950/95 backdrop-blur border-b border-neutral-800 px-4 py-3 flex items-center gap-4 shadow-sm" id="top-bar">
+        <a href="/comics" class="text-neutral-400 hover:text-neutral-200 text-sm font-medium transition-colors flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            Back
+        </a>
+        <span class="flex-1 text-sm font-semibold text-neutral-200 truncate" id="chapter-title">Loading...</span>
+        <span class="text-xs font-medium text-neutral-500 tabular-nums" id="page-info">0/0</span>
     </div>
 
-    <div class="pages-container" id="pages"></div>
+    <div class="max-w-4xl mx-auto w-full" id="pages"></div>
 
-    <div class="bottom-bar" id="bottom-bar">
-        <span style="font-size:0.75rem;color:#737373" id="bottom-info">0/0</span>
-        <div class="progress-bar" id="progress-bar">
-            <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    <div class="bar-bottom fixed bottom-0 left-0 right-0 z-[100] bg-neutral-950/95 backdrop-blur border-t border-neutral-800 px-4 py-3 flex items-center gap-4 shadow-sm" id="bottom-bar">
+        <span class="text-xs font-medium text-neutral-500 tabular-nums w-12" id="bottom-info">0/0</span>
+        <div class="flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden cursor-pointer group" id="progress-bar">
+            <div class="h-full bg-blue-500 transition-all duration-200 group-hover:bg-blue-400" id="progress-fill" style="width:0%"></div>
         </div>
     </div>
+
 
     <script>
     (function() {
@@ -74,15 +51,15 @@
         var barTimeout = null;
 
         function showBars() {
-            document.getElementById('top-bar').classList.add('visible');
-            document.getElementById('bottom-bar').classList.add('visible');
+            document.getElementById('top-bar').classList.add('bars-visible');
+            document.getElementById('bottom-bar').classList.add('bars-visible');
             clearTimeout(barTimeout);
             barTimeout = setTimeout(hideBars, 3000);
         }
 
         function hideBars() {
-            document.getElementById('top-bar').classList.remove('visible');
-            document.getElementById('bottom-bar').classList.remove('visible');
+            document.getElementById('top-bar').classList.remove('bars-visible');
+            document.getElementById('bottom-bar').classList.remove('bars-visible');
         }
 
         function updateProgress() {
@@ -162,8 +139,8 @@
                 img.loading = (i < 3) ? 'eager' : 'lazy';
                 img.dataset.index = i;
                 img.alt = 'Page ' + (i + 1);
+                img.className = 'w-full block mx-auto transition-opacity duration-300';
                 img.style.opacity = '0';
-                img.style.transition = 'opacity 0.3s';
                 img.onload = function() {
                     img.style.opacity = '1';
                     loaded++;
@@ -186,15 +163,15 @@
 
             if (pages.length > 0) {
                 var prevBtn = document.createElement('button');
-                prevBtn.className = 'nav-btn prev';
-                prevBtn.innerHTML = '&larr; Prev';
+                prevBtn.className = 'fixed bottom-4 left-4 z-[90] bg-neutral-900/90 backdrop-blur border border-neutral-700 text-neutral-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-neutral-800 hover:text-white transition-colors shadow-lg';
+                prevBtn.innerHTML = '&larr; Prev Chapter';
                 prevBtn.style.display = prevChapter ? '' : 'none';
                 prevBtn.onclick = function() { chapterId = String(prevChapter); loadChapter(); window.scrollTo(0, 0); };
                 container.appendChild(prevBtn);
 
                 var nextBtn = document.createElement('button');
-                nextBtn.className = 'nav-btn next';
-                nextBtn.innerHTML = 'Next &rarr;';
+                nextBtn.className = 'fixed bottom-4 right-4 z-[90] bg-neutral-900/90 backdrop-blur border border-neutral-700 text-neutral-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-neutral-800 hover:text-white transition-colors shadow-lg';
+                nextBtn.innerHTML = 'Next Chapter &rarr;';
                 nextBtn.style.display = nextChapter ? '' : 'none';
                 nextBtn.onclick = function() { chapterId = String(nextChapter); loadChapter(); window.scrollTo(0, 0); };
                 container.appendChild(nextBtn);
