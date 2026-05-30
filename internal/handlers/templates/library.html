@@ -1,6 +1,6 @@
 {{define "library.html"}}
 <!DOCTYPE html>
-<html lang="en" class="bg-neutral-950 text-neutral-200">
+<html lang="en" class="bg-background text-white">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +16,7 @@
         [x-cloak] { display: none !important; }
     </style>
 </head>
-<body class="min-h-screen bg-neutral-950">
+<body class="min-h-screen bg-background">
     {{template "nav" .}}
     <main class="max-w-4xl mx-auto px-4 py-6"
           x-data="{
@@ -69,81 +69,81 @@
 
         <div class="space-y-6">
 
-            <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-5">
-                <h2 class="text-lg font-semibold text-neutral-200 mb-3">OPDS Catalog</h2>
-                <p class="text-sm text-neutral-400 mb-4">
+            <div class="bg-surface rounded-lg border border-white/10 p-5">
+                <h2 class="text-lg font-semibold text-white mb-3">OPDS Catalog</h2>
+                <p class="text-sm text-muted/80 mb-4">
                     Connect your ereader or reading app via the OPDS feed. Use HTTP Basic Auth (your login credentials) to access it.
                 </p>
-                <div class="bg-neutral-800 rounded p-3 flex items-center justify-between gap-3">
-                    <code class="text-sm text-emerald-400 break-all">{{.OPDSURL}}</code>
+                <div class="glass-panel rounded p-3 flex items-center justify-between gap-3">
+                    <code class="text-sm text-primary break-all">{{.OPDSURL}}</code>
                     <button onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy', 1500)"
-                            class="bg-neutral-700 hover:bg-neutral-600 text-neutral-300 px-3 py-1 rounded text-sm flex-shrink-0">Copy</button>
+                            class="bg-surfaceHighlight hover:bg-neutral-600 text-muted px-3 py-1 rounded text-sm flex-shrink-0">Copy</button>
                 </div>
                 <details class="mt-3">
-                    <summary class="text-xs text-neutral-500 cursor-pointer">Compatible apps</summary>
-                    <div class="mt-2 text-xs text-neutral-400 space-y-1">
-                        <p><strong class="text-neutral-300">KOReader</strong> — OPDS catalog, download EPUBs directly</p>
-                        <p><strong class="text-neutral-300">Calibre</strong> — Add OPDS as a content server source</p>
-                        <p><strong class="text-neutral-300">FBReader</strong> — Add network library via OPDS</p>
-                        <p><strong class="text-neutral-300">Moon+ Reader</strong> — Online catalogs, OPDS support</p>
-                        <p><strong class="text-neutral-300">PocketBook</strong> — Built-in OPDS browser</p>
+                    <summary class="text-xs text-muted/60 cursor-pointer">Compatible apps</summary>
+                    <div class="mt-2 text-xs text-muted/80 space-y-1">
+                        <p><strong class="text-muted">KOReader</strong> — OPDS catalog, download EPUBs directly</p>
+                        <p><strong class="text-muted">Calibre</strong> — Add OPDS as a content server source</p>
+                        <p><strong class="text-muted">FBReader</strong> — Add network library via OPDS</p>
+                        <p><strong class="text-muted">Moon+ Reader</strong> — Online catalogs, OPDS support</p>
+                        <p><strong class="text-muted">PocketBook</strong> — Built-in OPDS browser</p>
                     </div>
                 </details>
             </div>
 
-            <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-5">
+            <div class="bg-surface rounded-lg border border-white/10 p-5">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-semibold text-neutral-200">Archiver</h2>
+                    <h2 class="text-lg font-semibold text-white">Archiver</h2>
                     <button @click="runNow()"
                             :disabled="status && status.active"
-                            class="text-xs px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white transition-colors">
+                            class="text-xs px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:bg-surfaceHighlight disabled:text-muted/60 text-white transition-colors">
                         Run Now
                     </button>
                 </div>
                 <template x-if="status">
                     <div class="space-y-3">
                         <div class="flex justify-between items-center">
-                            <span class="text-sm text-neutral-500">Status</span>
+                            <span class="text-sm text-muted/60">Status</span>
                             <span class="flex items-center gap-1.5 text-sm">
                                 <span class="w-2 h-2 rounded-full" :class="status.active ? 'bg-amber-400 pulse-dot' : 'bg-emerald-400'"></span>
                                 <span :class="status.active ? 'text-amber-300' : 'text-emerald-300'" x-text="status.active ? 'Archiving...' : 'Idle'"></span>
                             </span>
                         </div>
                         <div x-show="status.active && status.current" class="flex justify-between items-center">
-                            <span class="text-sm text-neutral-500">Current series</span>
-                            <span class="text-sm text-neutral-300" x-text="status.current"></span>
+                            <span class="text-sm text-muted/60">Current series</span>
+                            <span class="text-sm text-muted" x-text="status.current"></span>
                         </div>
                         <div x-show="status.active" class="flex justify-between items-center">
-                            <span class="text-sm text-neutral-500">Progress</span>
-                            <span class="text-sm text-neutral-300" x-text="status.done + ' / ' + status.total + ' series'"></span>
+                            <span class="text-sm text-muted/60">Progress</span>
+                            <span class="text-sm text-muted" x-text="status.done + ' / ' + status.total + ' series'"></span>
                         </div>
                         <div x-show="status.last_run" class="flex justify-between items-center">
-                            <span class="text-sm text-neutral-500">Last run</span>
-                            <span class="text-xs text-neutral-400" x-text="status.last_run ? new Date(status.last_run).toLocaleString() : 'Never'"></span>
+                            <span class="text-sm text-muted/60">Last run</span>
+                            <span class="text-xs text-muted/80" x-text="status.last_run ? new Date(status.last_run).toLocaleString() : 'Never'"></span>
                         </div>
                         <div x-show="!status.active && !status.last_run" class="flex justify-between items-center">
-                            <span class="text-sm text-neutral-500">Last run</span>
-                            <span class="text-xs text-neutral-400">Not yet run</span>
+                            <span class="text-sm text-muted/60">Last run</span>
+                            <span class="text-xs text-muted/80">Not yet run</span>
                         </div>
                     </div>
                 </template>
                 <template x-if="!status">
-                    <div class="text-sm text-neutral-500">Loading...</div>
+                    <div class="text-sm text-muted/60">Loading...</div>
                 </template>
             </div>
 
-            <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-5">
+            <div class="bg-surface rounded-lg border border-white/10 p-5">
                 <div class="flex items-center justify-between gap-4">
                     <div>
-                        <h2 class="text-lg font-semibold text-neutral-200">Archive All Stories</h2>
-                        <p class="text-sm text-neutral-400 mt-1">
+                        <h2 class="text-lg font-semibold text-white">Archive All Stories</h2>
+                        <p class="text-sm text-muted/80 mt-1">
                             {{if .ArchiveAll}}All active series are being archived with gzip compression.{{else}}Only individually selected series are archived. Enable to archive everything.{{end}}
                         </p>
                     </div>
                     <form hx-post="/api/archive/all" hx-swap="none" hx-on::after-request="location.reload()" class="flex-shrink-0">
                         <input type="hidden" name="enabled" value="{{if not .ArchiveAll}}true{{else}}false{{end}}">
                         <button type="submit"
-                                class="relative inline-flex items-center h-6 w-11 rounded-full transition-colors focus:outline-none {{if .ArchiveAll}}bg-emerald-600{{else}}bg-neutral-700{{end}}"
+                                class="relative inline-flex items-center h-6 w-11 rounded-full transition-colors focus:outline-none {{if .ArchiveAll}}bg-emerald-600{{else}}bg-surfaceHighlight{{end}}"
                                 id="archive-toggle-btn">
                             <span class="inline-block w-5 h-5 bg-neutral-300 rounded-full transition-transform transform {{if .ArchiveAll}}translate-x-5{{else}}translate-x-0.5{{end}}"></span>
                         </button>
@@ -151,54 +151,54 @@
                 </div>
             </div>
 
-            <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-5" x-show="storage" x-cloak>
-                <h2 class="text-lg font-semibold text-neutral-200 mb-4">Storage</h2>
+            <div class="bg-surface rounded-lg border border-white/10 p-5" x-show="storage" x-cloak>
+                <h2 class="text-lg font-semibold text-white mb-4">Storage</h2>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    <div class="bg-neutral-800 rounded-lg p-3 text-center">
+                    <div class="glass-panel rounded-lg hover:-translate-y-1 transition-transform duration-300 p-3 text-center">
                         <div class="text-lg font-semibold text-neutral-100" x-text="formatBytes(storage && storage.total_bytes)"></div>
-                        <div class="text-xs text-neutral-500 mt-1">Total</div>
+                        <div class="text-xs text-muted/60 mt-1">Total</div>
                     </div>
-                    <div class="bg-neutral-800 rounded-lg p-3 text-center">
+                    <div class="glass-panel rounded-lg hover:-translate-y-1 transition-transform duration-300 p-3 text-center">
                         <div class="text-lg font-semibold text-neutral-100" x-text="formatBytes(storage && storage.content_bytes)"></div>
-                        <div class="text-xs text-neutral-500 mt-1">Chapters</div>
+                        <div class="text-xs text-muted/60 mt-1">Chapters</div>
                     </div>
-                    <div class="bg-neutral-800 rounded-lg p-3 text-center">
+                    <div class="glass-panel rounded-lg hover:-translate-y-1 transition-transform duration-300 p-3 text-center">
                         <div class="text-lg font-semibold text-neutral-100" x-text="formatBytes(storage && storage.image_bytes)"></div>
-                        <div class="text-xs text-neutral-500 mt-1">Images</div>
+                        <div class="text-xs text-muted/60 mt-1">Images</div>
                     </div>
-                    <div class="bg-neutral-800 rounded-lg p-3 text-center">
+                    <div class="glass-panel rounded-lg hover:-translate-y-1 transition-transform duration-300 p-3 text-center">
                         <div class="text-lg font-semibold text-neutral-100" x-text="storage && storage.chapter_count"></div>
-                        <div class="text-xs text-neutral-500 mt-1">Archived</div>
+                        <div class="text-xs text-muted/60 mt-1">Archived</div>
                     </div>
                 </div>
                 <div x-show="storage && storage.per_series && storage.per_series.length > 0">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm text-neutral-500">Per-series breakdown</span>
+                        <span class="text-sm text-muted/60">Per-series breakdown</span>
                         <span class="text-xs text-neutral-600">Sorted by size</span>
                     </div>
                     <div class="space-y-2">
                         <template x-for="s in (storage && storage.per_series || [])" :key="s.series_id">
-                            <div class="bg-neutral-800 rounded-lg p-3">
+                            <div class="glass-panel rounded-lg hover:-translate-y-1 transition-transform duration-300 p-3">
                                 <div class="flex items-center justify-between mb-1.5">
                                     <div class="flex items-center gap-2 min-w-0">
-                                        <a :href="'/reader/' + s.series_id" class="text-sm text-neutral-200 font-medium truncate hover:text-emerald-300" x-text="s.series_title"></a>
+                                        <a :href="'/reader/' + s.series_id" class="text-sm text-white font-medium truncate hover:text-emerald-300" x-text="s.series_title"></a>
                                     </div>
                                     <div class="flex items-center gap-2 flex-shrink-0">
-                                        <span class="text-xs text-neutral-400" x-text="s.archived_chapters + '/' + s.total_chapters + ' ch'"></span>
-                                        <span class="text-xs text-neutral-400" x-text="formatBytes(s.content_bytes + s.image_bytes)"></span>
+                                        <span class="text-xs text-muted/80" x-text="s.archived_chapters + '/' + s.total_chapters + ' ch'"></span>
+                                        <span class="text-xs text-muted/80" x-text="formatBytes(s.content_bytes + s.image_bytes)"></span>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1">
-                                    <div class="flex-1 bg-neutral-700 rounded-full h-1">
+                                    <div class="flex-1 bg-surfaceHighlight rounded-full h-1">
                                         <div class="h-1 rounded-full bg-emerald-500" :style="'width:' + (s.total_chapters > 0 ? Math.round(s.archived_chapters / s.total_chapters * 100) : 0) + '%'"></div>
                                     </div>
                                     <button @click="reArchive(s.series_id, s.series_title)"
-                                            :class="confirmingReArchive === s.series_id ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-400'"
+                                            :class="confirmingReArchive === s.series_id ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-surfaceHighlight hover:bg-neutral-600 text-muted/80'"
                                             class="text-xs px-2 py-0.5 rounded transition-colors"
                                             x-text="confirmingReArchive === s.series_id ? 'Confirm?' : 'Re-archive'">
                                     </button>
                                     <button @click="deleteArchive(s.series_id, s.series_title)"
-                                            :class="confirmingDelete === s.series_id ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-400'"
+                                            :class="confirmingDelete === s.series_id ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-surfaceHighlight hover:bg-neutral-600 text-muted/80'"
                                             class="text-xs px-2 py-0.5 rounded transition-colors"
                                             x-text="confirmingDelete === s.series_id ? 'Confirm?' : 'Delete'">
                                     </button>
@@ -207,36 +207,36 @@
                         </template>
                     </div>
                 </div>
-                <div x-show="storage && (!storage.per_series || storage.per_series.length === 0)" class="text-sm text-neutral-500 text-center py-2">
+                <div x-show="storage && (!storage.per_series || storage.per_series.length === 0)" class="text-sm text-muted/60 text-center py-2">
                     No archived data yet.
                 </div>
             </div>
 
-            <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-5">
-                <h2 class="text-lg font-semibold text-neutral-200 mb-1">Archive Progress</h2>
-                <p class="text-sm text-neutral-500 mb-4">
+            <div class="bg-surface rounded-lg border border-white/10 p-5">
+                <h2 class="text-lg font-semibold text-white mb-1">Archive Progress</h2>
+                <p class="text-sm text-muted/60 mb-4">
                     {{if .ArchiveAll}}All active series are shown (Archive All is enabled).{{else}}Per-series chapter archival status. Only series with "Archive" enabled are shown.{{end}}
                 </p>
                 <div class="space-y-3">
                     {{range .ArchiveStats}}
-                    <div class="bg-neutral-800 rounded-lg p-3">
+                    <div class="glass-panel rounded-lg hover:-translate-y-1 transition-transform duration-300 p-3">
                         <div class="flex items-center justify-between mb-2">
                             <div class="flex items-center gap-2 min-w-0">
-                                <span class="text-sm text-neutral-200 font-medium truncate">{{.SeriesTitle}}</span>
+                                <span class="text-sm text-white font-medium truncate">{{.SeriesTitle}}</span>
                             </div>
                             <div class="flex items-center gap-2 flex-shrink-0">
-                                <a href="/reader/{{.SeriesID}}" class="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-2 py-0.5 rounded">Read</a>
-                                <span class="text-xs text-neutral-400">{{.ArchivedChapters}}/{{.TotalChapters}}</span>
+                                <a href="/reader/{{.SeriesID}}" class="text-xs text-primary hover:text-emerald-300 bg-emerald-900/30 px-2 py-0.5 rounded">Read</a>
+                                <span class="text-xs text-muted/80">{{.ArchivedChapters}}/{{.TotalChapters}}</span>
                             </div>
                         </div>
-                        <div class="w-full bg-neutral-700 rounded-full h-1.5">
+                        <div class="w-full bg-surfaceHighlight rounded-full h-1.5">
                             {{if .Percent}}
                             <div class="h-1.5 rounded-full {{if .Complete}}bg-emerald-500{{else}}bg-blue-500{{end}}" style="width: {{.Percent}}%;"></div>
                             {{end}}
                         </div>
                     </div>
                     {{else}}
-                    <div class="text-sm text-neutral-500 text-center py-4">
+                    <div class="text-sm text-muted/60 text-center py-4">
                         No archived series found. {{if .ArchiveAll}}Active series will appear here as chapters are archived.{{else}}Enable "Archive" on a series from the dashboard to start archiving chapters.{{end}}
                     </div>
                     {{end}}

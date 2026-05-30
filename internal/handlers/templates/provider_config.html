@@ -1,6 +1,6 @@
 {{define "provider_config.html"}}
 <!DOCTYPE html>
-<html lang="en" class="bg-neutral-950 text-neutral-200">
+<html lang="en" class="bg-background text-white">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -59,7 +59,7 @@
             btn.textContent = 'Check Auth';
             if (d.success) {
                 status.textContent = 'Authenticated';
-                status.className = 'text-xs bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded';
+                status.className = 'text-xs bg-emerald-900/30 text-primary px-2 py-0.5 rounded';
                 btn.style.display = 'none';
             } else {
                 status.textContent = d.error || 'Failed';
@@ -74,74 +74,74 @@
     }
     </script>
 </head>
-<body class="min-h-screen bg-neutral-950">
+<body class="min-h-screen bg-background">
     {{template "nav" .}}
     <main class="max-w-6xl mx-auto px-4 py-6">
     <div class="max-w-xl mx-auto">
         <h1 class="text-2xl font-bold mb-6 text-neutral-100">Provider Configuration</h1>
         <div class="space-y-6">
             {{range $name, $p := .Providers}}
-            <form hx-post="/admin/providers" hx-swap="none" class="bg-neutral-900 rounded-lg border border-neutral-800 p-4 space-y-3">
+            <form hx-post="/admin/providers" hx-swap="none" class="bg-surface rounded-lg border border-white/10 p-4 space-y-3">
                 <input type="hidden" name="provider_name" value="{{$name}}" />
                 <div class="flex items-center justify-between">
-                    <h3 class="font-semibold text-neutral-300">{{$name}}</h3>
+                    <h3 class="font-semibold text-muted">{{$name}}</h3>
                     <div class="flex items-center gap-2">
                         {{if $p.RequiresAuth}}
                             {{if and $p.SupportsLogin (index $.LoginTested $name)}}
-                            <span data-auth-status class="text-xs bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded">Authenticated</span>
+                            <span data-auth-status class="text-xs bg-emerald-900/30 text-primary px-2 py-0.5 rounded">Authenticated</span>
                             {{else}}
                             <span data-auth-status class="text-xs bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded">Requires Auth</span>
                             {{end}}
                         {{else}}
-                        <span class="text-xs bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded">Public</span>
+                        <span class="text-xs bg-emerald-900/30 text-primary px-2 py-0.5 rounded">Public</span>
                         {{end}}
                     </div>
                 </div>
                 {{if $p.SupportsLogin}}
                 <div>
-                    <label class="block text-sm text-neutral-500 mb-1">Username</label>
+                    <label class="block text-sm text-muted/60 mb-1">Username</label>
                     <input type="text" name="username"
                            value="{{index $.Usernames $name}}"
                            placeholder="Account username"
                            autocomplete="username"
-                           class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                           class="w-full glass-panel border border-white/5 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
                 </div>
                 <div>
-                    <label class="block text-sm text-neutral-500 mb-1">Password</label>
+                    <label class="block text-sm text-muted/60 mb-1">Password</label>
                     <div class="flex gap-2">
                         <input type="password" name="password"
                                placeholder="{{if index $.Usernames $name}}Leave blank to keep saved password{{else}}Account password{{end}}"
                                autocomplete="current-password"
-                               class="flex-1 bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                               class="flex-1 glass-panel border border-white/5 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
                         {{if index $.Usernames $name}}
                         <button type="button" onclick="togglePassword(this, '{{$name}}')"
-                                class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1 rounded text-sm flex-shrink-0">View</button>
+                                class="bg-surfaceHighlight hover:bg-neutral-600 text-white px-3 py-1 rounded text-sm flex-shrink-0">View</button>
                         {{end}}
                     </div>
                 </div>
-                <div class="pt-2 border-t border-neutral-800">
-                    <label class="block text-sm text-neutral-500 mb-1">Cookie Data <span class="text-neutral-600">(advanced fallback)</span></label>
+                <div class="pt-2 border-t border-white/10">
+                    <label class="block text-sm text-muted/60 mb-1">Cookie Data <span class="text-neutral-600">(advanced fallback)</span></label>
                     <input type="text" name="cookie_data"
                            value="{{index $.Configs $name}}"
                            placeholder="key1=value1; key2=value2"
-                           class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                           class="w-full glass-panel border border-white/5 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
                 </div>
                 {{else}}
                 <div>
-                    <label class="block text-sm text-neutral-500 mb-1">Cookie Data</label>
+                    <label class="block text-sm text-muted/60 mb-1">Cookie Data</label>
                     <input type="text" name="cookie_data"
                            value="{{index $.Configs $name}}"
                            placeholder="key1=value1; key2=value2"
-                           class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
+                           class="w-full glass-panel border border-white/5 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" />
                 </div>
                 {{end}}
                 <div class="flex items-center gap-2">
-                    <button type="submit" class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1 rounded text-sm">
+                    <button type="submit" class="bg-surfaceHighlight hover:bg-neutral-600 text-white px-3 py-1 rounded text-sm">
                         Save
                     </button>
                     {{if $p.SupportsLogin}}
                     <button type="button" onclick="checkAuth(this, '{{$name}}')"
-                            class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-3 py-1 rounded text-sm">
+                            class="bg-surfaceHighlight hover:bg-neutral-600 text-white px-3 py-1 rounded text-sm">
                         Check Auth
                     </button>
                     {{end}}

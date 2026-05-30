@@ -20,6 +20,9 @@ RUN go mod download
 COPY . .
 COPY --from=css /app/app.css ./internal/static/app.css
 
+# Run comprehensive tests
+RUN go test -v ./...
+
 ARG VERSION_COMMIT=dev
 RUN CGO_ENABLED=1 GOOS=linux go build \
     -ldflags "-X github.com/linuxnoodle/webfictionpoller/internal/version.BuildCommit=${VERSION_COMMIT}" \

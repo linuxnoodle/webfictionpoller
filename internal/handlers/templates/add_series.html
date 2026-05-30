@@ -1,6 +1,6 @@
 {{define "add_series.html"}}
 <!DOCTYPE html>
-<html lang="en" class="bg-neutral-950 text-neutral-200">
+<html lang="en" class="bg-background text-white">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="/static/app.css">
     <style>@keyframes fadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}.result-dialog{animation:fadeIn .15s ease-out}</style>
 </head>
-<body class="min-h-screen bg-neutral-950">
+<body class="min-h-screen bg-background">
     {{template "nav" .}}
     <main class="max-w-6xl mx-auto px-4 py-6">
     <div class="max-w-xl mx-auto">
@@ -21,33 +21,33 @@
               hx-on::after-request="showAddResult(event)"
               class="space-y-4">
             <div>
-                <label class="block text-sm text-neutral-500 mb-1">Series URL</label>
+                <label class="block text-sm text-muted/60 mb-1">Series URL</label>
                 <input id="series-url" type="url" name="url" required
                        placeholder="https://www.royalroad.com/fiction/..."
-                       class="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 focus:outline-none focus:border-neutral-500" />
+                       class="w-full glass-panel border border-white/5 rounded px-3 py-2 focus:outline-none focus:border-neutral-500" />
             </div>
             <div>
                 <p class="text-xs text-neutral-600">Supported providers:</p>
                 <div class="flex flex-wrap gap-2 mt-1">
                     {{range $name, $p := .Providers}}
-                    <span class="bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded text-xs">{{$name}}</span>
+                    <span class="glass-panel text-muted/80 px-2 py-0.5 rounded text-xs">{{$name}}</span>
                     {{end}}
                 </div>
             </div>
             <button id="add-btn" type="submit"
-                    class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-4 py-2 rounded">Add Series</button>
+                    class="bg-surfaceHighlight hover:bg-neutral-600 text-white px-4 py-2 rounded">Add Series</button>
         </form>
     </div>
 
     <div id="add-result" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.6)">
-        <div class="result-dialog bg-neutral-900 border border-neutral-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+        <div class="result-dialog bg-surface border border-white/5 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
             <h3 id="result-heading" class="text-lg font-semibold mb-2"></h3>
-            <p id="result-message" class="text-sm text-neutral-400 mb-4"></p>
+            <p id="result-message" class="text-sm text-muted/80 mb-4"></p>
             <div class="flex gap-2 justify-end">
                 <button onclick="document.getElementById('add-result').classList.add('hidden')"
-                        class="bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-4 py-2 rounded text-sm">Close</button>
+                        class="bg-surfaceHighlight hover:bg-neutral-600 text-white px-4 py-2 rounded text-sm">Close</button>
                 <a id="result-view-link" href="/series" class="hidden bg-emerald-800 hover:bg-emerald-700 text-emerald-200 px-4 py-2 rounded text-sm">View Series</a>
-                <button id="result-add-another" class="hidden bg-neutral-700 hover:bg-neutral-600 text-neutral-200 px-4 py-2 rounded text-sm"
+                <button id="result-add-another" class="hidden bg-surfaceHighlight hover:bg-neutral-600 text-white px-4 py-2 rounded text-sm"
                         onclick="document.getElementById('add-result').classList.add('hidden');document.getElementById('series-url').focus()">Add Another</button>
             </div>
         </div>
@@ -78,7 +78,7 @@
         var addAnother = document.getElementById('result-add-another');
         if (success) {
             heading.textContent = 'Series Added';
-            heading.className = 'text-lg font-semibold text-emerald-400 mb-2';
+            heading.className = 'text-lg font-semibold text-primary mb-2';
             msg.textContent = message;
             viewLink.classList.remove('hidden');
             addAnother.classList.remove('hidden');

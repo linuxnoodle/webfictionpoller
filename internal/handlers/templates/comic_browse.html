@@ -13,21 +13,21 @@
         .grid-covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
     </style>
 </head>
-<body class="bg-neutral-950 text-neutral-200 min-h-screen">
+<body class="bg-background text-white min-h-screen">
 {{template "nav" .}}
 <div class="max-w-6xl mx-auto px-4 py-6" x-data="comicApp()">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-neutral-100">Comics & Manga</h1>
-        <div class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
-            <button class="px-4 py-2 text-sm font-medium transition-colors focus:outline-none" :class="tab==='library'?'bg-neutral-600 text-neutral-100':'bg-neutral-800 text-neutral-400 hover:text-neutral-200'" @click="tab='library'">Library</button>
-            <button class="px-4 py-2 text-sm font-medium transition-colors focus:outline-none" :class="tab==='search'?'bg-neutral-600 text-neutral-100':'bg-neutral-800 text-neutral-400 hover:text-neutral-200'" @click="tab='search';$nextTick(()=>$refs.searchInput.focus())">Search</button>
+        <div class="flex glass-panel rounded-lg overflow-hidden border border-white/5">
+            <button class="px-4 py-2 text-sm font-medium transition-colors focus:outline-none" :class="tab==='library'?'bg-neutral-600 text-neutral-100':'glass-panel text-muted/80 hover:text-white'" @click="tab='library'">Library</button>
+            <button class="px-4 py-2 text-sm font-medium transition-colors focus:outline-none" :class="tab==='search'?'bg-neutral-600 text-neutral-100':'glass-panel text-muted/80 hover:text-white'" @click="tab='search';$nextTick(()=>$refs.searchInput.focus())">Search</button>
         </div>
     </div>
 
     <div x-show="tab==='search'">
         <div class="flex gap-2 mb-6">
             <input x-ref="searchInput" x-model="query" @keydown.enter="doSearch(1)"
-                   class="flex-1 bg-neutral-900 border border-neutral-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-lg px-4 py-2.5 text-sm text-neutral-200 placeholder-neutral-500 outline-none transition-all"
+                   class="flex-1 bg-surface border border-white/5 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-lg px-4 py-2.5 text-sm text-white placeholder-neutral-500 outline-none transition-all"
                    placeholder="Search manga on MangaDex...">
             <button @click="doSearch(1)" :disabled="searching"
                     class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors shadow-sm">
@@ -35,27 +35,27 @@
                 <span x-show="searching">Searching...</span>
             </button>
         </div>
-        <div class="max-h-[60vh] overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-900" x-show="results.length > 0">
+        <div class="max-h-[60vh] overflow-y-auto rounded-lg border border-white/10 bg-surface" x-show="results.length > 0">
             <template x-for="item in results" :key="item.source_id">
-                <div class="flex gap-4 p-4 border-b border-neutral-800 last:border-b-0 hover:bg-neutral-800/50 cursor-pointer transition-colors" @click="addSeries(item)">
+                <div class="flex gap-4 p-4 border-b border-white/10 last:border-b-0 hover:glass-panel/50 cursor-pointer transition-colors" @click="addSeries(item)">
                     <img :src="item.cover_url || '/static/placeholder.png'" :alt="item.title" loading="lazy"
                          class="w-16 h-24 sm:w-20 sm:h-28 object-cover rounded shadow-sm flex-shrink-0"
                          @error="$event.target.style.display='none'">
                     <div class="min-w-0 flex-1 flex flex-col">
-                        <h4 class="text-base font-semibold text-neutral-200 mb-1 truncate" x-text="item.title"></h4>
-                        <p class="text-xs text-neutral-400 mb-2" x-text="(item.genres || '') + (item.status ? ' · ' + item.status : '')"></p>
-                        <p class="text-xs text-neutral-500 line-clamp-2 leading-relaxed" x-text="item.description"></p>
+                        <h4 class="text-base font-semibold text-white mb-1 truncate" x-text="item.title"></h4>
+                        <p class="text-xs text-muted/80 mb-2" x-text="(item.genres || '') + (item.status ? ' · ' + item.status : '')"></p>
+                        <p class="text-xs text-muted/60 line-clamp-2 leading-relaxed" x-text="item.description"></p>
                         <div class="mt-auto pt-3">
                             <button x-show="!item.adding && !item.added"
-                                    class="text-xs font-medium bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50 px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1">
+                                    class="text-xs font-medium bg-emerald-900/30 text-primary hover:bg-emerald-900/50 px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                                 Add to Library
                             </button>
-                            <span x-show="item.added" class="text-xs font-medium text-emerald-500 inline-flex items-center gap-1 px-1">
+                            <span x-show="item.added" class="text-xs font-medium text-primary inline-flex items-center gap-1 px-1">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                 Added
                             </span>
-                            <span x-show="item.adding && !item.added" class="text-xs font-medium text-neutral-400 inline-flex items-center gap-1 px-1">
+                            <span x-show="item.adding && !item.added" class="text-xs font-medium text-muted/80 inline-flex items-center gap-1 px-1">
                                 <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                                 Adding...
                             </span>
@@ -64,7 +64,7 @@
                 </div>
             </template>
         </div>
-        <div x-show="results.length === 0 && searched && !searching" class="text-neutral-500 text-sm text-center py-8">
+        <div x-show="results.length === 0 && searched && !searching" class="text-muted/60 text-sm text-center py-8">
             No results found
         </div>
         <div x-show="hasNextPage && results.length > 0" class="text-center py-4">
@@ -73,20 +73,20 @@
     </div>
 
     <div x-show="tab==='library'">
-        <div x-show="loading" class="text-neutral-500 text-sm text-center py-8">Loading...</div>
-        <div x-show="!loading && library.length === 0" class="text-neutral-500 text-sm text-center py-8">
+        <div x-show="loading" class="text-muted/60 text-sm text-center py-8">Loading...</div>
+        <div x-show="!loading && library.length === 0" class="text-muted/60 text-sm text-center py-8">
             No comics in library. Search to add some!
         </div>
         <div class="grid-covers" x-show="library.length > 0">
             <template x-for="s in library" :key="s.id">
-                <div class="cursor-pointer rounded-lg bg-neutral-900 border border-neutral-800 hover:border-neutral-700 overflow-hidden hover:scale-[1.02] transition-all shadow-sm group" @click="viewSeries(s.id)">
-                    <div class="relative w-full aspect-[2/3] bg-neutral-800">
+                <div class="cursor-pointer rounded-lg bg-surface border border-white/10 hover:border-white/5 overflow-hidden hover:scale-[1.02] transition-all shadow-sm group" @click="viewSeries(s.id)">
+                    <div class="relative w-full aspect-[2/3] glass-panel">
                         <img :src="s.cover_url" :alt="s.title" loading="lazy" class="w-full h-full object-cover" @error="$event.target.style.display='none'">
                         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     </div>
                     <div class="p-3">
-                        <div class="text-sm font-semibold text-neutral-200 leading-tight line-clamp-1 group-hover:text-emerald-400 transition-colors" x-text="s.title"></div>
-                        <div class="mt-1.5 text-xs font-medium text-neutral-500" x-text="s.read_chapters + ' / ' + s.total_chapters + ' read'"></div>
+                        <div class="text-sm font-semibold text-white leading-tight line-clamp-1 group-hover:text-primary transition-colors" x-text="s.title"></div>
+                        <div class="mt-1.5 text-xs font-medium text-muted/60" x-text="s.read_chapters + ' / ' + s.total_chapters + ' read'"></div>
                     </div>
                 </div>
             </template>
@@ -95,39 +95,39 @@
 
     <div x-show="tab==='series'" x-cloak class="max-w-4xl mx-auto">
         <div class="flex items-center gap-3 mb-6">
-            <button @click="tab='library'" class="text-neutral-400 hover:text-neutral-200 text-sm font-medium inline-flex items-center gap-1 transition-colors">
+            <button @click="tab='library'" class="text-muted/80 hover:text-white text-sm font-medium inline-flex items-center gap-1 transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                 Back to Library
             </button>
             <h2 class="text-xl font-bold text-neutral-100 ml-2" x-text="currentSeries.title"></h2>
-            <a :href="currentSeries.source_url" target="_blank" class="text-emerald-500 hover:text-emerald-400 text-xs ml-auto font-medium transition-colors">Open Source &nearr;</a>
+            <a :href="currentSeries.source_url" target="_blank" class="text-primary hover:text-primary text-xs ml-auto font-medium transition-colors">Open Source &nearr;</a>
         </div>
 
-        <div class="flex flex-col sm:flex-row gap-6 mb-8 bg-neutral-900 rounded-xl border border-neutral-800 p-6 shadow-sm" x-show="currentSeries.cover_url">
+        <div class="flex flex-col sm:flex-row gap-6 mb-8 bg-surface rounded-xl border border-white/10 p-6 shadow-sm" x-show="currentSeries.cover_url">
             <div class="w-40 flex-shrink-0 mx-auto sm:mx-0">
                 <img :src="currentSeries.cover_url" class="w-full rounded-lg shadow-md aspect-[2/3] object-cover" @error="$event.target.style.display='none'">
             </div>
-            <div class="text-sm text-neutral-300 space-y-3 flex-1">
+            <div class="text-sm text-muted space-y-3 flex-1">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                    <p x-show="currentSeries.author"><span class="text-neutral-500 text-xs uppercase tracking-wider font-semibold block mb-0.5">Author</span> <span x-text="currentSeries.author"></span></p>
-                    <p x-show="currentSeries.artist"><span class="text-neutral-500 text-xs uppercase tracking-wider font-semibold block mb-0.5">Artist</span> <span x-text="currentSeries.artist"></span></p>
-                    <p x-show="currentSeries.genres"><span class="text-neutral-500 text-xs uppercase tracking-wider font-semibold block mb-0.5">Genres</span> <span x-text="currentSeries.genres"></span></p>
-                    <p x-show="currentSeries.status"><span class="text-neutral-500 text-xs uppercase tracking-wider font-semibold block mb-0.5">Status</span> <span x-text="currentSeries.status" class="inline-block px-2 py-0.5 rounded bg-neutral-800 text-neutral-300 text-xs capitalize"></span></p>
+                    <p x-show="currentSeries.author"><span class="text-muted/60 text-xs uppercase tracking-wider font-semibold block mb-0.5">Author</span> <span x-text="currentSeries.author"></span></p>
+                    <p x-show="currentSeries.artist"><span class="text-muted/60 text-xs uppercase tracking-wider font-semibold block mb-0.5">Artist</span> <span x-text="currentSeries.artist"></span></p>
+                    <p x-show="currentSeries.genres"><span class="text-muted/60 text-xs uppercase tracking-wider font-semibold block mb-0.5">Genres</span> <span x-text="currentSeries.genres"></span></p>
+                    <p x-show="currentSeries.status"><span class="text-muted/60 text-xs uppercase tracking-wider font-semibold block mb-0.5">Status</span> <span x-text="currentSeries.status" class="inline-block px-2 py-0.5 rounded glass-panel text-muted text-xs capitalize"></span></p>
                 </div>
-                <div x-show="currentSeries.description" class="pt-2 border-t border-neutral-800/60 mt-4">
-                    <span class="text-neutral-500 text-xs uppercase tracking-wider font-semibold block mb-1.5">Synopsis</span>
-                    <p class="leading-relaxed text-neutral-400" x-text="currentSeries.description"></p>
+                <div x-show="currentSeries.description" class="pt-2 border-t border-white/10/60 mt-4">
+                    <span class="text-muted/60 text-xs uppercase tracking-wider font-semibold block mb-1.5">Synopsis</span>
+                    <p class="leading-relaxed text-muted/80" x-text="currentSeries.description"></p>
                 </div>
             </div>
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
-            <h3 class="text-lg font-bold text-neutral-200">Chapters</h3>
+            <h3 class="text-lg font-bold text-white">Chapters</h3>
             <div class="flex gap-2">
-                <button @click="refreshChapters()" class="text-xs font-medium bg-neutral-800 hover:bg-neutral-700 px-3 py-1.5 rounded transition-colors text-neutral-300 shadow-sm">
+                <button @click="refreshChapters()" class="text-xs font-medium glass-panel hover:bg-surfaceHighlight px-3 py-1.5 rounded transition-colors text-muted shadow-sm">
                     Refresh
                 </button>
-                <button @click="markAllRead()" class="text-xs font-medium bg-neutral-800 hover:bg-neutral-700 px-3 py-1.5 rounded transition-colors text-neutral-300 shadow-sm">
+                <button @click="markAllRead()" class="text-xs font-medium glass-panel hover:bg-surfaceHighlight px-3 py-1.5 rounded transition-colors text-muted shadow-sm">
                     Mark All Read
                 </button>
                 <button @click="deleteSeries()" class="text-xs font-medium bg-red-900/30 hover:bg-red-900/50 text-red-400 px-3 py-1.5 rounded transition-colors shadow-sm ml-2">
@@ -136,18 +136,18 @@
             </div>
         </div>
 
-        <div class="bg-neutral-900 rounded-lg border border-neutral-800 divide-y divide-neutral-800/60 overflow-hidden shadow-sm">
+        <div class="bg-surface rounded-lg border border-white/10 divide-y divide-neutral-800/60 overflow-hidden shadow-sm">
             <template x-for="ch in currentChapters" :key="ch.id">
-                <div class="flex items-center gap-3 px-4 py-3 hover:bg-neutral-800/80 cursor-pointer transition-colors group"
+                <div class="flex items-center gap-3 px-4 py-3 hover:glass-panel/80 cursor-pointer transition-colors group"
                      :class="ch.is_read ? 'opacity-50 hover:opacity-100' : ''"
                      @click="openReader(ch.id)">
-                    <span class="text-xs font-medium text-neutral-500 w-14 flex-shrink-0" x-text="ch.chapter_num ? 'Ch. '+ch.chapter_num : ''"></span>
-                    <span class="text-sm font-medium flex-1 text-neutral-200 group-hover:text-emerald-400 transition-colors" x-text="ch.title"></span>
-                    <span class="text-xs text-neutral-500 flex-shrink-0" x-text="ch.pages + ' pages'"></span>
-                    <span x-show="ch.downloaded" class="text-xs text-emerald-500 ml-2" title="Downloaded">&#10003;</span>
+                    <span class="text-xs font-medium text-muted/60 w-14 flex-shrink-0" x-text="ch.chapter_num ? 'Ch. '+ch.chapter_num : ''"></span>
+                    <span class="text-sm font-medium flex-1 text-white group-hover:text-primary transition-colors" x-text="ch.title"></span>
+                    <span class="text-xs text-muted/60 flex-shrink-0" x-text="ch.pages + ' pages'"></span>
+                    <span x-show="ch.downloaded" class="text-xs text-primary ml-2" title="Downloaded">&#10003;</span>
                 </div>
             </template>
-            <div x-show="currentChapters.length === 0" class="px-4 py-8 text-center text-sm text-neutral-500">
+            <div x-show="currentChapters.length === 0" class="px-4 py-8 text-center text-sm text-muted/60">
                 No chapters found for this series. Try refreshing.
             </div>
         </div>

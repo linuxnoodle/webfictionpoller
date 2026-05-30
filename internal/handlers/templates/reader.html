@@ -1,6 +1,6 @@
 {{define "reader.html"}}
 <!DOCTYPE html>
-<html lang="en" class="bg-neutral-950 text-neutral-200">
+<html lang="en" class="bg-background text-white">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -187,7 +187,7 @@
               if (this.settings.theme === 'light' || this.settings.theme === 'sepia') {
                 document.body.classList.add('text-stone-800');
               } else {
-                document.body.classList.add('text-neutral-200');
+                document.body.classList.add('text-white');
               }
           },
           updateSetting(key, val) {
@@ -222,7 +222,7 @@
                   }
               }
               fetch('/api/reader/chapter/' + id).then(function(r){return r.json()}).then(function(d){
-                  self.content = d.content || '<p class=' + String.fromCharCode(39) + 'text-neutral-500' + String.fromCharCode(39) + '>No content available.</p>';
+                  self.content = d.content || '<p class=' + String.fromCharCode(39) + 'text-muted/60' + String.fromCharCode(39) + '>No content available.</p>';
                   self.prevId = d.prev_id || null;
                   self.nextId = d.next_id || null;
                   self.loading = false;
@@ -265,11 +265,11 @@
           }
       }">
     <div class="sidebar-overlay" :class="sidebarOpen ? 'open' : ''" @click="sidebarOpen = false"></div>
-    <aside class="sidebar bg-neutral-900 border-r border-neutral-800 flex flex-col"
+    <aside class="sidebar bg-surface border-r border-white/10 flex flex-col"
            :class="sidebarOpen ? 'open' : ''">
-        <div class="p-3 border-b border-neutral-800 flex-shrink-0">
-            <h2 class="text-sm font-semibold text-neutral-200 truncate">{{.Series.Title}}</h2>
-            <p class="text-xs text-neutral-500 mt-0.5" x-text="chapters.length + ' chapters'"></p>
+        <div class="p-3 border-b border-white/10 flex-shrink-0">
+            <h2 class="text-sm font-semibold text-white truncate">{{.Series.Title}}</h2>
+            <p class="text-xs text-muted/60 mt-0.5" x-text="chapters.length + ' chapters'"></p>
         </div>
         <div class="ch-list flex-1 overflow-y-auto p-1.5">
             <template x-for="ch in chapters" :key="ch.id">
@@ -277,25 +277,25 @@
                         :class="{ 'active': currentId === ch.id, 'read': ch.is_read && currentId !== ch.id }"
                         :title="ch.title"
                         @click="loadChapter(ch.id, 0); sidebarOpen = false">
-                    <span x-text="ch.title" class="text-neutral-300"></span>
+                    <span x-text="ch.title" class="text-muted"></span>
                 </button>
             </template>
         </div>
     </aside>
 
-    <div class="settings-panel bg-neutral-900 border-l border-neutral-800 p-4 space-y-5"
+    <div class="settings-panel bg-surface border-l border-white/10 p-4 space-y-5"
          :class="settingsOpen ? 'open' : ''">
         <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-neutral-200">Settings</h3>
-            <button @click="settingsOpen = false" class="text-neutral-500 hover:text-neutral-200 text-lg">&times;</button>
+            <h3 class="text-sm font-semibold text-white">Settings</h3>
+            <button @click="settingsOpen = false" class="text-muted/60 hover:text-white text-lg">&times;</button>
         </div>
         <div>
-            <label class="text-xs text-neutral-400 uppercase tracking-wider block mb-1.5">Font</label>
+            <label class="text-xs text-muted/80 uppercase tracking-wider block mb-1.5">Font</label>
             <div class="grid grid-cols-3 gap-1.5">
                 <template x-for="f in fonts" :key="f.id">
                     <button @click="updateSetting('font', f.id)"
                             class="px-2 py-1.5 rounded text-xs transition-colors"
-                            :class="settings.font === f.id ? 'bg-emerald-700 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'"
+                            :class="settings.font === f.id ? 'bg-emerald-700 text-white' : 'glass-panel text-muted hover:bg-surfaceHighlight'"
                             :style="'font-family:' + f.css">
                         <span x-text="f.name"></span>
                     </button>
@@ -303,39 +303,39 @@
             </div>
         </div>
         <div>
-            <label class="text-xs text-neutral-400 uppercase tracking-wider block mb-1.5">Size</label>
+            <label class="text-xs text-muted/80 uppercase tracking-wider block mb-1.5">Size</label>
             <div class="flex items-center gap-2">
                 <button @click="if(settings.size > 12) updateSetting('size', settings.size - 2)"
-                        class="w-8 h-8 flex items-center justify-center rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700 text-sm">A-</button>
-                <span class="text-sm text-neutral-300 w-8 text-center" x-text="settings.size"></span>
+                        class="w-8 h-8 flex items-center justify-center rounded glass-panel text-muted hover:bg-surfaceHighlight text-sm">A-</button>
+                <span class="text-sm text-muted w-8 text-center" x-text="settings.size"></span>
                 <button @click="if(settings.size < 32) updateSetting('size', settings.size + 2)"
-                        class="w-8 h-8 flex items-center justify-center rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700 text-sm">A+</button>
+                        class="w-8 h-8 flex items-center justify-center rounded glass-panel text-muted hover:bg-surfaceHighlight text-sm">A+</button>
             </div>
         </div>
         <div>
-            <label class="text-xs text-neutral-400 uppercase tracking-wider block mb-1.5">Theme</label>
+            <label class="text-xs text-muted/80 uppercase tracking-wider block mb-1.5">Theme</label>
             <div class="grid grid-cols-2 gap-1.5">
                 <template x-for="t in themes" :key="t.id">
                     <button @click="updateSetting('theme', t.id)"
                             class="px-2 py-1.5 rounded text-xs transition-colors"
-                            :class="settings.theme === t.id ? 'bg-emerald-700 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'"
+                            :class="settings.theme === t.id ? 'bg-emerald-700 text-white' : 'glass-panel text-muted hover:bg-surfaceHighlight'"
                             x-text="t.name">
                     </button>
                 </template>
             </div>
         </div>
         <div>
-            <label class="text-xs text-neutral-400 uppercase tracking-wider block mb-1.5">Width</label>
+            <label class="text-xs text-muted/80 uppercase tracking-wider block mb-1.5">Width</label>
             <input type="range" min="28" max="64" step="2" x-model.number="settings.width"
                    @input="applySettings(); persistSettings()"
                    class="w-full accent-emerald-500">
-            <div class="flex justify-between text-xs text-neutral-500 mt-0.5">
+            <div class="flex justify-between text-xs text-muted/60 mt-0.5">
                 <span>Narrow</span>
                 <span x-text="settings.width + 'rem'"></span>
                 <span>Wide</span>
             </div>
         </div>
-        <div class="text-xs text-neutral-600 pt-2 border-t border-neutral-800">
+        <div class="text-xs text-neutral-600 pt-2 border-t border-white/10">
             Keyboard: &larr; prev &middot; &rarr; next
         </div>
     </div>

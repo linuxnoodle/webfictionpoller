@@ -14,25 +14,25 @@
         .bar-bottom { transform: translateY(100%); transition: transform 0.25s ease; }
     </style>
 </head>
-<body class="bg-[#0a0a0a] text-neutral-200 min-h-screen font-sans overflow-x-hidden">
+<body class="bg-[#0a0a0a] text-white min-h-screen font-sans overflow-x-hidden">
     <div class="fixed inset-0 flex items-center justify-center bg-[#0a0a0a] z-[200]" id="loading">
-        <div class="w-8 h-8 border-4 border-neutral-800 border-t-blue-500 rounded-full animate-spin"></div>
+        <div class="w-8 h-8 border-4 border-white/10 border-t-blue-500 rounded-full animate-spin"></div>
     </div>
 
-    <div class="bar-top fixed top-0 left-0 right-0 z-[100] bg-neutral-950/95 backdrop-blur border-b border-neutral-800 px-4 py-3 flex items-center gap-4 shadow-sm" id="top-bar">
-        <a href="/comics" class="text-neutral-400 hover:text-neutral-200 text-sm font-medium transition-colors flex items-center gap-1">
+    <div class="bar-top fixed top-0 left-0 right-0 z-[100] bg-background/95 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center gap-4 shadow-sm" id="top-bar">
+        <a href="/comics" class="text-muted/80 hover:text-white text-sm font-medium transition-colors flex items-center gap-1">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             Back
         </a>
-        <span class="flex-1 text-sm font-semibold text-neutral-200 truncate" id="chapter-title">Loading...</span>
-        <span class="text-xs font-medium text-neutral-500 tabular-nums" id="page-info">0/0</span>
+        <span class="flex-1 text-sm font-semibold text-white truncate" id="chapter-title">Loading...</span>
+        <span class="text-xs font-medium text-muted/60 tabular-nums" id="page-info">0/0</span>
     </div>
 
     <div class="max-w-4xl mx-auto w-full" id="pages"></div>
 
-    <div class="bar-bottom fixed bottom-0 left-0 right-0 z-[100] bg-neutral-950/95 backdrop-blur border-t border-neutral-800 px-4 py-3 flex items-center gap-4 shadow-sm" id="bottom-bar">
-        <span class="text-xs font-medium text-neutral-500 tabular-nums w-12" id="bottom-info">0/0</span>
-        <div class="flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden cursor-pointer group" id="progress-bar">
+    <div class="bar-bottom fixed bottom-0 left-0 right-0 z-[100] bg-background/95 backdrop-blur border-t border-white/10 px-4 py-3 flex items-center gap-4 shadow-sm" id="bottom-bar">
+        <span class="text-xs font-medium text-muted/60 tabular-nums w-12" id="bottom-info">0/0</span>
+        <div class="flex-1 h-1.5 glass-panel rounded-full overflow-hidden cursor-pointer group" id="progress-bar">
             <div class="h-full bg-blue-500 transition-all duration-200 group-hover:bg-blue-400" id="progress-fill" style="width:0%"></div>
         </div>
     </div>
@@ -163,14 +163,14 @@
 
             if (pages.length > 0) {
                 var prevBtn = document.createElement('button');
-                prevBtn.className = 'fixed bottom-4 left-4 z-[90] bg-neutral-900/90 backdrop-blur border border-neutral-700 text-neutral-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-neutral-800 hover:text-white transition-colors shadow-lg';
+                prevBtn.className = 'fixed bottom-4 left-4 z-[90] bg-surface/90 backdrop-blur border border-white/5 text-muted px-4 py-2 rounded-lg text-sm font-medium hover:glass-panel hover:text-white transition-colors shadow-lg';
                 prevBtn.innerHTML = '&larr; Prev Chapter';
                 prevBtn.style.display = prevChapter ? '' : 'none';
                 prevBtn.onclick = function() { chapterId = String(prevChapter); loadChapter(); window.scrollTo(0, 0); };
                 container.appendChild(prevBtn);
 
                 var nextBtn = document.createElement('button');
-                nextBtn.className = 'fixed bottom-4 right-4 z-[90] bg-neutral-900/90 backdrop-blur border border-neutral-700 text-neutral-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-neutral-800 hover:text-white transition-colors shadow-lg';
+                nextBtn.className = 'fixed bottom-4 right-4 z-[90] bg-surface/90 backdrop-blur border border-white/5 text-muted px-4 py-2 rounded-lg text-sm font-medium hover:glass-panel hover:text-white transition-colors shadow-lg';
                 nextBtn.innerHTML = 'Next Chapter &rarr;';
                 nextBtn.style.display = nextChapter ? '' : 'none';
                 nextBtn.onclick = function() { chapterId = String(nextChapter); loadChapter(); window.scrollTo(0, 0); };

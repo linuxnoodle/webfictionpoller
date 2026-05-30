@@ -1,6 +1,6 @@
 {{define "dashboard.html"}}
 <!DOCTYPE html>
-<html lang="en" class="bg-neutral-950 text-neutral-200">
+<html lang="en" class="bg-background text-white">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,13 +26,13 @@
         var content = row.querySelector('[data-content]');
         if (content) content.classList.add('opacity-40');
         var title = row.querySelector('[data-title]');
-        if (title) { title.className = 'text-sm text-neutral-500 hover:text-neutral-300 truncate min-w-0'; if (url) { var a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.className = title.className; a.textContent = title.textContent; a.onclick = function(e){e.stopPropagation()}; title.replaceWith(a); } }
+        if (title) { title.className = 'text-sm text-muted/60 hover:text-muted truncate min-w-0'; if (url) { var a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.className = title.className; a.textContent = title.textContent; a.onclick = function(e){e.stopPropagation()}; title.replaceWith(a); } }
         var badge = row.querySelector('[data-badge]');
-        if (badge) badge.className = 'text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]';
+        if (badge) badge.className = 'text-xs text-neutral-600 glass-panel px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]';
         var check = row.querySelector('[data-act-check]');
-        if (check) { check.classList.remove('text-emerald-400','bg-emerald-900/40','hover:bg-emerald-800'); check.classList.add('text-neutral-700','bg-neutral-800'); check.onclick = null; }
+        if (check) { check.classList.remove('text-primary','bg-emerald-900/40','hover:bg-emerald-800'); check.classList.add('text-neutral-700','glass-panel'); check.onclick = null; }
         var ext = row.querySelector('[data-act-ext]');
-        if (ext) { ext.classList.remove('text-emerald-300','bg-emerald-900/50'); ext.classList.add('text-neutral-400','bg-neutral-800','hover:bg-neutral-700'); }
+        if (ext) { ext.classList.remove('text-emerald-300','bg-emerald-900/50'); ext.classList.add('text-muted/80','glass-panel','hover:bg-surfaceHighlight'); }
     }
     function _decrementUnread() {
         var el = document.getElementById('unread-count');
@@ -66,13 +66,13 @@
     }
     function syncSeries(id, btn) {
         if (btn.classList.contains('animate-spin')) return;
-        btn.classList.add('animate-spin', 'text-emerald-500');
-        btn.classList.remove('text-neutral-500', 'hover:text-neutral-300');
+        btn.classList.add('animate-spin', 'text-primary');
+        btn.classList.remove('text-muted/60', 'hover:text-muted');
         fetch('/api/series/' + id + '/sync', {method: 'POST', headers: {'X-CSRF-Token': _csrf}})
             .then(function(r){return r.json()})
             .then(function(d){
-                btn.classList.remove('animate-spin', 'text-emerald-500');
-                btn.classList.add('text-neutral-500', 'hover:text-neutral-300');
+                btn.classList.remove('animate-spin', 'text-primary');
+                btn.classList.add('text-muted/60', 'hover:text-muted');
                 if (d.success) {
                     if (d.inserted > 0) {
                         alert('Sync successful: ' + d.inserted + ' new chapters. Refresh page to see.');
@@ -82,14 +82,14 @@
                 }
             })
             .catch(function(e) {
-                btn.classList.remove('animate-spin', 'text-emerald-500');
-                btn.classList.add('text-neutral-500', 'hover:text-neutral-300');
+                btn.classList.remove('animate-spin', 'text-primary');
+                btn.classList.add('text-muted/60', 'hover:text-muted');
                 alert('Sync failed: ' + e);
             });
     }
     </script>
 </head>
-<body class="min-h-screen bg-neutral-950">
+<body class="min-h-screen bg-background">
     {{template "nav" .}}
     <main class="max-w-6xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
     <div x-data="{ view: localStorage.getItem('dashView') || 'time', search: '', sortBy: localStorage.getItem('dashSort') || 'published', unreadOnly: localStorage.getItem('dashUnread') === 'true' }"
@@ -98,55 +98,55 @@
         <div class="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between mb-4 sm:mb-6">
             <div class="flex flex-wrap items-center gap-2 sm:gap-4">
                 <h1 class="text-xl sm:text-2xl font-bold text-neutral-100">Dashboard</h1>
-                <div class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
+                <div class="flex glass-panel rounded-lg overflow-hidden border border-white/5">
                     <button @click="view = 'time'"
-                            :class="view === 'time' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                            :class="view === 'time' ? 'bg-neutral-600 text-neutral-100' : 'glass-panel text-muted/60 hover:text-muted'"
                             class="px-3 py-1.5 text-sm">Time</button>
                     <button @click="view = 'series'"
-                            :class="view === 'series' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                            :class="view === 'series' ? 'bg-neutral-600 text-neutral-100' : 'glass-panel text-muted/60 hover:text-muted'"
                             class="px-3 py-1.5 text-sm">Series</button>
                 </div>
                 <div x-show="view === 'time'" class="flex items-center gap-2 sm:gap-4">
-                    <div class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
+                    <div class="flex glass-panel rounded-lg overflow-hidden border border-white/5">
                         <button @click="sortBy = 'published'"
-                                :class="sortBy === 'published' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                                :class="sortBy === 'published' ? 'bg-neutral-600 text-neutral-100' : 'glass-panel text-muted/60 hover:text-muted'"
                                 class="px-2 py-1.5 text-xs">published</button>
                         <button @click="sortBy = 'received'"
-                                :class="sortBy === 'received' ? 'bg-neutral-600 text-neutral-100' : 'bg-neutral-800 text-neutral-500 hover:text-neutral-300'"
+                                :class="sortBy === 'received' ? 'bg-neutral-600 text-neutral-100' : 'glass-panel text-muted/60 hover:text-muted'"
                                 class="px-2 py-1.5 text-xs">received</button>
                     </div>
-                    <label class="flex items-center gap-1.5 text-xs text-neutral-400 cursor-pointer hover:text-neutral-200">
-                        <input type="checkbox" x-model="unreadOnly" class="rounded border-neutral-700 bg-neutral-800 text-emerald-500 focus:ring-emerald-500">
+                    <label class="flex items-center gap-1.5 text-xs text-muted/80 cursor-pointer hover:text-white">
+                        <input type="checkbox" x-model="unreadOnly" class="rounded border-white/5 glass-panel text-primary focus:ring-emerald-500">
                         Unread
                     </label>
                 </div>
-                <div x-show="view === 'series'" class="flex bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700">
-                    <button onclick="sortSeriesBy('title')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "title"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">title</button>
-                    <button onclick="sortSeriesBy('author')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "author"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">author</button>
-                    <button onclick="sortSeriesBy('provider')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "provider"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">provider</button>
-                    <button onclick="sortSeriesBy('rating')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "rating"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">rating</button>
-                    <button onclick="sortSeriesBy('status')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "status"}}bg-neutral-600 text-neutral-100{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">status</button>
+                <div x-show="view === 'series'" class="flex glass-panel rounded-lg overflow-hidden border border-white/5">
+                    <button onclick="sortSeriesBy('title')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "title"}}bg-neutral-600 text-neutral-100{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">title</button>
+                    <button onclick="sortSeriesBy('author')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "author"}}bg-neutral-600 text-neutral-100{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">author</button>
+                    <button onclick="sortSeriesBy('provider')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "provider"}}bg-neutral-600 text-neutral-100{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">provider</button>
+                    <button onclick="sortSeriesBy('rating')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "rating"}}bg-neutral-600 text-neutral-100{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">rating</button>
+                    <button onclick="sortSeriesBy('status')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "status"}}bg-neutral-600 text-neutral-100{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">status</button>
                 </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 sm:gap-4">
                 {{if .Stats}}
-                <div class="flex gap-2 sm:gap-4 text-xs sm:text-sm text-neutral-500">
+                <div class="flex gap-2 sm:gap-4 text-xs sm:text-sm text-muted/60">
                     <span>{{.Stats.TotalSeries}} series</span>
                     <span>{{.Stats.ActiveSeries}} active</span>
-                    <span id="unread-count" class="text-neutral-300">{{.Stats.UnreadChapter}} unread</span>
+                    <span id="unread-count" class="text-muted">{{.Stats.UnreadChapter}} unread</span>
                 </div>
                 {{end}}
                 <button hx-post="/api/read-all" hx-swap="none" hx-confirm="Mark all chapters as read?"
-                        class="bg-neutral-700 hover:bg-neutral-600 text-neutral-300 px-2 sm:px-3 py-1 rounded text-xs sm:text-sm">Mark All Read</button>
+                        class="bg-surfaceHighlight hover:bg-neutral-600 text-muted px-2 sm:px-3 py-1 rounded text-xs sm:text-sm">Mark All Read</button>
                 <input type="text" x-model="search" placeholder="Filter..."
-                       class="bg-neutral-800 border border-neutral-700 rounded px-2 sm:px-3 py-1.5 text-sm focus:outline-none focus:border-neutral-500 w-28 sm:w-auto" />
+                       class="glass-panel border border-white/5 rounded px-2 sm:px-3 py-1.5 text-sm focus:outline-none focus:border-neutral-500 w-28 sm:w-auto" />
             </div>
         </div>
 
         {{if and (not .Groups) (not .TimeView)}}
         <div class="text-neutral-600 text-center py-12">
             <p class="text-lg">No chapters yet.</p>
-            <a href="/series/add" class="text-neutral-400 hover:text-neutral-200 mt-2 inline-block">Add a series to track</a>
+            <a href="/series/add" class="text-muted/80 hover:text-white mt-2 inline-block">Add a series to track</a>
         </div>
         {{end}}
 
@@ -156,17 +156,17 @@
             {{range .TimeGroups}}
             <div class="mt-4"
                  data-st="{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}">
-                <h3 class="text-sm font-semibold text-neutral-500 uppercase tracking-wider px-2 sm:px-4 py-2 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">{{.Date}}</h3>
+                <h3 class="text-sm font-semibold text-muted/60 uppercase tracking-wider px-2 sm:px-4 py-2 sticky top-0 bg-background/90 backdrop-blur z-10">{{.Date}}</h3>
                 {{range .Chapters}}
-                <div id="row-{{.ID}}" class="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded hover:bg-neutral-900/50">
+                <div id="row-{{.ID}}" class="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded hover:bg-surface/50">
                     <a href="/reader/{{.SeriesID}}?chapter={{.ID}}" class="flex items-center gap-1.5 sm:gap-3 flex-1 min-w-0 no-underline">
                         {{if .IsRead}}
                         <div class="w-1 flex-shrink-0"></div>
                         <div data-content class="flex-1 min-w-0 overflow-hidden opacity-40">
                             <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                                 <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
-                                <span data-badge class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
-                                <span class="text-sm text-neutral-500 truncate min-w-0">{{.Title}}</span>
+                                <span data-badge class="text-xs text-neutral-600 glass-panel px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                                <span class="text-sm text-muted/60 truncate min-w-0">{{.Title}}</span>
                             </div>
                         </div>
                         {{else}}
@@ -174,8 +174,8 @@
                         <div data-content class="flex-1 min-w-0 overflow-hidden">
                             <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                                 <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
-                                <span data-badge class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
-                                <span data-title class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
+                                <span data-badge class="text-xs text-muted/80 glass-panel px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                                <span data-title class="text-sm text-white truncate min-w-0">{{.Title}}</span>
                             </div>
                         </div>
                         {{end}}
@@ -184,18 +184,18 @@
                         <div class="hidden sm:flex items-center gap-0.5"
                              data-rating-sid="{{.SeriesID}}">
                             <button onclick="ratingDown(this)"
-                                    class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                            <span data-rating-value="{{f64f .SeriesRating}}" {{ratingStyle .SeriesRating}}class="w-10 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400 py-0.5 cursor-pointer inline-block">{{ratingText .SeriesRating}}</span>
+                                    class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-white glass-panel hover:bg-surfaceHighlight rounded text-xs">&#9660;</button>
+                            <span data-rating-value="{{f64f .SeriesRating}}" {{ratingStyle .SeriesRating}}class="w-10 text-center glass-panel border border-white/5 rounded text-xs text-muted/80 py-0.5 cursor-pointer inline-block">{{ratingText .SeriesRating}}</span>
                             <button onclick="ratingUp(this)"
-                                    class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
+                                    class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-white glass-panel hover:bg-surfaceHighlight rounded text-xs">&#9650;</button>
                         </div>
                         <span class="text-xs text-neutral-600 w-10 text-right flex-shrink-0">{{.PublishedAt.Format "15:04"}}</span>
                         <button data-act-ext onclick="openExt({{.ID}}, '{{.URL}}')" title="Open at source"
-                                class="icon-btn {{if .IsRead}}text-neutral-500 bg-neutral-800 hover:bg-neutral-700{{else}}text-emerald-300 bg-emerald-900/50 hover:bg-emerald-800{{end}}">
+                                class="icon-btn {{if .IsRead}}text-muted/60 glass-panel hover:bg-surfaceHighlight{{else}}text-emerald-300 bg-emerald-900/50 hover:bg-emerald-800{{end}}">
                             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
                         </button>
                         <button data-act-check {{if .IsRead}}disabled{{else}}onclick="markCheck(this, {{.ID}})"{{end}} title="Mark read"
-                                class="icon-btn {{if .IsRead}}text-neutral-700 bg-neutral-800 cursor-default{{else}}text-emerald-400 bg-emerald-900/40 hover:bg-emerald-800{{end}}">
+                                class="icon-btn {{if .IsRead}}text-neutral-700 glass-panel cursor-default{{else}}text-primary bg-emerald-900/40 hover:bg-emerald-800{{end}}">
                             <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
                         </button>
                     </div>
@@ -215,12 +215,12 @@
         <!-- SERIES VIEW -->
         <div x-show="view === 'series'">
             {{if .RatingDist}}
-            <div class="mb-4 bg-neutral-900 rounded-lg border border-neutral-800 p-4">
-                <h2 class="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-3">Rating Distribution</h2>
+            <div class="mb-4 bg-surface rounded-lg border border-white/10 p-4">
+                <h2 class="text-sm font-semibold text-muted/80 uppercase tracking-wider mb-3">Rating Distribution</h2>
                 <div class="flex items-end gap-px h-24">
                     {{range $i, $count := .RatingDist}}
                     <div class="flex-1 flex flex-col items-center justify-end h-full min-w-0">
-                        {{if gt $count 0}}<span class="text-neutral-500 mb-0.5" style="font-size:8px">{{$count}}</span>{{end}}
+                        {{if gt $count 0}}<span class="text-muted/60 mb-0.5" style="font-size:8px">{{$count}}</span>{{end}}
                         <div class="w-full rounded-t transition-all"
                              style="height: {{if gt $count 0}}max(3px, calc({{$count}} / {{$.MaxRating}} * 100%)){{else}}1px{{end}}; min-height: 1px; background: hsl({{ratingHue $i}}, 65%, 50%);"></div>
                     </div>
@@ -235,7 +235,7 @@
             <!-- Mobile: card layout -->
             <div class="sm:hidden space-y-3">
                 {{range .AllSeries}}
-                <div class="bg-neutral-900 rounded-lg border border-neutral-800 p-3 space-y-2" data-st="{{jsstr .Title}}" data-series-id="{{.ID}}">
+                <div class="bg-surface rounded-lg border border-white/10 p-3 space-y-2" data-st="{{jsstr .Title}}" data-series-id="{{.ID}}">
                     <div class="flex items-start justify-between gap-2">
                         <div class="flex items-center gap-1.5 min-w-0">
                             {{if .ImageURL}}
@@ -244,37 +244,37 @@
                             <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
                             {{end}}
                             <div class="min-w-0">
-                                <a href="{{.SourceURL}}" target="_blank" class="text-sm font-semibold text-neutral-200 hover:text-neutral-100 truncate block">{{.Title}}</a>
-                                <span class="text-xs text-neutral-500">{{.Author}} &middot; {{.ProviderName}}</span>
+                                <a href="{{.SourceURL}}" target="_blank" class="text-sm font-semibold text-white hover:text-neutral-100 truncate block">{{.Title}}</a>
+                                <span class="text-xs text-muted/60">{{.Author}} &middot; {{.ProviderName}}</span>
                             </div>
                         </div>
                         <button hx-post="/api/series/{{.ID}}/delete" hx-swap="none" hx-confirm="Delete this series and all its chapters?"
                                 class="text-red-400/70 hover:text-red-400 text-xs flex-shrink-0">Delete</button>
                     </div>
                     {{if .Summary}}
-                    <p class="text-xs text-neutral-500" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{.Summary}}</p>
+                    <p class="text-xs text-muted/60" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{.Summary}}</p>
                     {{end}}
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-0.5" data-rating-sid="{{.ID}}">
                             <button onclick="ratingDown(this)"
-                                    class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                            <span data-rating-value="{{f64f .Rating}}" {{ratingStyle .Rating}}class="w-10 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 py-0 cursor-pointer inline-block">{{ratingText .Rating}}</span>
+                                    class="w-5 h-5 flex items-center justify-center text-muted/60 hover:text-white glass-panel hover:bg-surfaceHighlight rounded text-xs">&#9660;</button>
+                            <span data-rating-value="{{f64f .Rating}}" {{ratingStyle .Rating}}class="w-10 text-center glass-panel border border-white/5 rounded text-xs text-muted py-0 cursor-pointer inline-block">{{ratingText .Rating}}</span>
                             <button onclick="ratingUp(this)"
-                                    class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
+                                    class="w-5 h-5 flex items-center justify-center text-muted/60 hover:text-white glass-panel hover:bg-surfaceHighlight rounded text-xs">&#9650;</button>
                         </div>
                         <select hx-post="/api/series/{{.ID}}/status" hx-include="this" hx-swap="none"
-                                name="status" class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-neutral-300">
+                                name="status" class="glass-panel border border-white/5 rounded px-2 py-1 text-xs text-muted">
                             <option value="active" {{if eq .Status "active"}}selected{{end}}>Active</option>
                             <option value="binge" {{if eq .Status "binge"}}selected{{end}}>Binge</option>
                             <option value="hiatus" {{if eq .Status "hiatus"}}selected{{end}}>Hiatus</option>
                             <option value="dropped" {{if eq .Status "dropped"}}selected{{end}}>Dropped</option>
                         </select>
                         <button hx-post="/api/series/{{.ID}}/archive" hx-vals='{"archive":"{{if .Archive}}false{{else}}true{{end}}"}' hx-swap="none"
-                                class="text-xs px-1.5 py-0.5 rounded {{if .Archive}}bg-emerald-900/30 text-emerald-400{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">Archive {{if .Archive}}On{{else}}Off{{end}}</button>
-                        <button onclick="syncSeries({{.ID}}, this)" class="text-neutral-500 hover:text-neutral-300 p-1" title="Sync Series">
+                                class="text-xs px-1.5 py-0.5 rounded {{if .Archive}}bg-emerald-900/30 text-primary{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">Archive {{if .Archive}}On{{else}}Off{{end}}</button>
+                        <button onclick="syncSeries({{.ID}}, this)" class="text-muted/60 hover:text-muted p-1" title="Sync Series">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                         </button>
-                        <a href="/reader/{{.ID}}" class="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-1.5 py-0.5 rounded">Read</a>
+                        <a href="/reader/{{.ID}}" class="text-xs text-primary hover:text-emerald-300 bg-emerald-900/30 px-1.5 py-0.5 rounded">Read</a>
                     </div>
                 </div>
                 {{end}}
@@ -284,7 +284,7 @@
             <div class="hidden sm:block overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="text-left text-neutral-500 border-b border-neutral-800">
+                        <tr class="text-left text-muted/60 border-b border-white/10">
                             <th class="pb-2 pr-4"></th>
                             <th class="pb-2 pr-4">Title</th>
                             <th class="pb-2 pr-4">Author</th>
@@ -299,7 +299,7 @@
                     </thead>
                     <tbody>
                         {{range .AllSeries}}
-                        <tr class="border-b border-neutral-800/50 hover:bg-neutral-900/50" data-st="{{jsstr .Title}}" data-series-id="{{.ID}}">
+                        <tr class="border-b border-white/10/50 hover:bg-surface/50" data-st="{{jsstr .Title}}" data-series-id="{{.ID}}">
                             <td class="py-2 pr-4">
                                 {{if .ImageURL}}
                                 <img src="{{.ImageURL}}" alt="" class="w-8 h-11 object-cover rounded">
@@ -308,22 +308,22 @@
                                 {{end}}
                             </td>
                             <td class="py-2 pr-4">
-                                <a href="{{.SourceURL}}" target="_blank" class="text-neutral-300 hover:text-neutral-100">{{.Title}}</a>
+                                <a href="{{.SourceURL}}" target="_blank" class="text-muted hover:text-neutral-100">{{.Title}}</a>
                             </td>
-                            <td class="py-2 pr-4 text-neutral-500">{{.Author}}</td>
-                            <td class="py-2 pr-4 text-neutral-500">{{.ProviderName}}</td>
+                            <td class="py-2 pr-4 text-muted/60">{{.Author}}</td>
+                            <td class="py-2 pr-4 text-muted/60">{{.ProviderName}}</td>
                             <td class="py-2 pr-4">
                                 <div class="flex items-center gap-0.5" data-rating-sid="{{.ID}}">
                                     <button onclick="ratingDown(this)"
-                                            class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                                    <span data-rating-value="{{f64f .Rating}}" {{ratingStyle .Rating}}class="w-11 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 py-0 cursor-pointer inline-block">{{ratingText .Rating}}</span>
+                                            class="w-5 h-5 flex items-center justify-center text-muted/60 hover:text-white glass-panel hover:bg-surfaceHighlight rounded text-xs">&#9660;</button>
+                                    <span data-rating-value="{{f64f .Rating}}" {{ratingStyle .Rating}}class="w-11 text-center glass-panel border border-white/5 rounded text-xs text-muted py-0 cursor-pointer inline-block">{{ratingText .Rating}}</span>
                                     <button onclick="ratingUp(this)"
-                                            class="w-5 h-5 flex items-center justify-center text-neutral-500 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
+                                            class="w-5 h-5 flex items-center justify-center text-muted/60 hover:text-white glass-panel hover:bg-surfaceHighlight rounded text-xs">&#9650;</button>
                                 </div>
                             </td>
                             <td class="py-2 pr-4">
                                 <select hx-post="/api/series/{{.ID}}/status" hx-include="this" hx-swap="none"
-                                        name="status" class="bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-xs text-neutral-300">
+                                        name="status" class="glass-panel border border-white/5 rounded px-1 py-0.5 text-xs text-muted">
                                     <option value="active" {{if eq .Status "active"}}selected{{end}}>Active</option>
                                     <option value="binge" {{if eq .Status "binge"}}selected{{end}}>Binge</option>
                                     <option value="hiatus" {{if eq .Status "hiatus"}}selected{{end}}>Hiatus</option>
@@ -332,15 +332,15 @@
                             </td>
                             <td class="py-2 pr-4">
                                 <button hx-post="/api/series/{{.ID}}/archive" hx-vals='{"archive":"{{if .Archive}}false{{else}}true{{end}}"}' hx-swap="none"
-                                        class="text-xs px-1.5 py-0.5 rounded {{if .Archive}}bg-emerald-900/30 text-emerald-400{{else}}bg-neutral-800 text-neutral-500 hover:text-neutral-300{{end}}">{{if .Archive}}On{{else}}Off{{end}}</button>
+                                        class="text-xs px-1.5 py-0.5 rounded {{if .Archive}}bg-emerald-900/30 text-primary{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">{{if .Archive}}On{{else}}Off{{end}}</button>
                             </td>
                             <td class="py-2 pr-4">
-                                <button onclick="syncSeries({{.ID}}, this)" class="text-neutral-500 hover:text-neutral-300 p-1" title="Sync Series">
+                                <button onclick="syncSeries({{.ID}}, this)" class="text-muted/60 hover:text-muted p-1" title="Sync Series">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                                 </button>
                             </td>
                             <td class="py-2 pr-4">
-                                <a href="/reader/{{.ID}}" class="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-1.5 py-0.5 rounded">Read</a>
+                                <a href="/reader/{{.ID}}" class="text-xs text-primary hover:text-emerald-300 bg-emerald-900/30 px-1.5 py-0.5 rounded">Read</a>
                             </td>
                             <td class="py-2">
                                 <button hx-post="/api/series/{{.ID}}/delete" hx-swap="none" hx-confirm="Delete this series and all its chapters?"
