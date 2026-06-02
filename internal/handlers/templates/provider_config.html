@@ -29,7 +29,11 @@
             headers: {'X-CSRF-Token': _csrf}
         }).then(function(r){return r.json()}).then(function(d) {
             btn.disabled = false;
-            if (d.password === '') {
+            if (d.error) {
+                btn.textContent = 'Error';
+                return;
+            }
+            if (!d.password || d.password === '') {
                 btn.textContent = 'View';
                 return;
             }
@@ -47,14 +51,25 @@
         var form = btn.closest('form');
         var status = form.querySelector('[data-auth-status]');
         btn.disabled = true;
-        btn.textContent = 'Checking...';
-        status.textContent = '';
-        status.className = 'text-xs px-2 py-0.5 rounded';
-        fetch('/api/providers/check-auth', {
+        btn.textContent = 'Saving...';
+        var formData = new FormData(form);
+        var params = [];
+        formData.forEach(function(v, k) { params.push(encodeURIComponent(k) + '=' + encodeURIComponent(v)); });
+        fetch('/admin/providers', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': _csrf},
-            body: 'provider_name=' + encodeURIComponent(name)
-        }).then(function(r){return r.json()}).then(function(d) {
+            body: params.join('&')
+        }).then(function() {
+            btn.textContent = 'Checking...';
+            status.textContent = '';
+            status.className = 'text-xs px-2 py-0.5 rounded';
+            return fetch('/api/providers/check-auth', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': _csrf},
+                body: 'provider_name=' + encodeURIComponent(name)
+            });
+        }).then(function(r) { return r ? r.json() : null; }).then(function(d) {
+            if (!d) { btn.disabled = false; btn.textContent = 'Check Auth'; return; }
             btn.disabled = false;
             btn.textContent = 'Check Auth';
             if (d.success) {
