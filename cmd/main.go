@@ -67,6 +67,7 @@ func main() {
 		providers.NewSufficientVelocityProvider(),
 		providers.NewQuestionableQuestingProvider(),
 		providers.NewFanfictionNetProvider(),
+		providers.NewAO3Provider(),
 	}
 
 	handlers.RegisterComicProvider(comics.NewMangaDexProvider())

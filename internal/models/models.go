@@ -129,7 +129,7 @@ type SeriesStorage struct {
 
 func ProviderFavicon(name string) string {
 	switch name {
-	case "royalroad", "spacebattles", "sufficientvelocity", "questionablequesting", "fanfictionnet":
+	case "royalroad", "spacebattles", "sufficientvelocity", "questionablequesting", "fanfictionnet", "ao3":
 		return "/static/favicons/" + name + ".ico"
 	default:
 		return ""
@@ -148,11 +148,13 @@ func ProviderFaviconSource(name string) string {
 		return "https://forum.questionablequesting.com/favicon.ico"
 	case "fanfictionnet":
 		return "https://www.fanfiction.net/favicon.ico"
+	case "ao3":
+		return "https://archiveofourown.org/favicon.ico"
 	default:
 		return ""
 	}
 }
 
 func ProviderNames() []string {
-	return []string{"royalroad", "spacebattles", "sufficientvelocity", "questionablequesting", "fanfictionnet"}
+	return []string{"royalroad", "spacebattles", "sufficientvelocity", "questionablequesting", "fanfictionnet", "ao3"}
 }
