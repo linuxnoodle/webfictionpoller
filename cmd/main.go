@@ -368,6 +368,25 @@ func loadProviderCredentials(store *handlers.Store, pool *worker.WorkerPool, vau
 			continue
 		}
 
+		if lr, ok := p.(providers.LoginRefresher); ok {
+			providerName := name
+			lr.SetCredentialSource(func() (string, string, bool) {
+				fresh, err := store.GetProviderConfig(providerName)
+				if err != nil || fresh == nil {
+					return "", "", false
+				}
+				if fresh.Username == "" || fresh.EncryptedPassword == "" {
+					return "", "", false
+				}
+				plainPass, err := vault.Decrypt(fresh.EncryptedPassword)
+				if err != nil {
+					logging.Error("failed to decrypt password for %s during re-login: %v", providerName, err)
+					return "", "", false
+				}
+				return fresh.Username, plainPass, true
+			})
+		}
+
 		if pc.Username != "" && pc.EncryptedPassword != "" && p.SupportsLogin() {
 			plainPass, err := vault.Decrypt(pc.EncryptedPassword)
 			if err != nil {
