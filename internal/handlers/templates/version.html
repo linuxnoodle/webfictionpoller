@@ -38,8 +38,8 @@
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-neutral-500">Server status</span>
                             <span class="flex items-center gap-1.5 text-sm">
-                                <span class="w-2 h-2 rounded-full pulse-dot" :class="serverUp ? 'bg-emerald-400' : 'bg-red-400'"></span>
-                                <span :class="serverUp ? 'text-emerald-300' : 'text-red-300'" x-text="serverUp ? 'Connected' : 'Disconnected'"></span>
+                                <span class="w-2 h-2 rounded-full pulse-dot" :class="serverUp ? 'bg-primary' : 'bg-red-400'"></span>
+                                <span :class="serverUp ? 'text-primary' : 'text-red-300'" x-text="serverUp ? 'Connected' : 'Disconnected'"></span>
                             </span>
                         </div>
                         <div class="flex justify-between items-center">
@@ -53,7 +53,7 @@
                         <div class="border-t border-neutral-800 my-2"></div>
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-neutral-500">Latest version</span>
-                            <span class="text-sm font-mono" :class="data.update_available ? 'text-emerald-300' : 'text-neutral-200'" x-text="data.latest_short || 'Checking...'"></span>
+                            <span class="text-sm font-mono" :class="data.update_available ? 'text-primary' : 'text-neutral-200'" x-text="data.latest_short || 'Checking...'"></span>
                         </div>
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-neutral-500">Last checked</span>
@@ -61,8 +61,8 @@
                         </div>
                     </div>
 
-                    <div x-show="data.update_available && !data.updating && !updating" class="mt-4 bg-emerald-900/30 border border-emerald-800/50 rounded-lg p-4">
-                        <p class="text-emerald-300 text-sm font-semibold mb-1">Update available!</p>
+                    <div x-show="data.update_available && !data.updating && !updating" class="mt-4 bg-primary/20 border border-primary/20 rounded-lg p-4">
+                        <p class="text-primary text-sm font-semibold mb-1">Update available!</p>
                         <p class="text-xs text-neutral-400 mb-3">A newer version is available on GitHub.</p>
                         <button @click="
                             updating=true; updateDone=false; updateLog=null; serverUp=true; needsRestart=false;
@@ -115,7 +115,7 @@
                                 }).catch(function(){serverUp=false});
                             }, 1000);
                         "
-                                class="w-full bg-emerald-700 hover:bg-emerald-600 text-white py-2 rounded text-sm font-semibold">
+                                class="w-full bg-primary hover:bg-primary text-white py-2 rounded text-sm font-semibold">
                             Update Now
                         </button>
                         <details class="mt-2">
@@ -130,13 +130,13 @@
                     <div x-show="updating || data.updating || updateLog" class="mt-4 bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                         <div class="flex items-center gap-2 mb-3">
                             <svg x-show="!updateDone" class="spinner w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg>
-                            <p class="text-sm font-semibold" :class="updateDone ? 'text-emerald-300' : 'text-amber-300'" x-text="updateDone ? 'Update complete!' : 'Updating...'"></p>
+                            <p class="text-sm font-semibold" :class="updateDone ? 'text-primary' : 'text-amber-300'" x-text="updateDone ? 'Update complete!' : 'Updating...'"></p>
                         </div>
                         <div id="update-log" class="bg-neutral-950 rounded p-3 max-h-72 overflow-y-auto">
                             <pre class="update-log text-neutral-300" x-text="updateLog || data.update_log || 'Preparing...'"></pre>
                         </div>
                         <p x-show="!updateDone" class="text-xs text-neutral-600 mt-2" x-text="needsRestart ? (serverUp ? 'Waiting for container to restart...' : 'Container restarting, waiting for server...') : 'Waiting for update to complete...'"></p>
-                        <p x-show="updateDone" class="text-xs text-emerald-500 mt-2">Restart complete. Version info updated above.</p>
+                        <p x-show="updateDone" class="text-xs text-primary mt-2">Restart complete. Version info updated above.</p>
                     </div>
 
                     <div x-show="!data.update_available && !data.updating && data.latest_commit" class="mt-4 bg-neutral-800/50 rounded-lg p-3">

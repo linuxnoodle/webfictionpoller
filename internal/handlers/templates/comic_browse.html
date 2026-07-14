@@ -27,10 +27,10 @@
     <div x-show="tab==='search'">
         <div class="flex gap-2 mb-6">
             <input x-ref="searchInput" x-model="query" @keydown.enter="doSearch(1)"
-                   class="flex-1 bg-surface border border-white/5 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-lg px-4 py-2.5 text-sm text-white placeholder-neutral-500 outline-none transition-all"
+                   class="flex-1 bg-surface border border-white/5 focus:border-primary focus:ring-1 focus:ring-primary rounded-lg px-4 py-2.5 text-sm text-white placeholder-neutral-500 outline-none transition-all"
                    placeholder="Search manga on MangaDex...">
             <button @click="doSearch(1)" :disabled="searching"
-                    class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors shadow-sm">
+                    class="bg-primary hover:bg-primary text-white px-6 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors shadow-sm">
                 <span x-show="!searching">Search</span>
                 <span x-show="searching">Searching...</span>
             </button>
@@ -47,7 +47,7 @@
                         <p class="text-xs text-muted/60 line-clamp-2 leading-relaxed" x-text="item.description"></p>
                         <div class="mt-auto pt-3">
                             <button x-show="!item.adding && !item.added"
-                                    class="text-xs font-medium bg-emerald-900/30 text-primary hover:bg-emerald-900/50 px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1">
+                                    class="text-xs font-medium bg-primary/20 text-primary hover:bg-primary/30 px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                                 Add to Library
                             </button>
@@ -68,7 +68,7 @@
             No results found
         </div>
         <div x-show="hasNextPage && results.length > 0" class="text-center py-4">
-            <button @click="doSearch(currentPage+1)" class="text-sm text-blue-400 hover:text-blue-300">Load more...</button>
+            <button @click="doSearch(currentPage+1)" class="text-sm text-primary hover:text-primary">Load more...</button>
         </div>
     </div>
 

@@ -74,5 +74,5 @@ func (h *Handler) SyncSeriesNow(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "inserted": inserted})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "inserted": inserted, "total": len(chapters)})
 }

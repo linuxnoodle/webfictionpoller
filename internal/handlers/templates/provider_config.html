@@ -74,7 +74,7 @@
             btn.textContent = 'Check Auth';
             if (d.success) {
                 status.textContent = 'Authenticated';
-                status.className = 'text-xs bg-emerald-900/30 text-primary px-2 py-0.5 rounded';
+                status.className = 'text-xs bg-primary/20 text-primary px-2 py-0.5 rounded';
                 btn.style.display = 'none';
             } else {
                 status.textContent = d.error || 'Failed';
@@ -103,12 +103,12 @@
                     <div class="flex items-center gap-2">
                         {{if $p.RequiresAuth}}
                             {{if and $p.SupportsLogin (index $.LoginTested $name)}}
-                            <span data-auth-status class="text-xs bg-emerald-900/30 text-primary px-2 py-0.5 rounded">Authenticated</span>
+                            <span data-auth-status class="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">Authenticated</span>
                             {{else}}
                             <span data-auth-status class="text-xs bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded">Requires Auth</span>
                             {{end}}
                         {{else}}
-                        <span class="text-xs bg-emerald-900/30 text-primary px-2 py-0.5 rounded">Public</span>
+                        <span class="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">Public</span>
                         {{end}}
                     </div>
                 </div>

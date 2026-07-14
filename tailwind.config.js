@@ -8,11 +8,11 @@ module.exports = {
         sans: ['Inter', 'sans-serif'],
       },
       colors: {
-        background: '#0B0C10',
-        surface: '#1F2833',
-        surfaceHighlight: '#2A3645',
-        primary: '#45A29E',
-        accent: '#66FCF1',
+        background: '#2C2C2C',
+        surface: '#522546',
+        surfaceHighlight: '#88304E',
+        primary: '#F7374F',
+        accent: '#F7374F',
         muted: '#C5C6C7',
       },
       boxShadow: {

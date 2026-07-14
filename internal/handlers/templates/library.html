@@ -96,7 +96,7 @@
                     <h2 class="text-lg font-semibold text-white">Archiver</h2>
                     <button @click="runNow()"
                             :disabled="status && status.active"
-                            class="text-xs px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:bg-surfaceHighlight disabled:text-muted/60 text-white transition-colors">
+                            class="text-xs px-3 py-1.5 rounded bg-primary hover:bg-primary disabled:bg-surfaceHighlight disabled:text-muted/60 text-white transition-colors">
                         Run Now
                     </button>
                 </div>
@@ -105,8 +105,8 @@
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-muted/60">Status</span>
                             <span class="flex items-center gap-1.5 text-sm">
-                                <span class="w-2 h-2 rounded-full" :class="status.active ? 'bg-amber-400 pulse-dot' : 'bg-emerald-400'"></span>
-                                <span :class="status.active ? 'text-amber-300' : 'text-emerald-300'" x-text="status.active ? 'Archiving...' : 'Idle'"></span>
+                                <span class="w-2 h-2 rounded-full" :class="status.active ? 'bg-amber-400 pulse-dot' : 'bg-primary'"></span>
+                                <span :class="status.active ? 'text-amber-300' : 'text-primary'" x-text="status.active ? 'Archiving...' : 'Idle'"></span>
                             </span>
                         </div>
                         <div x-show="status.active && status.current" class="flex justify-between items-center">
@@ -143,7 +143,7 @@
                     <form hx-post="/api/archive/all" hx-swap="none" hx-on::after-request="location.reload()" class="flex-shrink-0">
                         <input type="hidden" name="enabled" value="{{if not .ArchiveAll}}true{{else}}false{{end}}">
                         <button type="submit"
-                                class="relative inline-flex items-center h-6 w-11 rounded-full transition-colors focus:outline-none {{if .ArchiveAll}}bg-emerald-600{{else}}bg-surfaceHighlight{{end}}"
+                                class="relative inline-flex items-center h-6 w-11 rounded-full transition-colors focus:outline-none {{if .ArchiveAll}}bg-primary{{else}}bg-surfaceHighlight{{end}}"
                                 id="archive-toggle-btn">
                             <span class="inline-block w-5 h-5 bg-neutral-300 rounded-full transition-transform transform {{if .ArchiveAll}}translate-x-5{{else}}translate-x-0.5{{end}}"></span>
                         </button>
@@ -181,7 +181,7 @@
                             <div class="glass-panel rounded-lg hover:-translate-y-1 transition-transform duration-300 p-3">
                                 <div class="flex items-center justify-between mb-1.5">
                                     <div class="flex items-center gap-2 min-w-0">
-                                        <a :href="'/reader/' + s.series_id" class="text-sm text-white font-medium truncate hover:text-emerald-300" x-text="s.series_title"></a>
+                                        <a :href="'/reader/' + s.series_id" class="text-sm text-white font-medium truncate hover:text-primary" x-text="s.series_title"></a>
                                     </div>
                                     <div class="flex items-center gap-2 flex-shrink-0">
                                         <span class="text-xs text-muted/80" x-text="s.archived_chapters + '/' + s.total_chapters + ' ch'"></span>
@@ -190,7 +190,7 @@
                                 </div>
                                 <div class="flex items-center gap-1">
                                     <div class="flex-1 bg-surfaceHighlight rounded-full h-1">
-                                        <div class="h-1 rounded-full bg-emerald-500" :style="'width:' + (s.total_chapters > 0 ? Math.round(s.archived_chapters / s.total_chapters * 100) : 0) + '%'"></div>
+                                        <div class="h-1 rounded-full bg-primary" :style="'width:' + (s.total_chapters > 0 ? Math.round(s.archived_chapters / s.total_chapters * 100) : 0) + '%'"></div>
                                     </div>
                                     <button @click="reArchive(s.series_id, s.series_title)"
                                             :class="confirmingReArchive === s.series_id ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-surfaceHighlight hover:bg-neutral-600 text-muted/80'"
@@ -225,13 +225,13 @@
                                 <span class="text-sm text-white font-medium truncate">{{.SeriesTitle}}</span>
                             </div>
                             <div class="flex items-center gap-2 flex-shrink-0">
-                                <a href="/reader/{{.SeriesID}}" class="text-xs text-primary hover:text-emerald-300 bg-emerald-900/30 px-2 py-0.5 rounded">Read</a>
+                                <a href="/reader/{{.SeriesID}}" class="text-xs text-primary hover:text-primary bg-primary/20 px-2 py-0.5 rounded">Read</a>
                                 <span class="text-xs text-muted/80">{{.ArchivedChapters}}/{{.TotalChapters}}</span>
                             </div>
                         </div>
                         <div class="w-full bg-surfaceHighlight rounded-full h-1.5">
                             {{if .Percent}}
-                            <div class="h-1.5 rounded-full {{if .Complete}}bg-emerald-500{{else}}bg-blue-500{{end}}" style="width: {{.Percent}}%;"></div>
+                            <div class="h-1.5 rounded-full {{if .Complete}}bg-primary{{else}}bg-primary{{end}}" style="width: {{.Percent}}%;"></div>
                             {{end}}
                         </div>
                     </div>

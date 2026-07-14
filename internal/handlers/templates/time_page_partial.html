@@ -2,26 +2,26 @@
 {{range .TimeGroups}}
 <div class="mt-4"
      data-st="{{range .Chapters}}{{jsstr .SeriesTitle}} {{jsstr .Title}} {{end}}">
-    <h3 class="text-sm font-semibold text-neutral-500 uppercase tracking-wider px-2 sm:px-4 py-2 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">{{.Date}}</h3>
+    <h3 class="text-sm font-semibold text-muted/60 uppercase tracking-wider px-2 sm:px-4 py-2 sticky top-0 bg-background/90 backdrop-blur z-10">{{.Date}}</h3>
     {{range .Chapters}}
-    <div id="row-{{.ID}}" class="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded hover:bg-neutral-900/50">
+    <div id="row-{{.ID}}" data-chapter-id="{{.ID}}" data-series-id="{{.SeriesID}}" data-chapter-url="{{.URL}}" data-series-title="{{.SeriesTitle}}" data-is-read="{{.IsRead}}" class="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 rounded hover:bg-surface/50">
         <a href="/reader/{{.SeriesID}}?chapter={{.ID}}" class="flex items-center gap-1.5 sm:gap-3 flex-1 min-w-0 no-underline">
             {{if .IsRead}}
             <div class="w-1 flex-shrink-0"></div>
             <div data-content class="flex-1 min-w-0 overflow-hidden opacity-40">
                 <div class="flex items-center gap-1 sm:gap-2 min-w-0">
-                    <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block">
-                    <span data-badge class="text-xs text-neutral-600 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
-                    <span class="text-sm text-neutral-500 truncate min-w-0">{{.Title}}</span>
+                    <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
+                    <span data-badge class="text-xs text-neutral-600 glass-panel px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                    <span class="text-sm text-muted/60 truncate min-w-0">{{.Title}}</span>
                 </div>
             </div>
             {{else}}
             <div data-dot class="w-1 self-stretch bg-amber-500/70 rounded-full flex-shrink-0"></div>
             <div data-content class="flex-1 min-w-0 overflow-hidden">
                 <div class="flex items-center gap-1 sm:gap-2 min-w-0">
-                    <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0 hidden sm:block">
-                    <span data-badge class="text-xs text-neutral-400 bg-neutral-800 px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
-                    <span data-title class="text-sm text-neutral-200 truncate min-w-0">{{.Title}}</span>
+                    <img src="{{faviconURL .ProviderName}}" alt="" class="w-3.5 h-3.5 flex-shrink-0">
+                    <span data-badge class="text-xs text-muted/80 glass-panel px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap truncate max-w-[6rem]">{{.SeriesTitle}}</span>
+                    <span data-title class="text-sm text-white truncate min-w-0">{{.Title}}</span>
                 </div>
             </div>
             {{end}}
@@ -30,18 +30,18 @@
             <div class="hidden sm:flex items-center gap-0.5"
                  data-rating-sid="{{.SeriesID}}">
                 <button onclick="ratingDown(this)"
-                        class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9660;</button>
-                <span data-rating-value="{{f64f .SeriesRating}}" {{ratingStyle .SeriesRating}}class="w-10 text-center bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400 py-0.5 cursor-pointer inline-block">{{ratingText .SeriesRating}}</span>
+                        class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-white glass-panel hover:bg-surfaceHighlight rounded text-xs">&#9660;</button>
+                <span data-rating-value="{{f64f .SeriesRating}}" {{ratingStyle .SeriesRating}}class="w-10 text-center glass-panel border border-white/5 rounded text-xs text-muted/80 py-0.5 cursor-pointer inline-block">{{ratingText .SeriesRating}}</span>
                 <button onclick="ratingUp(this)"
-                        class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-neutral-200 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">&#9650;</button>
+                        class="w-5 h-5 flex items-center justify-center text-neutral-600 hover:text-white glass-panel hover:bg-surfaceHighlight rounded text-xs">&#9650;</button>
             </div>
             <span class="text-xs text-neutral-600 w-10 text-right flex-shrink-0">{{.PublishedAt.Format "15:04"}}</span>
             <button data-act-ext onclick="openExt({{.ID}}, '{{.URL}}')" title="Open at source"
-                    class="icon-btn {{if .IsRead}}text-neutral-500 bg-neutral-800 hover:bg-neutral-700{{else}}text-emerald-300 bg-emerald-900/50 hover:bg-emerald-800{{end}}">
+                    class="icon-btn {{if .IsRead}}text-muted/60 glass-panel hover:bg-surfaceHighlight{{else}}text-primary bg-primary/30 hover:bg-primary/80{{end}}">
                 <svg viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
             </button>
             <button data-act-check {{if .IsRead}}disabled{{else}}onclick="markCheck(this, {{.ID}})"{{end}} title="Mark read"
-                    class="icon-btn {{if .IsRead}}text-neutral-700 bg-neutral-800 cursor-default{{else}}text-emerald-400 bg-emerald-900/40 hover:bg-emerald-800{{end}}">
+                    class="icon-btn {{if .IsRead}}text-neutral-700 glass-panel cursor-default{{else}}text-primary bg-primary/25 hover:bg-primary/80{{end}}">
                 <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
             </button>
         </div>
@@ -51,7 +51,7 @@
 {{end}}
 {{if .HasMoreTime}}
 <div hx-get="/api/chapters/time?page={{add .TimePage 1}}&sort={{.SortBy}}&unread={{.UnreadOnly}}" hx-trigger="intersect once" hx-swap="outerHTML"
-     class="py-4 text-center text-neutral-600 text-sm">
+     class="py-4 text-center text-muted/60 text-sm">
     Loading more...
 </div>
 {{end}}

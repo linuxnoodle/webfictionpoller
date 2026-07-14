@@ -4,13 +4,24 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+)
+
+var ao3UpdatedRe = regexp.MustCompile(`<!--\s*updated_at=(\d+)\s*-->`)
+
+const ao3MinDelay = 2 * time.Second
+
+var (
+	ao3Mu       sync.Mutex
+	ao3LastReq  time.Time
 )
 
 type AO3Provider struct {
@@ -26,6 +37,23 @@ func NewAO3Provider() *AO3Provider {
 }
 
 func (p *AO3Provider) Name() string { return "ao3" }
+
+func (p *AO3Provider) ao3Get(url string) (*http.Response, error) {
+	ao3Mu.Lock()
+	elapsed := time.Since(ao3LastReq)
+	if elapsed < ao3MinDelay {
+		time.Sleep(ao3MinDelay - elapsed)
+	}
+	ao3LastReq = time.Now()
+	ao3Mu.Unlock()
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "WebfictionPoller/1.0 (bots@archiveofourown.org)")
+	return p.client.Do(req)
+}
 
 func (p *AO3Provider) MatchURL(rawURL string) bool {
 	u, err := url.Parse(rawURL)
@@ -61,7 +89,7 @@ func (p *AO3Provider) fetchSeriesMetadata(rawURL string) (models.Series, error) 
 	cleanURL := p.cleanURL(rawURL)
 	fetchURL := cleanURL + "?view_adult=true"
 
-	resp, err := doGet(p.client, fetchURL)
+	resp, err := p.ao3Get(fetchURL)
 	if err != nil {
 		return series, err
 	}
@@ -119,7 +147,7 @@ func (p *AO3Provider) fetchWorkMetadata(rawURL string) (models.Series, error) {
 	cleanURL := p.cleanURL(rawURL)
 	fetchURL := cleanURL + "?view_adult=true"
 
-	resp, err := doGet(p.client, fetchURL)
+	resp, err := p.ao3Get(fetchURL)
 	if err != nil {
 		return series, err
 	}
@@ -181,7 +209,7 @@ func (p *AO3Provider) PollUpdates(series models.Series) ([]models.Chapter, error
 
 func (p *AO3Provider) pollSeries(series models.Series) ([]models.Chapter, error) {
 	fetchURL := series.SourceURL + "?view_adult=true"
-	resp, err := doGet(p.client, fetchURL)
+	resp, err := p.ao3Get(fetchURL)
 	if err != nil {
 		return nil, err
 	}
@@ -209,17 +237,17 @@ func (p *AO3Provider) pollSeries(series models.Series) ([]models.Chapter, error)
 		}
 
 		pubAt := time.Now()
-		tsAttr, _ := s.Find("div.header.module").Attr("data-updated-at")
-		if tsAttr == "" {
+		headerHTML, _ := s.Find("div.header.module").Html()
+		if m := ao3UpdatedRe.FindStringSubmatch(headerHTML); len(m) == 2 {
+			if ts, err := strconv.ParseInt(m[1], 10, 64); err == nil {
+				pubAt = time.Unix(ts, 0)
+			}
+		} else {
 			s.Find("p.datetime").Each(func(_ int, dt *goquery.Selection) {
 				if t, err := time.Parse("02 Jan 2006", strings.TrimSpace(dt.Text())); err == nil {
 					pubAt = t
 				}
 			})
-		} else {
-			if ts, err := strconv.ParseInt(tsAttr, 10, 64); err == nil {
-				pubAt = time.Unix(ts, 0)
-			}
 		}
 
 		chapters = append(chapters, models.Chapter{
@@ -230,13 +258,17 @@ func (p *AO3Provider) pollSeries(series models.Series) ([]models.Chapter, error)
 		})
 	})
 
-	logging.Info("[ao3] polled series %s: %d works", series.SourceURL, len(chapters))
+	if len(chapters) == 0 {
+		logging.Info("[ao3] polled series %s: 0 works found (blurb count=%d)", series.SourceURL, doc.Find("li.work.blurb").Length())
+	} else {
+		logging.Info("[ao3] polled series %s: %d works", series.SourceURL, len(chapters))
+	}
 	return chapters, nil
 }
 
 func (p *AO3Provider) pollWork(series models.Series) ([]models.Chapter, error) {
 	fetchURL := series.SourceURL + "?view_adult=true"
-	resp, err := doGet(p.client, fetchURL)
+	resp, err := p.ao3Get(fetchURL)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +291,7 @@ func (p *AO3Provider) pollWork(series models.Series) ([]models.Chapter, error) {
 	})
 
 	parts := strings.Split(chapStat, "/")
+	logging.Info("[ao3] polling work %s: chapStat=%q parts=%d", series.SourceURL, chapStat, len(parts))
 	if len(parts) == 2 {
 		total, _ := strconv.Atoi(parts[0])
 		if total <= 1 {
@@ -313,7 +346,7 @@ func (p *AO3Provider) pollMultiChapterWork(series models.Series, doc *goquery.Do
 	}
 
 	navigateURL := series.SourceURL + "/navigate"
-	resp, err := doGet(p.client, navigateURL)
+	resp, err := p.ao3Get(navigateURL)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +392,7 @@ func (p *AO3Provider) FetchChapterContent(chapterURL string) (string, error) {
 		fetchURL += "&view_adult=true"
 	}
 
-	resp, err := doGet(p.client, fetchURL)
+	resp, err := p.ao3Get(fetchURL)
 	if err != nil {
 		return "", err
 	}

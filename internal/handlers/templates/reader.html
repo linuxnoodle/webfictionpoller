@@ -295,7 +295,7 @@
                 <template x-for="f in fonts" :key="f.id">
                     <button @click="updateSetting('font', f.id)"
                             class="px-2 py-1.5 rounded text-xs transition-colors"
-                            :class="settings.font === f.id ? 'bg-emerald-700 text-white' : 'glass-panel text-muted hover:bg-surfaceHighlight'"
+                            :class="settings.font === f.id ? 'bg-primary text-white' : 'glass-panel text-muted hover:bg-surfaceHighlight'"
                             :style="'font-family:' + f.css">
                         <span x-text="f.name"></span>
                     </button>
@@ -318,7 +318,7 @@
                 <template x-for="t in themes" :key="t.id">
                     <button @click="updateSetting('theme', t.id)"
                             class="px-2 py-1.5 rounded text-xs transition-colors"
-                            :class="settings.theme === t.id ? 'bg-emerald-700 text-white' : 'glass-panel text-muted hover:bg-surfaceHighlight'"
+                            :class="settings.theme === t.id ? 'bg-primary text-white' : 'glass-panel text-muted hover:bg-surfaceHighlight'"
                             x-text="t.name">
                     </button>
                 </template>
@@ -328,7 +328,7 @@
             <label class="text-xs text-muted/80 uppercase tracking-wider block mb-1.5">Width</label>
             <input type="range" min="28" max="64" step="2" x-model.number="settings.width"
                    @input="applySettings(); persistSettings()"
-                   class="w-full accent-emerald-500">
+                   class="w-full accent-primary">
             <div class="flex justify-between text-xs text-muted/60 mt-0.5">
                 <span>Narrow</span>
                 <span x-text="settings.width + 'rem'"></span>
