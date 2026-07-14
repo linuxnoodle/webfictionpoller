@@ -1,9 +1,13 @@
 package providers
 
 import (
+	"errors"
+	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
@@ -215,5 +219,161 @@ func TestXenForo_PollUpdates(t *testing.T) {
 	}
 	if chapters[0].Title != "Chapter 1" {
 		t.Errorf("chapters[0].Title = %q, want %q", chapters[0].Title, "Chapter 1")
+	}
+}
+
+func TestXenForo_PollUpdates_ReloginOnAuthFailure(t *testing.T) {
+	var loginCalls int32
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/login/":
+			w.Header().Set("Content-Type", "text/html")
+			io.WriteString(w, `<html><body><input name="_xfToken" value="testtoken"></body></html>`)
+		case r.URL.Path == "/login/login":
+			atomic.AddInt32(&loginCalls, 1)
+			http.SetCookie(w, &http.Cookie{Name: "xf_user", Value: "abc123", Path: "/"})
+			w.Header().Set("Content-Type", "text/html")
+			io.WriteString(w, `<html><body>OK</body></html>`)
+		case strings.HasSuffix(r.URL.Path, "/threadmarks.rss"):
+			if atomic.LoadInt32(&loginCalls) == 0 {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			w.Header().Set("Content-Type", "application/xml")
+			io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>T</title>
+<item><title>Chapter 1</title><link>`+server.URL+`/threads/test.1/post-1</link>
+<pubDate>Mon, 15 Jan 2024 10:00:00 +0000</pubDate></item>
+</channel></rss>`)
+		case strings.HasSuffix(r.URL.Path, "/threadmarks"):
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	p := NewQuestionableQuestingProvider()
+	p.baseURL = server.URL
+	p.client = server.Client()
+	p.client.Jar, _ = cookiejar.New(nil)
+
+	p.SetCredentialSource(func() (string, string, bool) {
+		return "user", "pass", true
+	})
+
+	series := models.Series{
+		ID:           1,
+		SourceURL:    server.URL + "/threads/test.1",
+		ProviderName: "questionablequesting",
+	}
+
+	chapters, err := p.PollUpdates(series)
+	if err != nil {
+		t.Fatalf("PollUpdates should have self-healed via re-login, got: %v", err)
+	}
+	if len(chapters) != 1 {
+		t.Fatalf("expected 1 chapter after re-login, got %d", len(chapters))
+	}
+	if chapters[0].Title != "Chapter 1" {
+		t.Errorf("chapter title = %q, want %q", chapters[0].Title, "Chapter 1")
+	}
+	if got := atomic.LoadInt32(&loginCalls); got != 1 {
+		t.Errorf("expected exactly 1 login call, got %d", got)
+	}
+}
+
+func TestXenForo_PollUpdates_AuthFailure_NoCredentialSource(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	p := NewQuestionableQuestingProvider()
+	p.baseURL = server.URL
+	p.client = server.Client()
+	p.client.Jar, _ = cookiejar.New(nil)
+
+	_, err := p.PollUpdates(models.Series{ID: 1, SourceURL: server.URL + "/threads/test.1"})
+	if err == nil {
+		t.Fatal("expected errAuthRequired, got nil")
+	}
+	if !errors.Is(err, errAuthRequired) {
+		t.Errorf("expected errAuthRequired, got: %v", err)
+	}
+}
+
+func TestXenForo_ReloginCooldown(t *testing.T) {
+	var loginCalls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/login/":
+			io.WriteString(w, `<html><body><input name="_xfToken" value="t"></body></html>`)
+		case r.URL.Path == "/login/login":
+			atomic.AddInt32(&loginCalls, 1)
+			http.SetCookie(w, &http.Cookie{Name: "xf_user", Value: "x", Path: "/"})
+			io.WriteString(w, `<html>OK</html>`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	p := NewQuestionableQuestingProvider()
+	p.baseURL = server.URL
+	p.client = server.Client()
+	p.client.Jar, _ = cookiejar.New(nil)
+	p.SetCredentialSource(func() (string, string, bool) { return "u", "p", true })
+
+	if !p.tryRelogin() {
+		t.Error("first tryRelogin should succeed")
+	}
+	if got := atomic.LoadInt32(&loginCalls); got != 1 {
+		t.Errorf("expected 1 login call after first tryRelogin, got %d", got)
+	}
+
+	if !p.tryRelogin() {
+		t.Error("second tryRelogin (within cooldown) should report success because last login was OK")
+	}
+	if got := atomic.LoadInt32(&loginCalls); got != 1 {
+		t.Errorf("login should not have been called again within cooldown, got %d calls", got)
+	}
+
+	p.lastLoginAttempt = p.lastLoginAttempt.Add(-reloginCooldown - 1)
+	if !p.tryRelogin() {
+		t.Error("third tryRelogin (after cooldown) should succeed")
+	}
+	if got := atomic.LoadInt32(&loginCalls); got != 2 {
+		t.Errorf("expected 2 login calls after cooldown expired, got %d", got)
+	}
+}
+
+func TestXenForo_ReloginFailed_PropagatesAuthError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/login/":
+			io.WriteString(w, `<html><body><input name="_xfToken" value="t"></body></html>`)
+		case r.URL.Path == "/login/login":
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+		}
+	}))
+	defer server.Close()
+
+	p := NewQuestionableQuestingProvider()
+	p.baseURL = server.URL
+	p.client = server.Client()
+	p.client.Jar, _ = cookiejar.New(nil)
+	p.SetCredentialSource(func() (string, string, bool) { return "u", "p", true })
+
+	_, err := p.PollUpdates(models.Series{ID: 1, SourceURL: server.URL + "/threads/test.1"})
+	if err == nil {
+		t.Fatal("expected error when re-login fails")
+	}
+	if !errors.Is(err, errAuthRequired) {
+		t.Errorf("expected errAuthRequired when re-login fails, got: %v", err)
 	}
 }

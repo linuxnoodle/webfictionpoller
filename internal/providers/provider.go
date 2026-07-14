@@ -21,3 +21,7 @@ type Provider interface {
 	SupportsLogin() bool
 	Login(username, password string) error
 }
+
+type LoginRefresher interface {
+	SetCredentialSource(fn func() (username, password string, ok bool))
+}

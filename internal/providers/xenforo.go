@@ -1,12 +1,14 @@
 package providers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -15,12 +17,22 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
+var errAuthRequired = errors.New("authentication required, cookies may have expired")
+
+const reloginCooldown = 5 * time.Minute
+
 type XenForoProvider struct {
 	name     string
 	baseURL  string
 	domain   string
 	client   *http.Client
 	requires bool
+
+	credSource func() (username, password string, ok bool)
+
+	loginMu          sync.Mutex
+	lastLoginAttempt time.Time
+	lastLoginOK      bool
 }
 
 func NewSpaceBattlesProvider() *XenForoProvider {
@@ -71,6 +83,49 @@ func (p *XenForoProvider) SetCookies(cookieStr string) error {
 	u, _ := url.Parse("https://" + p.domain)
 	p.client.Jar.SetCookies(u, cookies)
 	return nil
+}
+
+func (p *XenForoProvider) SetCredentialSource(fn func() (username, password string, ok bool)) {
+	p.credSource = fn
+}
+
+func (p *XenForoProvider) tryRelogin() bool {
+	if !p.RequiresAuth() || p.credSource == nil {
+		return false
+	}
+	p.loginMu.Lock()
+	defer p.loginMu.Unlock()
+
+	now := time.Now()
+	if now.Sub(p.lastLoginAttempt) < reloginCooldown {
+		return p.lastLoginOK
+	}
+
+	p.lastLoginAttempt = now
+	username, password, ok := p.credSource()
+	if !ok {
+		p.lastLoginOK = false
+		return false
+	}
+	if err := p.Login(username, password); err != nil {
+		logging.Error("[%s] automatic re-login failed: %v", p.name, err)
+		p.lastLoginOK = false
+		return false
+	}
+	p.lastLoginOK = true
+	logging.Info("[%s] automatic re-login succeeded", p.name)
+	return true
+}
+
+func (p *XenForoProvider) withRelogin(fn func() error) error {
+	err := fn()
+	if err == nil || !errors.Is(err, errAuthRequired) {
+		return err
+	}
+	if !p.tryRelogin() {
+		return err
+	}
+	return fn()
 }
 
 func (p *XenForoProvider) parseCookies(raw string) []*http.Cookie {
@@ -258,7 +313,13 @@ func (p *XenForoProvider) fetchMetadataFromRSS(rssURL, threadURL string) (models
 }
 
 func (p *XenForoProvider) FetchChapterContent(chapterURL string) (string, error) {
-	return p.fetchContentFromReader(chapterURL)
+	var content string
+	err := p.withRelogin(func() error {
+		var innerErr error
+		content, innerErr = p.fetchContentFromReader(chapterURL)
+		return innerErr
+	})
+	return content, err
 }
 
 func (p *XenForoProvider) FetchComments(chapterURL string) ([]Comment, error) {
@@ -444,9 +505,21 @@ func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) 
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusForbidden && p.RequiresAuth() {
+		return "", errAuthRequired
+	}
+
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("parsing html: %w", err)
+	}
+
+	if p.RequiresAuth() {
+		if doc.Find("input[name='login']").Length() > 0 || doc.Find("a[href*='/login/']").Length() > 0 {
+			if strings.Contains(doc.Find("title").Text(), "Log in") {
+				return "", errAuthRequired
+			}
+		}
 	}
 
 	postID := p.extractPostID(chapterURL)
@@ -557,6 +630,16 @@ func (p *XenForoProvider) buildThreadmarksRSSURL(threadURL string) string {
 }
 
 func (p *XenForoProvider) PollUpdates(series models.Series) ([]models.Chapter, error) {
+	var chapters []models.Chapter
+	err := p.withRelogin(func() error {
+		var innerErr error
+		chapters, innerErr = p.pollUpdates(series)
+		return innerErr
+	})
+	return chapters, err
+}
+
+func (p *XenForoProvider) pollUpdates(series models.Series) ([]models.Chapter, error) {
 	rssURL := p.buildThreadmarksRSSURL(series.SourceURL)
 
 	fp := gofeed.NewParser()
@@ -615,7 +698,7 @@ func (p *XenForoProvider) pollUpdatesHTML(series models.Series) ([]models.Chapte
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusForbidden && p.RequiresAuth() {
-			return nil, fmt.Errorf("authentication required, cookies may have expired")
+			return nil, errAuthRequired
 		}
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
@@ -627,7 +710,7 @@ func (p *XenForoProvider) pollUpdatesHTML(series models.Series) ([]models.Chapte
 
 	if doc.Find("input[name='login']").Length() > 0 || doc.Find("a[href*='/login/']").Length() > 0 {
 		if strings.Contains(doc.Find("title").Text(), "Log in") {
-			return nil, fmt.Errorf("authentication required, cookies may have expired")
+			return nil, errAuthRequired
 		}
 	}
 
