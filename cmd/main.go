@@ -110,6 +110,8 @@ func main() {
 	apiTokens := api.NewTokenStore(db)
 	apiAuth := api.NewAuthenticator(apiTokens, sessionManager)
 	v1Server := apiv1.NewServer(db, apiTokens, store)
+	v1Server.SetPool(pool)
+	v1Server.SetBlobStore(blobStore)
 	h.SetTokenStore(apiTokens)
 	v1Server.SetPool(pool)
 	h.SetUserIDResolver(func(r *http.Request) (int64, bool) {
@@ -596,21 +598,49 @@ func logoutHandler(sm *scs.SessionManager) http.HandlerFunc {
 	}
 }
 
+// scheduler periodically polls every active text series. Each provider's
+// polling interval is resolved independently: settings override
+// `poll_interval:<name>` → provider Meta.PollIntervalDefault → global
+// POLL_INTERVAL. A wake ticker fires frequently enough that the shortest
+// interval is honored (default every 1m), and providers whose interval has
+// not elapsed are skipped on a given wake.
 type scheduler struct {
-	interval time.Duration
-	store    *handlers.Store
-	pool     *worker.WorkerPool
-	logDir   string
+	globalInterval time.Duration
+	wakeInterval   time.Duration
+	store          *handlers.Store
+	pool           *worker.WorkerPool
+	logDir         string
+
+	mu        sync.Mutex
+	lastPoll  map[string]time.Time
 }
 
 func newScheduler(interval time.Duration, store *handlers.Store, pool *worker.WorkerPool, logDir string) *scheduler {
-	return &scheduler{interval: interval, store: store, pool: pool, logDir: logDir}
+	return &scheduler{
+		globalInterval: interval,
+		wakeInterval:   wakeIntervalFor(interval),
+		store:          store,
+		pool:           pool,
+		logDir:         logDir,
+		lastPoll:       make(map[string]time.Time),
+	}
+}
+
+// wakeIntervalFor picks the scheduler wake cadence: the smaller of the global
+// interval and 1 minute. Capped at 1m so a long global interval (e.g. 1h)
+// still lets per-provider overrides like "30m" fire close to on time.
+func wakeIntervalFor(global time.Duration) time.Duration {
+	const floor = time.Minute
+	if global <= 0 || global < floor {
+		return floor
+	}
+	return floor
 }
 
 func (s *scheduler) start(ctx context.Context) {
-	s.runPoll(ctx)
+	s.runPoll(ctx, true)
 
-	ticker := time.NewTicker(s.interval)
+	ticker := time.NewTicker(s.wakeInterval)
 	defer ticker.Stop()
 
 	for {
@@ -619,12 +649,48 @@ func (s *scheduler) start(ctx context.Context) {
 			logging.Info("[scheduler] stopping")
 			return
 		case <-ticker.C:
-			s.runPoll(ctx)
+			s.runPoll(ctx, false)
 		}
 	}
 }
 
-func (s *scheduler) runPoll(ctx context.Context) {
+// intervalFor resolves the per-provider polling interval using the precedence:
+// settings > Meta.PollIntervalDefault > global.
+func (s *scheduler) intervalFor(providerName string) time.Duration {
+	if key := "poll_interval:" + providerName; key != "" {
+		if v := s.store.GetSetting(key); v != "" {
+			if d, err := time.ParseDuration(v); err == nil && d > 0 {
+				return d
+			}
+		}
+	}
+	if p, ok := s.pool.GetProvider(providerName); ok {
+		if pp, ok := p.(plugin.Provider); ok {
+			if d := pp.Meta().PollIntervalDefault; d != "" {
+				if parsed, err := time.ParseDuration(d); err == nil && parsed > 0 {
+					return parsed
+				}
+			}
+		}
+	}
+	return s.globalInterval
+}
+
+// providerDue reports whether providerName should be polled now, and records
+// the poll time if so. force=true bypasses the interval check (used for the
+// initial boot poll and manual triggers).
+func (s *scheduler) providerDue(providerName string, force bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	last := s.lastPoll[providerName]
+	if !force && time.Since(last) < s.intervalFor(providerName) {
+		return false
+	}
+	s.lastPoll[providerName] = time.Now()
+	return true
+}
+
+func (s *scheduler) runPoll(ctx context.Context, force bool) {
 	logging.RotateIfNeeded(s.logDir)
 	select {
 	case <-ctx.Done():
@@ -637,18 +703,35 @@ func (s *scheduler) runPoll(ctx context.Context) {
 		logging.Error("[scheduler] error fetching series: %v", err)
 		return
 	}
-	logging.Info("[scheduler] polling %d series", len(all))
-	for _, series := range all {
+
+	// Bucket series by provider so we can skip whole providers at once when
+	// their interval hasn't elapsed.
+	byProvider := make(map[string][]models.Series)
+	for _, ser := range all {
+		byProvider[ser.ProviderName] = append(byProvider[ser.ProviderName], ser)
+	}
+
+	queued := 0
+	for providerName, series := range byProvider {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
-		p, ok := s.pool.GetProvider(series.ProviderName)
+		p, ok := s.pool.GetProvider(providerName)
 		if !ok {
 			continue
 		}
-		s.pool.Submit(worker.Job{Series: series, Provider: p})
+		if !s.providerDue(providerName, force) {
+			continue
+		}
+		for _, ser := range series {
+			s.pool.Submit(worker.Job{Series: ser, Provider: p})
+			queued++
+		}
+	}
+	if queued > 0 {
+		logging.Info("[scheduler] queued %d series across %d providers", queued, len(byProvider))
 	}
 }
 

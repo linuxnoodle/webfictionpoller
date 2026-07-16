@@ -18,10 +18,15 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 )
 
-// setupServer spins a temp DB, creates a user, and wires the v1 server behind
-// the bearer-auth middleware. Returns the server, the user creds, and a
-// helper to make authenticated requests.
 func setupServer(t *testing.T) (*v1.Server, *api.TokenStore, *sql.DB, string, string) {
+	srv, tokens, db, store, user, pass := setupServerWithStore(t)
+	_ = store
+	return srv, tokens, db, user, pass
+}
+
+// setupServerWithStore is the full-fidelity fixture: returns the store too,
+// for tests that need to seed comic/series data.
+func setupServerWithStore(t *testing.T) (*v1.Server, *api.TokenStore, *sql.DB, *handlers.Store, string, string) {
 	t.Helper()
 	tmp, err := os.CreateTemp("", "api-v1-*.db")
 	if err != nil {
@@ -45,7 +50,7 @@ func setupServer(t *testing.T) (*v1.Server, *api.TokenStore, *sql.DB, string, st
 	tokens := api.NewTokenStore(db)
 	store := handlers.NewStore(db)
 	srv := v1.NewServer(db, tokens, store)
-	return srv, tokens, db, username, password
+	return srv, tokens, db, store, username, password
 }
 
 func newAuthenticatedMux(t *testing.T, srv *v1.Server, db *sql.DB) *http.ServeMux {

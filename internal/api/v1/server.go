@@ -10,7 +10,11 @@
 package v1
 
 import (
+	"archive/zip"
+	"context"
 	"database/sql"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -19,8 +23,12 @@ import (
 
 	"github.com/linuxnoodle/webfictionpoller/internal/api"
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
+	"github.com/linuxnoodle/webfictionpoller/internal/blob"
+	"github.com/linuxnoodle/webfictionpoller/internal/comics"
+	"github.com/linuxnoodle/webfictionpoller/internal/download"
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
+	"github.com/linuxnoodle/webfictionpoller/internal/models"
 	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 	"github.com/linuxnoodle/webfictionpoller/internal/worker"
 )
@@ -32,15 +40,21 @@ type Server struct {
 	tokens   *api.TokenStore
 	store    *handlers.Store
 	pool     *worker.WorkerPool
+	downloads *download.Tracker
+	blob     blob.Store
 }
 
 func NewServer(db *sql.DB, tokens *api.TokenStore, store *handlers.Store) *Server {
-	return &Server{db: db, tokens: tokens, store: store}
+	return &Server{db: db, tokens: tokens, store: store, downloads: download.NewTracker()}
 }
 
 // SetPool wires the worker pool. Optional; if unset, /poll/* and /metrics
 // return 503.
 func (s *Server) SetPool(p *worker.WorkerPool) { s.pool = p }
+
+// SetBlobStore wires the blob backend so download endpoints can return
+// presigned MinIO URLs when available. Optional.
+func (s *Server) SetBlobStore(b blob.Store) { s.blob = b }
 
 // Routes returns the /api/v1 subrouter. authz is the middleware chain that
 // applies to every authenticated route; the /auth/* group is gated separately
@@ -75,6 +89,13 @@ func (s *Server) Routes(authz func(http.Handler) http.Handler, hasUsersGate func
 		r.Get("/poll/status", s.pollStatus)
 		r.Post("/poll/now", s.pollNow)
 		r.Get("/metrics/providers", s.providerMetrics)
+
+		// Downloads (offline reading). Mirrors the comic_handlers endpoints
+		// but lives under the versioned API and surfaces presigned MinIO URLs
+		// when the blob backend supports them.
+		r.Post("/downloads/comics/{chapterID}", s.downloadComicChapter)
+		r.Get("/downloads/comics/{chapterID}/status", s.downloadComicChapterStatus)
+		r.Get("/downloads/comics/{chapterID}/cbz", s.downloadComicChapterCBZ)
 
 		// Provider introspection.
 		r.Get("/providers", s.providersList)
@@ -432,6 +453,222 @@ func (s *Server) providerMetrics(w http.ResponseWriter, r *http.Request) {
 	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"providers": s.pool.MetricsSnapshots(),
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Downloads (offline reading bundles)
+// ---------------------------------------------------------------------------
+
+// comicChapterDownloadKey namespaces tracker keys for comic chapter downloads.
+// Kept identical to handlers.comicDownloadKey so the web UI and API share
+// progress state — a download triggered from the browser shows up in API
+// polls and vice versa.
+func comicChapterDownloadKey(id int64) string {
+	return fmt.Sprintf("comic-chapter:%d", id)
+}
+
+// downloadComicChapter triggers a background download of every page in the
+// chapter. Returns 202 with the tracker status; clients poll /status.
+//
+//	POST /api/v1/downloads/comics/{chapterID}
+func (s *Server) downloadComicChapter(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(chi.URLParam(r, "chapterID"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	chapter, err := s.store.GetComicChapterByID(id)
+	if err != nil || chapter == nil {
+		api.WriteError(w, http.StatusNotFound, "chapter_not_found", "")
+		return
+	}
+	series, _ := s.store.GetComicSeriesByID(chapter.SeriesID)
+	provider, err := lookupComicProvider(series)
+	if err != nil {
+		api.WriteError(w, http.StatusServiceUnavailable, "provider_unavailable", err.Error())
+		return
+	}
+
+	store := s.store
+	status := s.downloads.Start(comicChapterDownloadKey(id), 0, func(ctx context.Context, rep download.Reporter) error {
+		pages, err := provider.PageList(chapter.SourceID)
+		if err != nil {
+			return fmt.Errorf("page list: %w", err)
+		}
+		rep.SetTotal(len(pages))
+		if len(pages) == 0 {
+			return fmt.Errorf("upstream returned 0 pages")
+		}
+		for _, pg := range pages {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if store.ComicPageBlobStored(ctx, id, pg.Index) {
+				rep.Inc()
+				continue
+			}
+			if err := fetchAndCacheComicPageV1(ctx, store, provider, id, pg); err != nil {
+				logging.Error("[api/v1] download page %d chapter %d: %v", pg.Index, id, err)
+				continue
+			}
+			rep.Inc()
+		}
+		return nil
+	})
+
+	api.WriteJSON(w, http.StatusAccepted, map[string]interface{}{
+		"ok":     true,
+		"key":    comicChapterDownloadKey(id),
+		"status": status,
+	})
+}
+
+// downloadComicChapterStatus returns the current progress of a chapter
+// download. If no job has been recorded, falls back to the chapter's stored
+// `downloaded` flag.
+//
+//	GET /api/v1/downloads/comics/{chapterID}/status
+func (s *Server) downloadComicChapterStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(chi.URLParam(r, "chapterID"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	status, ok := s.downloads.Status(comicChapterDownloadKey(id))
+	if !ok {
+		chapter, _ := s.store.GetComicChapterByID(id)
+		state := download.StateFailed
+		if chapter != nil && chapter.Downloaded {
+			state = download.StateComplete
+		}
+		status = download.Status{Key: comicChapterDownloadKey(id), State: state}
+	}
+	api.WriteJSON(w, http.StatusOK, status)
+}
+
+// downloadComicChapterCBZ streams a CBZ (zip of page images) for offline
+// reading. Pages are read from the blob store on the fly; the response is
+// streamed so memory use stays flat regardless of chapter size.
+//
+//	GET /api/v1/downloads/comics/{chapterID}/cbz
+func (s *Server) downloadComicChapterCBZ(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(chi.URLParam(r, "chapterID"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	chapter, err := s.store.GetComicChapterByID(id)
+	if err != nil || chapter == nil {
+		api.WriteError(w, http.StatusNotFound, "chapter_not_found", "")
+		return
+	}
+	pages, err := s.store.GetComicChapterPages(id)
+	if err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	if len(pages) == 0 {
+		api.WriteError(w, http.StatusNotFound, "no_pages_cached", "download the chapter first")
+		return
+	}
+
+	filename := fmt.Sprintf("chapter-%d.cbz", id)
+	if chapter.ChapterNum != "" {
+		filename = fmt.Sprintf("chapter-%s.cbz", sanitizeCBZName(chapter.ChapterNum))
+	}
+	w.Header().Set("Content-Type", "application/vnd.comicbook+zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	zw := zip.NewWriter(w)
+	ctx := r.Context()
+	for _, pg := range pages {
+		if ctx.Err() != nil {
+			return
+		}
+		name := fmt.Sprintf("%05d.jpg", pg.Index)
+		fw, err := zw.Create(name)
+		if err != nil {
+			return
+		}
+		rc, _, err := s.store.GetComicPageReader(ctx, id, pg.Index)
+		if err != nil {
+			logging.Error("[api/v1] cbz read page %d: %v", pg.Index, err)
+			return
+		}
+		if _, err := io.Copy(fw, rc); err != nil {
+			rc.Close()
+			return
+		}
+		rc.Close()
+	}
+	if fw, err := zw.Create("ComicInfo.xml"); err == nil {
+		fmt.Fprintf(fw, `<?xml version="1.0" encoding="UTF-8"?>`+
+			`<ComicInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" `+
+			`xmlns:xsd="http://www.w3.org/2001/XMLSchema">`+
+			`<PageCount>%d</PageCount><Number>%s</Number></ComicInfo>`,
+			len(pages), chapter.ChapterNum)
+	}
+	if err := zw.Close(); err != nil {
+		logging.Error("[api/v1] cbz close: %v", err)
+	}
+}
+
+// lookupComicProvider resolves a comic provider by name via plugin.Default.
+// Returns the legacy comics.ComicProvider interface.
+func lookupComicProvider(series *models.ComicSeries) (comics.ComicProvider, error) {
+	if series == nil {
+		return nil, fmt.Errorf("series is nil")
+	}
+	p, ok := plugin.Default.Get(series.ProviderName)
+	if !ok {
+		return nil, fmt.Errorf("provider %q not registered", series.ProviderName)
+	}
+	cp, ok := p.(comics.ComicProvider)
+	if !ok {
+		return nil, fmt.Errorf("provider %q does not implement ComicProvider", series.ProviderName)
+	}
+	return cp, nil
+}
+
+// fetchAndCacheComicPageV1 mirrors handlers.fetchAndCacheComicPage but lives
+// in the API package to avoid a dependency cycle.
+func fetchAndCacheComicPageV1(ctx context.Context, store *handlers.Store, provider comics.ComicProvider, chapterID int64, pg models.ComicPage) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", pg.ImageURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("upstream status %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 25<<20))
+	if err != nil {
+		return err
+	}
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = http.DetectContentType(data)
+	}
+	return store.SaveComicPage(chapterID, pg.Index, pg.ImageURL, data, ct)
+}
+
+func sanitizeCBZName(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "chapter"
+	}
+	return b.String()
 }
 
 // ---------------------------------------------------------------------------

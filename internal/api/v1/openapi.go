@@ -39,6 +39,28 @@ const openAPIYAMLJSON = `{
     "/chapters/{id}/content": {"get": {"summary": "Cached chapter HTML", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}]}},
     "/chapters/{id}/read": {"post": {"summary": "Mark chapter read", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}]}},
     "/unread-count": {"get": {"summary": "Total unread chapters"}},
-    "/providers": {"get": {"summary": "List registered providers (stub)"}}
+    "/poll/status": {"get": {"summary": "Current poll-cycle progress"}},
+    "/poll/now": {"post": {"summary": "Trigger an immediate poll of every active series"}},
+    "/metrics/providers": {"get": {"summary": "Per-provider polling metrics (last-poll, errors, chapter yield)"}},
+    "/downloads/comics/{chapterID}": {
+      "post": {
+        "summary": "Trigger a background download of every page in a comic chapter",
+        "parameters": [{"name": "chapterID", "in": "path", "required": true, "schema": {"type": "integer"}}]
+      }
+    },
+    "/downloads/comics/{chapterID}/status": {
+      "get": {
+        "summary": "Progress of a comic chapter download",
+        "parameters": [{"name": "chapterID", "in": "path", "required": true, "schema": {"type": "integer"}}]
+      }
+    },
+    "/downloads/comics/{chapterID}/cbz": {
+      "get": {
+        "summary": "Stream a CBZ bundle of cached page images for offline reading",
+        "parameters": [{"name": "chapterID", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "responses": {"200": {"description": "CBZ file", "content": {"application/vnd.comicbook+zip": {}}}}
+      }
+    },
+    "/providers": {"get": {"summary": "List registered providers (catalog metadata)"}}
   }
 }`
