@@ -22,6 +22,7 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
+	"github.com/linuxnoodle/webfictionpoller/internal/worker"
 )
 
 // Server bundles the dependencies every v1 handler needs. Construct once at
@@ -30,11 +31,16 @@ type Server struct {
 	db       *sql.DB
 	tokens   *api.TokenStore
 	store    *handlers.Store
+	pool     *worker.WorkerPool
 }
 
 func NewServer(db *sql.DB, tokens *api.TokenStore, store *handlers.Store) *Server {
 	return &Server{db: db, tokens: tokens, store: store}
 }
+
+// SetPool wires the worker pool. Optional; if unset, /poll/* and /metrics
+// return 503.
+func (s *Server) SetPool(p *worker.WorkerPool) { s.pool = p }
 
 // Routes returns the /api/v1 subrouter. authz is the middleware chain that
 // applies to every authenticated route; the /auth/* group is gated separately
@@ -68,6 +74,7 @@ func (s *Server) Routes(authz func(http.Handler) http.Handler, hasUsersGate func
 		// Polling status / triggers.
 		r.Get("/poll/status", s.pollStatus)
 		r.Post("/poll/now", s.pollNow)
+		r.Get("/metrics/providers", s.providerMetrics)
 
 		// Provider introspection.
 		r.Get("/providers", s.providersList)
@@ -394,19 +401,37 @@ func (s *Server) unreadCount(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 func (s *Server) pollStatus(w http.ResponseWriter, r *http.Request) {
-	// Placeholder; wired to WorkerPool progress in a subsequent commit once
-	// the pool exposes status through an interface.
-	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"active": false,
-		"done":   0,
-		"total":  0,
-	})
+	if s.pool == nil {
+		api.WriteError(w, http.StatusServiceUnavailable, "pool_not_configured", "")
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, s.pool.PollProgress())
 }
 
 func (s *Server) pollNow(w http.ResponseWriter, r *http.Request) {
-	// Triggering poll requires WorkerPool access; this stub returns a 501
-	// until the pool is wired through an interface.
-	api.WriteError(w, http.StatusNotImplemented, "not_wired", "poll trigger via API coming in next commit")
+	if s.pool == nil {
+		api.WriteError(w, http.StatusServiceUnavailable, "pool_not_configured", "")
+		return
+	}
+	count, err := s.pool.SubmitAll(s.store)
+	if err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	api.WriteJSON(w, http.StatusAccepted, map[string]interface{}{
+		"queued": count,
+		"status": s.pool.PollProgress(),
+	})
+}
+
+func (s *Server) providerMetrics(w http.ResponseWriter, r *http.Request) {
+	if s.pool == nil {
+		api.WriteError(w, http.StatusServiceUnavailable, "pool_not_configured", "")
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"providers": s.pool.MetricsSnapshots(),
+	})
 }
 
 // ---------------------------------------------------------------------------

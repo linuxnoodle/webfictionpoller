@@ -111,6 +111,7 @@ func main() {
 	apiAuth := api.NewAuthenticator(apiTokens, sessionManager)
 	v1Server := apiv1.NewServer(db, apiTokens, store)
 	h.SetTokenStore(apiTokens)
+	v1Server.SetPool(pool)
 	h.SetUserIDResolver(func(r *http.Request) (int64, bool) {
 		v := sessionManager.Get(r.Context(), "userID")
 		if v == nil {
