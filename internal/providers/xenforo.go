@@ -14,6 +14,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -62,6 +63,33 @@ func newXenForoProvider(name, baseURL, domain string, requiresAuth bool) *XenFor
 }
 
 func (p *XenForoProvider) Name() string { return p.name }
+
+func (p *XenForoProvider) Meta() plugin.Meta {
+	meta := plugin.Meta{
+		Name:        p.name,
+		Kind:        plugin.KindText,
+		Homepage:    p.baseURL,
+		FaviconURL:  p.baseURL + "/favicon.ico",
+		Rate:        plugin.RateSpec{RequestsPerSecond: 0.5, Burst: 1, Concurrency: 1},
+		PollIntervalDefault: "15m",
+	}
+	switch p.name {
+	case "spacebattles":
+		meta.DisplayName = "SpaceBattles"
+	case "sufficientvelocity":
+		meta.DisplayName = "Sufficient Velocity"
+	case "questionablequesting":
+		meta.DisplayName = "Questionable Questing"
+	default:
+		meta.DisplayName = p.name
+	}
+	if p.requires {
+		meta.AuthModes = []plugin.AuthMode{plugin.AuthLogin, plugin.AuthCookies}
+	} else {
+		meta.AuthModes = []plugin.AuthMode{plugin.AuthNone}
+	}
+	return meta
+}
 
 func (p *XenForoProvider) MatchURL(rawURL string) bool {
 	u, err := url.Parse(rawURL)

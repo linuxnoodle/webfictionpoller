@@ -13,6 +13,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 )
 
 var ao3UpdatedRe = regexp.MustCompile(`<!--\s*updated_at=(\d+)\s*-->`)
@@ -37,6 +38,19 @@ func NewAO3Provider() *AO3Provider {
 }
 
 func (p *AO3Provider) Name() string { return "ao3" }
+
+func (p *AO3Provider) Meta() plugin.Meta {
+	return plugin.Meta{
+		Name:              "ao3",
+		DisplayName:       "Archive of Our Own",
+		Kind:              plugin.KindText,
+		Homepage:          "https://archiveofourown.org",
+		FaviconURL:        "https://archiveofourown.org/favicon.ico",
+		AuthModes:         []plugin.AuthMode{plugin.AuthNone},
+		Rate:              plugin.RateSpec{RequestsPerSecond: 0.5, Burst: 1, Concurrency: 1},
+		PollIntervalDefault: "30m",
+	}
+}
 
 func (p *AO3Provider) ao3Get(url string) (*http.Response, error) {
 	ao3Mu.Lock()

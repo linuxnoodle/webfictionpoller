@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 )
 
 type MangaDexProvider struct {
@@ -19,6 +21,33 @@ func NewMangaDexProvider() *MangaDexProvider {
 }
 
 func (m *MangaDexProvider) Name() string { return "mangadex" }
+
+func (m *MangaDexProvider) Meta() plugin.Meta {
+	return plugin.Meta{
+		Name:              "mangadex",
+		DisplayName:       "MangaDex",
+		Kind:              plugin.KindComic,
+		Homepage:          "https://mangadex.org",
+		FaviconURL:        "https://mangadex.org/img/avatar.png",
+		AuthModes:         []plugin.AuthMode{plugin.AuthNone},
+		Rate:              plugin.RateSpec{RequestsPerSecond: 5.0, Burst: 10, Concurrency: 2},
+		PollIntervalDefault: "1h",
+	}
+}
+
+// MatchURL lets MangaDex participate in plugin.ByURL routing for pasted
+// mangadex.org/title/... URLs (future add-by-URL flow). Currently add-by-URL
+// for comics is search-driven; this is forward compatibility.
+func (m *MangaDexProvider) MatchURL(rawURL string) bool {
+	return plugin.HostMatch(rawURL, "mangadex.org")
+}
+
+// Search is the plugin.Searcher capability; existing SearchManga is kept
+// as the concrete implementation for backward compatibility with
+// handlers.comicProviders map.
+func (m *MangaDexProvider) Search(query string, page int) (*MangasPage, error) {
+	return m.SearchManga(query, page)
+}
 
 func (m *MangaDexProvider) SearchManga(query string, page int) (*MangasPage, error) {
 	limit := 20

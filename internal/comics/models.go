@@ -1,41 +1,14 @@
+// Package comics hosts comic-provider implementations (currently MangaDex).
+//
+// Domain types (ComicSeries, ComicChapter, ComicPage, MangasPage) have moved
+// to internal/models to break import cycles with internal/plugin. They are
+// re-exported here as type aliases so existing callers
+// (comics.ComicSeries etc.) continue to compile unchanged.
 package comics
 
-type ComicSeries struct {
-	ID           int64  `json:"id"`
-	SourceID     string `json:"source_id"`
-	Title        string `json:"title"`
-	Author       string `json:"author,omitempty"`
-	Artist       string `json:"artist,omitempty"`
-	Description  string `json:"description,omitempty"`
-	CoverURL     string `json:"cover_url,omitempty"`
-	SourceURL    string `json:"source_url"`
-	ProviderName string `json:"provider_name"`
-	Status       string `json:"status"`
-	Genres       string `json:"genres,omitempty"`
-	Rating       float64 `json:"rating"`
-	CreatedAt    string `json:"created_at"`
-}
+import "github.com/linuxnoodle/webfictionpoller/internal/models"
 
-type ComicChapter struct {
-	ID          int64  `json:"id"`
-	SeriesID    int64  `json:"series_id"`
-	SourceID    string `json:"source_id"`
-	Title       string `json:"title"`
-	ChapterNum  string `json:"chapter_num,omitempty"`
-	VolumeNum   string `json:"volume_num,omitempty"`
-	SourceURL   string `json:"source_url"`
-	Pages       int    `json:"pages"`
-	IsRead      bool   `json:"is_read"`
-	Downloaded  bool   `json:"downloaded"`
-	PublishedAt string `json:"published_at"`
-}
-
-type ComicPage struct {
-	Index    int    `json:"index"`
-	ImageURL string `json:"image_url"`
-}
-
-type MangasPage struct {
-	Mangas      []ComicSeries `json:"mangas"`
-	HasNextPage bool          `json:"has_next_page"`
-}
+type ComicSeries = models.ComicSeries
+type ComicChapter = models.ComicChapter
+type ComicPage = models.ComicPage
+type MangasPage = models.MangasPage

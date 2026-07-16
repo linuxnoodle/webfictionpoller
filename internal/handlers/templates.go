@@ -12,6 +12,7 @@ import (
 	"github.com/justinas/nosurf"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 )
 
 var tmpl *template.Template
@@ -54,7 +55,7 @@ func InitTemplates() error {
 			return a % b
 		},
 		"faviconURL": func(providerName string) string {
-			return models.ProviderFavicon(providerName)
+			return plugin.Default.FaviconServedPath(providerName)
 		},
 		"jsstr": func(s string) string {
 			b, _ := json.Marshal(s)

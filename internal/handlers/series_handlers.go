@@ -11,6 +11,7 @@ import (
 
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 )
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +162,7 @@ func (h *Handler) ChapterPreview(w http.ResponseWriter, r *http.Request) {
 	if err := tmpl.ExecuteTemplate(w, "chapter_preview", map[string]interface{}{
 		"Chapter":    ch,
 		"Content":    template.HTML(content),
-		"FaviconURL": models.ProviderFavicon(ch.ProviderName),
+		"FaviconURL": plugin.Default.FaviconServedPath(ch.ProviderName),
 	}); err != nil {
 		internalError(w, r, err)
 	}

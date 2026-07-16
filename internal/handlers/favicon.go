@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 )
 
 type FaviconCache struct {
@@ -25,8 +25,8 @@ func NewFaviconCache() *FaviconCache {
 
 func (fc *FaviconCache) prefetch() {
 	client := &http.Client{Timeout: 10 * time.Second}
-	for _, name := range models.ProviderNames() {
-		url := models.ProviderFaviconSource(name)
+	for _, name := range plugin.Default.Names() {
+		url := plugin.Default.FaviconSourceURL(name)
 		if url == "" {
 			continue
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -28,6 +29,19 @@ func NewRoyalRoadProvider() *RoyalRoadProvider {
 }
 
 func (p *RoyalRoadProvider) Name() string { return "royalroad" }
+
+func (p *RoyalRoadProvider) Meta() plugin.Meta {
+	return plugin.Meta{
+		Name:              "royalroad",
+		DisplayName:       "Royal Road",
+		Kind:              plugin.KindText,
+		Homepage:          "https://www.royalroad.com",
+		FaviconURL:        "https://www.royalroad.com/favicon.ico",
+		AuthModes:         []plugin.AuthMode{plugin.AuthNone},
+		Rate:              plugin.RateSpec{RequestsPerSecond: 1.0, Burst: 2, Concurrency: 1},
+		PollIntervalDefault: "15m",
+	}
+}
 
 func (p *RoyalRoadProvider) MatchURL(rawURL string) bool {
 	u, err := url.Parse(rawURL)

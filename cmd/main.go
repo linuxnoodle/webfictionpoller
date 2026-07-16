@@ -24,6 +24,7 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 	"github.com/linuxnoodle/webfictionpoller/internal/providers"
 	"github.com/linuxnoodle/webfictionpoller/internal/static"
 	"github.com/linuxnoodle/webfictionpoller/internal/worker"
@@ -61,16 +62,14 @@ func main() {
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
 	sessionManager.Cookie.Secure = os.Getenv("COOKIE_SECURE") != "false"
 
-	providerList := []providers.Provider{
-		providers.NewRoyalRoadProvider(),
-		providers.NewSpaceBattlesProvider(),
-		providers.NewSufficientVelocityProvider(),
-		providers.NewQuestionableQuestingProvider(),
-		providers.NewFanfictionNetProvider(),
-		providers.NewAO3Provider(),
+	// Providers self-register via init() in internal/providers and internal/comics.
+	// Derive the runtime list from the global plugin registry.
+	providerList := registryTextProviders()
+	for _, p := range plugin.Default.ByKind(plugin.KindComic) {
+		if cp, ok := p.(comics.ComicProvider); ok {
+			handlers.RegisterComicProvider(cp)
+		}
 	}
-
-	handlers.RegisterComicProvider(comics.NewMangaDexProvider())
 
 	store := handlers.NewStore(db)
 
@@ -269,6 +268,26 @@ func envOrDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// registryTextProviders returns every registered text provider that implements
+// the legacy providers.Provider interface. This is the bridge between the new
+// plugin.Registry and the existing worker pool / handlers, which still consume
+// providers.Provider. As those consumers migrate to plugin capability
+// interfaces directly, this helper goes away.
+func registryTextProviders() []providers.Provider {
+	var out []providers.Provider
+	for _, p := range plugin.Default.ByKind(plugin.KindText) {
+		if lp, ok := p.(providers.Provider); ok {
+			out = append(out, lp)
+		} else {
+			logging.Error("[main] text provider %q does not implement legacy providers.Provider interface; skipping", p.Meta().Name)
+		}
+	}
+	if len(out) == 0 {
+		logging.Error("[main] no text providers registered; check that internal/providers is imported")
+	}
+	return out
 }
 
 func securityHeaders(next http.Handler) http.Handler {

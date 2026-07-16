@@ -11,7 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
-	"github.com/linuxnoodle/webfictionpoller/internal/providers"
+	"github.com/linuxnoodle/webfictionpoller/internal/models"
 )
 
 func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
@@ -214,7 +214,7 @@ func (h *Handler) ReaderChapterCommentsAPI(w http.ResponseWriter, r *http.Reques
 	}
 
 	if comments == nil {
-		comments = []providers.Comment{}
+		comments = []models.Comment{}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"comments": comments})

@@ -14,6 +14,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 )
 
 type FlareSolverrProvider struct {
@@ -35,6 +36,20 @@ func NewFanfictionNetProvider() *FlareSolverrProvider {
 }
 
 func (p *FlareSolverrProvider) Name() string { return "fanfictionnet" }
+
+func (p *FlareSolverrProvider) Meta() plugin.Meta {
+	return plugin.Meta{
+		Name:              "fanfictionnet",
+		DisplayName:       "FanFiction.net",
+		Kind:              plugin.KindText,
+		Homepage:          "https://www.fanfiction.net",
+		FaviconURL:        "https://www.fanfiction.net/favicon.ico",
+		AuthModes:         []plugin.AuthMode{plugin.AuthFlareSolverr},
+		// FlareSolverr solves are expensive (Cloudflare bypass, ~30-60s each).
+		Rate:                plugin.RateSpec{RequestsPerSecond: 0.05, Burst: 1, Concurrency: 1},
+		PollIntervalDefault: "30m",
+	}
+}
 
 func (p *FlareSolverrProvider) MatchURL(rawURL string) bool {
 	u, err := url.Parse(rawURL)

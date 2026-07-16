@@ -4,6 +4,13 @@ import "time"
 
 const UnratedRating = -1.0
 
+type Comment struct {
+	Author    string `json:"author"`
+	Content   string `json:"content"`
+	Date      string `json:"date"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+}
+
 type Series struct {
 	ID           int64     `json:"id"`
 	Title        string    `json:"title"`
@@ -127,34 +134,4 @@ type SeriesStorage struct {
 	ImageBytes       int64  `json:"image_bytes"`
 }
 
-func ProviderFavicon(name string) string {
-	switch name {
-	case "royalroad", "spacebattles", "sufficientvelocity", "questionablequesting", "fanfictionnet", "ao3":
-		return "/static/favicons/" + name + ".ico"
-	default:
-		return ""
-	}
-}
 
-func ProviderFaviconSource(name string) string {
-	switch name {
-	case "royalroad":
-		return "https://www.royalroad.com/favicon.ico"
-	case "spacebattles":
-		return "https://forums.spacebattles.com/favicon.ico"
-	case "sufficientvelocity":
-		return "https://forums.sufficientvelocity.com/favicon.ico"
-	case "questionablequesting":
-		return "https://forum.questionablequesting.com/favicon.ico"
-	case "fanfictionnet":
-		return "https://www.fanfiction.net/favicon.ico"
-	case "ao3":
-		return "https://archiveofourown.org/favicon.ico"
-	default:
-		return ""
-	}
-}
-
-func ProviderNames() []string {
-	return []string{"royalroad", "spacebattles", "sufficientvelocity", "questionablequesting", "fanfictionnet", "ao3"}
-}

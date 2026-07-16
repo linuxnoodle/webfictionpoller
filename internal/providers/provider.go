@@ -2,12 +2,8 @@ package providers
 
 import "github.com/linuxnoodle/webfictionpoller/internal/models"
 
-type Comment struct {
-	Author    string `json:"author"`
-	Content   string `json:"content"`
-	Date      string `json:"date"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-}
+// Comment is an alias for models.Comment. Deprecated: use models.Comment directly.
+type Comment = models.Comment
 
 type Provider interface {
 	Name() string
