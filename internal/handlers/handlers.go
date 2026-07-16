@@ -6,6 +6,7 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 
+	"github.com/linuxnoodle/webfictionpoller/internal/api"
 	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
 	"github.com/linuxnoodle/webfictionpoller/internal/download"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
@@ -29,6 +30,11 @@ type Handler struct {
 	opdsCatalog   *opds.Catalog
 	archiver      *worker.Archiver
 	downloads     *download.Tracker
+	tokens        *api.TokenStore
+
+	// userIDOf resolves the authenticated user ID from the browser session.
+	// Injected by main.go to avoid handlers depending on the scs package.
+	userIDOf      func(*http.Request) (int64, bool)
 }
 
 func NewHandler(store *Store, pool *worker.WorkerPool, logDir string, vault *crypto.Vault) *Handler {
@@ -42,6 +48,14 @@ func NewHandler(store *Store, pool *worker.WorkerPool, logDir string, vault *cry
 		downloads:     download.NewTracker(),
 	}
 }
+
+// SetTokenStore wires the bearer-token store. Called once at startup from
+// main.go after the api.TokenStore is constructed.
+func (h *Handler) SetTokenStore(t *api.TokenStore) { h.tokens = t }
+
+// SetUserIDResolver wires the session-aware user-ID resolver. Called once at
+// startup from main.go.
+func (h *Handler) SetUserIDResolver(fn func(*http.Request) (int64, bool)) { h.userIDOf = fn }
 
 func (h *Handler) SetArchiver(a *worker.Archiver) {
 	h.archiver = a

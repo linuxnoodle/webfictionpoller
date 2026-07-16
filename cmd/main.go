@@ -110,6 +110,20 @@ func main() {
 	apiTokens := api.NewTokenStore(db)
 	apiAuth := api.NewAuthenticator(apiTokens, sessionManager)
 	v1Server := apiv1.NewServer(db, apiTokens, store)
+	h.SetTokenStore(apiTokens)
+	h.SetUserIDResolver(func(r *http.Request) (int64, bool) {
+		v := sessionManager.Get(r.Context(), "userID")
+		if v == nil {
+			return 0, false
+		}
+		switch t := v.(type) {
+		case int64:
+			return t, true
+		case int:
+			return int64(t), true
+		}
+		return 0, false
+	})
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -201,6 +215,10 @@ func main() {
 			r.Post("/api/version/check", h.VersionCheckNow)
 			r.Post("/api/version/update", h.SelfUpdate)
 			r.Get("/admin/version", h.VersionPage)
+
+			r.Get("/admin/tokens", h.TokensPage)
+			r.Post("/admin/tokens", h.CreateTokenForm)
+			r.Post("/admin/tokens/revoke", h.RevokeTokenForm)
 
 			r.Get("/reader/{id}", h.ReaderPage)
 			r.Get("/api/reader/{id}/chapters", h.ReaderChaptersAPI)

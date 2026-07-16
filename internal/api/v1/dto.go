@@ -146,6 +146,18 @@ func toComicChapters(in []models.ComicChapter) []comicChapter {
 	return out
 }
 
+// providerInfo is the wire representation of plugin.Meta. Exposed via the
+// /providers endpoint so mobile clients can render provider pickers and
+// capability/auth badges without hardcoding the catalog.
+type providerInfo struct {
+	Name                string   `json:"name"`
+	DisplayName         string   `json:"display_name"`
+	Kind                string   `json:"kind"`
+	Homepage            string   `json:"homepage,omitempty"`
+	AuthModes           []string `json:"auth_modes"`
+	PollIntervalDefault string   `json:"poll_interval_default,omitempty"`
+}
+
 // --- Parsing helpers (kept here so the server file imports stay minimal) ---
 
 func parseID(s string) (int64, error) {

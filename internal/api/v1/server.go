@@ -21,6 +21,7 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 )
 
 // Server bundles the dependencies every v1 handler needs. Construct once at
@@ -413,10 +414,26 @@ func (s *Server) pollNow(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 func (s *Server) providersList(w http.ResponseWriter, r *http.Request) {
-	// Stub returning names only; full metadata via plugin.Default comes next.
-	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"providers": []string{},
-	})
+	// Pull live metadata from the plugin registry so iOS clients can show
+	// provider pickers, capability badges, and auth modes without hardcoding.
+	providers := plugin.Default.All()
+	out := make([]providerInfo, 0, len(providers))
+	for _, p := range providers {
+		m := p.Meta()
+		authModes := make([]string, 0, len(m.AuthModes))
+		for _, a := range m.AuthModes {
+			authModes = append(authModes, string(a))
+		}
+		out = append(out, providerInfo{
+			Name:              m.Name,
+			DisplayName:       m.DisplayName,
+			Kind:              string(m.Kind),
+			Homepage:          m.Homepage,
+			AuthModes:         authModes,
+			PollIntervalDefault: m.PollIntervalDefault,
+		})
+	}
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{"providers": out})
 }
 
 // ---------------------------------------------------------------------------

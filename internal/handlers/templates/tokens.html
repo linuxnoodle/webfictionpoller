@@ -1,0 +1,107 @@
+{{define "tokens.html"}}
+<!DOCTYPE html>
+<html lang="en" class="bg-background text-white">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Tokens — WebFiction Tracker</title>
+    <meta name="csrf-token" content="{{.CSRFToken}}">
+    <script>var _csrf="{{.CSRFToken}}";</script>
+    <script src="/static/alpine.min.js" defer></script>
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="min-h-screen">
+{{template "nav.html" .}}
+<main class="max-w-3xl mx-auto px-4 py-8" x-data="tokensApp()">
+    <h1 class="text-2xl font-bold mb-2">API Tokens</h1>
+    <p class="text-sm text-muted/70 mb-6">
+        Bearer tokens authenticate the iOS app (and any other API client). Each
+        device should get its own labeled token. Tokens are shown
+        <strong>once</strong> at creation — store them immediately.
+    </p>
+
+    <!-- New-token plaintext reveal (only shown right after creation) -->
+    <div x-show="newToken" x-cloak class="mb-6 p-4 rounded-lg border border-primary/40 bg-primary/10">
+        <div class="text-sm font-semibold text-primary mb-2">Token created — copy now, you won't see it again:</div>
+        <div class="flex items-center gap-2">
+            <code class="flex-1 p-2 bg-background rounded text-xs break-all" x-text="newToken"></code>
+            <button @click="copyToken()" class="px-3 py-2 bg-primary/30 hover:bg-primary/50 rounded text-xs font-medium">Copy</button>
+        </div>
+        <div class="text-xs text-muted/60 mt-2">Label: <span x-text="newLabel"></span></div>
+    </div>
+
+    <!-- Create form -->
+    <form method="POST" action="/admin/tokens" class="mb-8 flex flex-wrap gap-2 items-end">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-xs text-muted/70 mb-1">Label</label>
+            <input type="text" name="label" placeholder="e.g. iPhone 15 Pro"
+                   class="w-full px-3 py-2 bg-surface border border-white/10 rounded text-sm focus:border-primary outline-none">
+        </div>
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-xs text-muted/70 mb-1">Device ID (optional)</label>
+            <input type="text" name="device_id" placeholder="auto-generated UUID"
+                   class="w-full px-3 py-2 bg-surface border border-white/10 rounded text-sm focus:border-primary outline-none">
+        </div>
+        <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary/80 rounded text-sm font-semibold">Create Token</button>
+    </form>
+
+    <!-- Token list -->
+    <h2 class="text-lg font-semibold mb-3">Active Tokens</h2>
+    <div class="bg-surface rounded-lg border border-white/10 divide-y divide-neutral-800/60 overflow-hidden">
+        {{range .Tokens}}
+        <div class="flex items-center gap-3 px-4 py-3">
+            <div class="flex-1">
+                <div class="text-sm font-medium text-white">{{.Label}}</div>
+                <div class="text-xs text-muted/60">
+                    Created {{.CreatedAt.Format "2006-01-02 15:04"}}
+                    {{if .LastUsedAt}} · Last used {{.LastUsedAt.Format "2006-01-02 15:04"}}{{end}}
+                    {{if .DeviceID}} · Device: <code>{{.DeviceID}}</code>{{end}}
+                </div>
+            </div>
+            {{if .RevokedAt}}
+            <span class="text-xs text-red-400 px-2 py-1">Revoked {{.RevokedAt.Format "2006-01-02"}}</span>
+            {{else}}
+            <form method="POST" action="/admin/tokens/revoke?id={{.ID}}" class="inline"
+                  onsubmit="return confirm('Revoke this token? The device will lose access immediately.');">
+                <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                <button type="submit" class="text-xs font-medium bg-red-900/30 hover:bg-red-900/50 text-red-400 px-3 py-1.5 rounded transition-colors">
+                    Revoke
+                </button>
+            </form>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="px-4 py-8 text-center text-sm text-muted/60">No tokens issued yet.</div>
+        {{end}}
+    </div>
+
+    <h2 class="text-lg font-semibold mt-8 mb-3">Using the API</h2>
+    <pre class="bg-surface rounded-lg border border-white/10 p-4 text-xs overflow-x-auto"><code>curl -X POST https://your-host/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"...","password":"...","label":"curl test"}'
+
+# Response includes "token". Use it:
+curl https://your-host/api/v1/library \
+  -H "Authorization: Bearer wfp_..." </code></pre>
+    <p class="text-xs text-muted/60 mt-2">
+        Full OpenAPI spec at <code>/api/v1/openapi.json</code>.
+    </p>
+</main>
+<script>
+function tokensApp() {
+    return {
+        newToken: {{if .NewTokenPlain}}{{jsstr .NewTokenPlain}}{{else}}null{{end}},
+        newLabel: {{if .NewTokenLabel}}{{jsstr .NewTokenLabel}}{{else}}''{{end}},
+        copyToken() {
+            if (!this.newToken) return;
+            navigator.clipboard.writeText(this.newToken).then(function() {
+                alert('Copied to clipboard');
+            });
+        }
+    };
+}
+</script>
+</body>
+</html>
+{{end}}
