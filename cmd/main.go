@@ -72,8 +72,6 @@ func main() {
 		}
 	}
 
-	store := handlers.NewStore(db)
-
 	blobStore, err := blob.FromConfig(context.Background(), blob.FromEnv())
 	if err != nil {
 		logging.Error("failed to init blob store: %v", err)
@@ -81,6 +79,8 @@ func main() {
 	}
 	handlers.SetBlobStore(blobStore)
 	logging.Info("blob store initialized: backend=%s", blob.FromEnv().Backend)
+
+	store := handlers.NewStore(db)
 
 	pool := worker.NewWorkerPool(4, providerList, func(seriesID int64, chapters []models.Chapter) {
 		_, err := store.InsertChapters(seriesID, chapters)
@@ -213,6 +213,9 @@ func main() {
 			r.Get("/api/comics/chapter/{id}/pages", h.ComicChapterPagesAPI)
 			r.Post("/api/comics/chapter/{id}/read", h.ComicMarkReadAPI)
 			r.Post("/api/comics/chapter/{id}/download", h.ComicDownloadChapterAPI)
+			r.Get("/api/comics/chapter/{id}/download/status", h.ComicDownloadStatusAPI)
+			r.Post("/api/comics/chapter/{id}/download/cancel", h.ComicDownloadCancelAPI)
+			r.Get("/api/comics/chapter/{id}/cbz", h.ComicChapterCBZAPI)
 			r.Get("/comics/page/{chapterId}/{pageIndex}", h.ComicServePage)
 			r.Post("/api/comics/progress", h.ComicSaveProgressAPI)
 		})
@@ -240,6 +243,18 @@ func main() {
 
 	scheduler := newScheduler(interval, store, pool, logDir)
 	go scheduler.start(ctx)
+
+	// Comic polling runs on its own interval (default 1h) — manga update
+	// cadence is much slower than text fiction. Per-provider interval overrides
+	// arrive in Phase 4; for now one global interval governs all comic providers.
+	comicInterval := envOrDefault("COMIC_POLL_INTERVAL", "1h")
+	comicDur, err := time.ParseDuration(comicInterval)
+	if err != nil || comicDur == 0 {
+		logging.Error("[main] invalid COMIC_POLL_INTERVAL %q, falling back to 1h: %v", comicInterval, err)
+		comicDur = time.Hour
+	}
+	comicSched := newComicScheduler(comicDur, store)
+	go comicSched.start(ctx)
 
 	archiveInterval := envOrDefault("ARCHIVE_INTERVAL", "1h")
 	archiveDur, _ := time.ParseDuration(archiveInterval)
@@ -601,5 +616,67 @@ func (s *scheduler) runPoll(ctx context.Context) {
 			continue
 		}
 		s.pool.Submit(worker.Job{Series: series, Provider: p})
+	}
+}
+
+// comicScheduler periodically refreshes the chapter list for every tracked
+// comic series. It does not fetch page images — that's the archiver / explicit
+// download flow. Discovered chapters land in comic_chapters for the library
+// view to surface as "new".
+type comicScheduler struct {
+	interval time.Duration
+	store    *handlers.Store
+}
+
+func newComicScheduler(interval time.Duration, store *handlers.Store) *comicScheduler {
+	return &comicScheduler{interval: interval, store: store}
+}
+
+func (s *comicScheduler) start(ctx context.Context) {
+	s.runPoll(ctx)
+	ticker := time.NewTicker(s.interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			logging.Info("[comic-scheduler] stopping")
+			return
+		case <-ticker.C:
+			s.runPoll(ctx)
+		}
+	}
+}
+
+func (s *comicScheduler) runPoll(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+	all, err := s.store.ListComicSeries()
+	if err != nil {
+		logging.Error("[comic-scheduler] list series: %v", err)
+		return
+	}
+	logging.Info("[comic-scheduler] refreshing %d comic series", len(all))
+	for _, cs := range all {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		p, ok := handlers.LookupComicProvider(cs.ProviderName)
+		if !ok {
+			logging.Error("[comic-scheduler] provider %q not registered for %q", cs.ProviderName, cs.Title)
+			continue
+		}
+		n, err := s.store.RefreshComicChapters(cs.ID, p, cs.SourceID)
+		if err != nil {
+			logging.Error("[comic-scheduler] refresh %q: %v", cs.Title, err)
+			continue
+		}
+		if n > 0 {
+			logging.Info("[comic-scheduler] %q: %d new chapter(s)", cs.Title, n)
+		}
 	}
 }

@@ -1,10 +1,17 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"net/http"
 	"time"
 
+	"github.com/linuxnoodle/webfictionpoller/internal/blob"
 	"github.com/linuxnoodle/webfictionpoller/internal/comics"
 )
 
@@ -146,14 +153,53 @@ func (s *Store) MarkComicChapterDownloaded(chapterID int64) error {
 }
 
 func (s *Store) SaveComicPage(chapterID int64, pageIndex int, imageURL string, data []byte, contentType string) error {
-	_, err := s.db.Exec(`
+	// Always record metadata (page_index + image_url + content_type) in the DB
+	// so listings stay queryable. Image bytes go to the blob store when present;
+	// we fall back to the legacy comic_pages.data BLOB column only when no
+	// blob store is wired (tests, very old installs).
+	hasBlob := s.blob != nil && len(data) > 0
+	var dataArg interface{}
+	if !hasBlob {
+		dataArg = data // legacy path: store bytes inline
+	}
+	if _, err := s.db.Exec(`
 		INSERT OR REPLACE INTO comic_pages (chapter_id, page_index, image_url, data, content_type)
 		VALUES (?, ?, ?, ?, ?)
-	`, chapterID, pageIndex, imageURL, data, contentType)
-	return err
+	`, chapterID, pageIndex, imageURL, dataArg, contentType); err != nil {
+		return err
+	}
+	if hasBlob {
+		ctx := context.Background()
+		if _, err := s.blob.Put(ctx, blob.KindComicPage, chapterID, PageBlobName(pageIndex), bytes.NewReader(data), blob.PutOptions{ContentType: contentType}); err != nil {
+			return fmt.Errorf("writing comic page blob: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) GetComicPageData(chapterID int64, pageIndex int) ([]byte, string, error) {
+	// Preferred path: blob store.
+	if s.blob != nil {
+		ctx := context.Background()
+		r, err := s.blob.Get(ctx, blob.KindComicPage, chapterID, PageBlobName(pageIndex))
+		if err == nil {
+			defer r.Close()
+			data, readErr := io.ReadAll(r)
+			if readErr != nil {
+				return nil, "", readErr
+			}
+			ct := s.comicPageContentType(chapterID, pageIndex)
+			if ct == "" {
+				ct = http.DetectContentType(data)
+			}
+			return data, ct, nil
+		}
+		// Fall through to legacy BLOB only on NotExist; surface other errors.
+		if !errors.Is(err, fs.ErrNotExist) {
+			return nil, "", err
+		}
+	}
+	// Legacy path: read bytes from comic_pages.data.
 	var data []byte
 	var contentType string
 	err := s.db.QueryRow(`
@@ -166,6 +212,63 @@ func (s *Store) GetComicPageData(chapterID int64, pageIndex int) ([]byte, string
 		return nil, "", err
 	}
 	return data, contentType, nil
+}
+
+// GetComicPageReader returns a streaming reader for a cached page, preferring
+// the blob store. Caller closes the reader. Returns (nil, "", nil) when the
+// page is not cached locally — caller should fetch from upstream.
+func (s *Store) GetComicPageReader(ctx context.Context, chapterID int64, pageIndex int) (io.ReadCloser, string, error) {
+	if s.blob != nil {
+		r, err := s.blob.Get(ctx, blob.KindComicPage, chapterID, PageBlobName(pageIndex))
+		if err == nil {
+			ct := s.comicPageContentType(chapterID, pageIndex)
+			return r, ct, nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return nil, "", err
+		}
+	}
+	data, ct, err := s.GetComicPageData(chapterID, pageIndex)
+	if err != nil {
+		return nil, "", err
+	}
+	if data == nil {
+		return nil, "", nil
+	}
+	return io.NopCloser(bytes.NewReader(data)), ct, nil
+}
+
+// comicPageContentType looks up the stored content_type for a page. Used to
+// avoid re-detecting MIME on every serve.
+func (s *Store) comicPageContentType(chapterID int64, pageIndex int) string {
+	var ct string
+	_ = s.db.QueryRow(`SELECT content_type FROM comic_pages WHERE chapter_id = ? AND page_index = ?`, chapterID, pageIndex).Scan(&ct)
+	return ct
+}
+
+// ComicPageBlobStored reports whether the page image lives in the blob store
+// (vs needing upstream fetch). Used by download-status to count cached pages.
+func (s *Store) ComicPageBlobStored(ctx context.Context, chapterID int64, pageIndex int) bool {
+	if s.blob == nil {
+		return false
+	}
+	_, err := s.blob.Size(ctx, blob.KindComicPage, chapterID, PageBlobName(pageIndex))
+	return err == nil
+}
+
+// DeleteComicChapterBlobs removes every cached page image for a chapter from
+// the blob store. Called when a chapter is deleted or re-downloaded.
+func (s *Store) DeleteComicChapterBlobs(ctx context.Context, chapterID int64) error {
+	if s.blob == nil {
+		return nil
+	}
+	return s.blob.DeleteAll(ctx, blob.KindComicPage, chapterID)
+}
+
+// PageBlobName returns the stable blob-store object name for a page index.
+// Exported so handlers and tests share the same naming scheme.
+func PageBlobName(pageIndex int) string {
+	return fmt.Sprintf("page-%06d", pageIndex)
 }
 
 func (s *Store) GetComicChapterPages(chapterID int64) ([]comics.ComicPage, error) {

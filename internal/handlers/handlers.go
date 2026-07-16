@@ -7,6 +7,7 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
+	"github.com/linuxnoodle/webfictionpoller/internal/download"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/opds"
 	"github.com/linuxnoodle/webfictionpoller/internal/worker"
@@ -27,6 +28,7 @@ type Handler struct {
 	vault         *crypto.Vault
 	opdsCatalog   *opds.Catalog
 	archiver      *worker.Archiver
+	downloads     *download.Tracker
 }
 
 func NewHandler(store *Store, pool *worker.WorkerPool, logDir string, vault *crypto.Vault) *Handler {
@@ -37,6 +39,7 @@ func NewHandler(store *Store, pool *worker.WorkerPool, logDir string, vault *cry
 		updateChecker: NewUpdateChecker(),
 		vault:         vault,
 		opdsCatalog:   opds.NewCatalog(store),
+		downloads:     download.NewTracker(),
 	}
 }
 

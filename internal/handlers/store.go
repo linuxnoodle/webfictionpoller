@@ -6,16 +6,23 @@ import (
 	"database/sql"
 	"io"
 
+	"github.com/linuxnoodle/webfictionpoller/internal/blob"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 )
 
 type Store struct {
-	db *sql.DB
+	db   *sql.DB
+	blob blob.Store // optional; when nil, comic pages fall back to DB BLOBs
 }
 
 func NewStore(db *sql.DB) *Store {
-	return &Store{db: db}
+	return &Store{db: db, blob: blobStore}
 }
+
+// SetStoreBlobStore overrides the blob backend on an existing Store. Used by
+// tests that construct a Store after calling SetBlobStore, and by main.go to
+// rebind after initialization order changes.
+func (s *Store) SetBlobStore(b blob.Store) { s.blob = b }
 
 func decompressGzip(data []byte) string {
 	if len(data) == 0 {

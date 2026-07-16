@@ -1,16 +1,23 @@
 package handlers
 
 import (
+	"archive/zip"
+	"context"
 	"encoding/json"
+	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/comics"
+	"github.com/linuxnoodle/webfictionpoller/internal/download"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
+	"github.com/linuxnoodle/webfictionpoller/internal/models"
 )
 
 var comicProviders = map[string]comics.ComicProvider{}
@@ -19,9 +26,38 @@ func RegisterComicProvider(p comics.ComicProvider) {
 	comicProviders[p.Name()] = p
 }
 
+// comicProviderByName looks up a comic provider by name. It returns (nil, false)
+// when the provider is unknown — there is deliberately NO fallback to "pick any"
+// provider, because with multiple comic providers registered that behaviour
+// would silently attribute a series to the wrong source.
+//
+// Callers should surface a clear error when this returns false rather than
+// guessing. main.go populates comicProviders from plugin.Default at startup,
+// so the registry is the source of truth.
 func comicProviderByName(name string) (comics.ComicProvider, bool) {
 	p, ok := comicProviders[name]
 	return p, ok
+}
+
+// LookupComicProvider is the exported form of comicProviderByName for callers
+// outside the handlers package (scheduler, future API layer).
+func LookupComicProvider(name string) (comics.ComicProvider, bool) {
+	return comicProviderByName(name)
+}
+
+// resolveComicProvider returns the provider for a series or an error explaining
+// why it could not be resolved. Replaces the old "pick any registered provider"
+// fallback, which silently misattributed series to the wrong source when more
+// than one comic provider was registered.
+func resolveComicProvider(series *comics.ComicSeries) (comics.ComicProvider, error) {
+	if series == nil {
+		return nil, errors.New("series is nil")
+	}
+	p, ok := comicProviderByName(series.ProviderName)
+	if !ok || p == nil {
+		return nil, fmt.Errorf("comic provider %q not registered", series.ProviderName)
+	}
+	return p, nil
 }
 
 func (h *Handler) ComicBrowsePage(w http.ResponseWriter, r *http.Request) {
@@ -44,8 +80,22 @@ func (h *Handler) ComicSearchAPI(w http.ResponseWriter, r *http.Request) {
 
 	p, ok := comicProviderByName(provider)
 	if !ok {
-		for _, p = range comicProviders {
-			break
+		// No provider selected. If exactly one is registered, use it; otherwise
+		// surface the choice rather than silently searching the wrong catalog.
+		if len(comicProviders) == 1 {
+			for _, single := range comicProviders {
+				p = single
+			}
+		} else {
+			names := make([]string, 0, len(comicProviders))
+			for n := range comicProviders {
+				names = append(names, n)
+			}
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"error":    "provider parameter required",
+				"providers": names,
+			})
+			return
 		}
 	}
 	if p == nil {
@@ -237,10 +287,12 @@ func (h *Handler) ComicChapterPagesAPI(w http.ResponseWriter, r *http.Request) {
 		p, _ = comicProviderByName(series.ProviderName)
 	}
 	if p == nil {
-		for _, prov := range comicProviders {
-			p = prov
-			break
+		name := ""
+		if series != nil {
+			name = series.ProviderName
 		}
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("comic provider %q not registered", name)})
+		return
 	}
 
 	if p == nil {
@@ -330,10 +382,13 @@ func (h *Handler) ComicServePage(w http.ResponseWriter, r *http.Request) {
 			provider, _ = comicProviderByName(series.ProviderName)
 		}
 		if provider == nil {
-			for _, p := range comicProviders {
-				provider = p
-				break
+			name := ""
+			if series != nil {
+				name = series.ProviderName
 			}
+			logging.Error("[comic] cannot serve page %d/%d: provider %q not registered", chapterID, pageIndex, name)
+			http.Error(w, "provider not registered", http.StatusInternalServerError)
+			return
 		}
 		if provider != nil {
 			providerPages, perr := provider.PageList(chapter.SourceID)
@@ -526,6 +581,12 @@ func (h *Handler) ComicUpdateStatusAPI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
 }
 
+// comicDownloadKey is the tracker key namespace for comic chapter downloads.
+// Kept stable so a client can poll status by chapter id alone.
+func comicDownloadKey(chapterID int64) string {
+	return fmt.Sprintf("comic-chapter:%d", chapterID)
+}
+
 func (h *Handler) ComicDownloadChapterAPI(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -540,61 +601,228 @@ func (h *Handler) ComicDownloadChapterAPI(w http.ResponseWriter, r *http.Request
 	}
 
 	series, _ := h.store.GetComicSeriesByID(chapter.SeriesID)
-	var provider comics.ComicProvider
-	if series != nil {
-		provider, _ = comicProviderByName(series.ProviderName)
-	}
-	if provider == nil {
-		for _, p := range comicProviders {
-			provider = p
-			break
-		}
-	}
-	if provider == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "no provider"})
+	provider, err := resolveComicProvider(series)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 		return
 	}
 
-	pages, err := provider.PageList(chapter.SourceID)
+	store := h.store
+	status := h.downloads.Start(comicDownloadKey(id), 0, func(ctx context.Context, rep download.Reporter) error {
+		// Defer page enumeration until inside the job so the total reflects the
+		// upstream response (page lists can change between requests).
+		pages, err := provider.PageList(chapter.SourceID)
+		if err != nil {
+			return fmt.Errorf("fetching page list: %w", err)
+		}
+		rep.SetTotal(len(pages))
+		if len(pages) == 0 {
+			return errors.New("upstream returned zero pages")
+		}
+
+		for _, pg := range pages {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			// Skip pages already in the blob store — resume after interruption.
+			if store.ComicPageBlobStored(ctx, id, pg.Index) {
+				rep.Inc()
+				continue
+			}
+			if err := fetchAndCacheComicPage(ctx, store, provider, id, pg); err != nil {
+				logging.Error("[comic] download page %d of chapter %d: %v", pg.Index, id, err)
+				// Continue rather than abort: partial downloads are useful.
+				continue
+			}
+			rep.Inc()
+		}
+		// Mark downloaded only if every page is now cached.
+		allCached := true
+		for _, pg := range pages {
+			if !store.ComicPageBlobStored(ctx, id, pg.Index) {
+				allCached = false
+				break
+			}
+		}
+		if allCached {
+			if err := store.MarkComicChapterDownloaded(id); err != nil {
+				logging.Error("[comic] mark downloaded %d: %v", id, err)
+			}
+		}
+		return nil
+	})
+
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"ok":     true,
+		"key":    comicDownloadKey(id),
+		"status": status,
+	})
+}
+
+// ComicDownloadStatusAPI returns the current progress of a chapter download.
+// GET /api/comics/chapter/{id}/download/status
+func (h *Handler) ComicDownloadStatusAPI(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid id"})
+		return
+	}
+	status, ok := h.downloads.Status(comicDownloadKey(id))
+	if !ok {
+		// No job recorded. Report based on the chapter's stored flag so the
+		// client gets a sensible answer on cold-start poll.
+		chapter, _ := h.store.GetComicChapterByID(id)
+		state := download.StateFailed
+		if chapter != nil && chapter.Downloaded {
+			state = download.StateComplete
+		}
+		status = download.Status{Key: comicDownloadKey(id), State: state}
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+// ComicDownloadCancelAPI cancels a running chapter download.
+// POST /api/comics/chapter/{id}/download/cancel
+func (h *Handler) ComicDownloadCancelAPI(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid id"})
+		return
+	}
+	h.downloads.Cancel(comicDownloadKey(id))
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true})
+}
+
+// ComicChapterCBZAPI streams a CBZ (zip of page images) for offline reading.
+// GET /api/comics/chapter/{id}/cbz
+//
+// Pages are read from the blob store on the fly; the response is streamed so
+// memory use stays flat regardless of chapter size. Returns 404 if no pages
+// are cached locally.
+func (h *Handler) ComicChapterCBZAPI(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid id"})
+		return
+	}
+	chapter, err := h.store.GetComicChapterByID(id)
+	if err != nil || chapter == nil {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "chapter not found"})
+		return
+	}
+	pages, err := h.store.GetComicChapterPages(id)
 	if err != nil {
 		internalError(w, r, err)
 		return
 	}
+	if len(pages) == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "no pages cached; download the chapter first"})
+		return
+	}
 
-	go func() {
-		for _, pg := range pages {
-			existing, _, _ := h.store.GetComicPageData(id, pg.Index)
-			if existing != nil {
-				continue
-			}
+	// Build a sensible filename. Use chapter number when present, fall back to id.
+	filename := fmt.Sprintf("chapter-%d.cbz", id)
+	if chapter.ChapterNum != "" {
+		filename = fmt.Sprintf("chapter-%s.cbz", sanitizeForFilename(chapter.ChapterNum))
+	}
 
-			resp, perr := http.Get(pg.ImageURL)
-			if perr != nil {
-				logging.Error("[comic] download page %d: %v", pg.Index, perr)
-				continue
-			}
-			data, perr := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if perr != nil {
-				logging.Error("[comic] read page %d: %v", pg.Index, perr)
-				continue
-			}
+	w.Header().Set("Content-Type", "application/vnd.comicbook+zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	// Streaming zip — no Content-Length, client shows indeterminate progress.
 
-			ct := resp.Header.Get("Content-Type")
-			if ct == "" {
-				ct = "image/jpeg"
-			}
-
-			h.store.SaveComicPage(id, pg.Index, pg.ImageURL, data, ct)
-			logging.Info("[comic] cached page %d/%d for chapter %d", pg.Index, len(pages), id)
+	zw := zip.NewWriter(w)
+	ctx := r.Context()
+	for _, pg := range pages {
+		if ctx.Err() != nil {
+			return
 		}
-		h.store.MarkComicChapterDownloaded(id)
-		logging.Info("[comic] finished downloading chapter %d (%d pages)", id, len(pages))
-	}()
+		ext := extensionForPageIndex(pg.Index)
+		name := fmt.Sprintf("%05d.%s", pg.Index, ext)
+		fw, err := zw.Create(name)
+		if err != nil {
+			logging.Error("[comic] cbz create %q: %v", name, err)
+			return
+		}
+		rc, _, err := h.store.GetComicPageReader(ctx, id, pg.Index)
+		if err != nil {
+			logging.Error("[comic] cbz read page %d: %v", pg.Index, err)
+			return
+		}
+		if _, err := io.Copy(fw, rc); err != nil {
+			rc.Close()
+			logging.Error("[comic] cbz copy page %d: %v", pg.Index, err)
+			return
+		}
+		rc.Close()
+	}
+	// Include a ComicInfo.xml metadata file so readers display title/series.
+	if fw, err := zw.Create("ComicInfo.xml"); err == nil {
+		writeComicInfoXML(fw, chapter, pages)
+	}
+	if err := zw.Close(); err != nil {
+		logging.Error("[comic] cbz close: %v", err)
+	}
+}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":    true,
-		"pages": len(pages),
-		"msg":   fmt.Sprintf("Downloading %d pages in background", len(pages)),
-	})
+// fetchAndCacheComicPage downloads one page from upstream and writes it to
+// the store (blob + metadata).
+func fetchAndCacheComicPage(ctx context.Context, store *Store, provider comics.ComicProvider, chapterID int64, pg models.ComicPage) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", pg.ImageURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("upstream status %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 25<<20))
+	if err != nil {
+		return err
+	}
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = http.DetectContentType(data)
+	}
+	return store.SaveComicPage(chapterID, pg.Index, pg.ImageURL, data, ct)
+}
+
+func writeComicInfoXML(w io.Writer, chapter *models.ComicChapter, pages []models.ComicPage) {
+	fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>
+<ComicInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <PageCount>%d</PageCount>
+  <Number>%s</Number>
+</ComicInfo>
+`, len(pages), escapeXML(chapter.ChapterNum))
+}
+
+func escapeXML(s string) string {
+	var b strings.Builder
+	xml.EscapeText(&b, []byte(s))
+	return b.String()
+}
+
+func sanitizeForFilename(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "chapter"
+	}
+	return b.String()
+}
+
+func extensionForPageIndex(idx int) string {
+	_ = idx
+	// We don't store per-page extension yet; default to jpg. Future: read from
+	// comic_pages.content_type and map.
+	return "jpg"
 }
