@@ -145,6 +145,15 @@
                     <span class="text-sm font-medium flex-1 text-white group-hover:text-primary transition-colors" x-text="ch.title"></span>
                     <span class="text-xs text-muted/60 flex-shrink-0" x-text="ch.pages + ' pages'"></span>
                     <span x-show="ch.downloaded" class="text-xs text-primary ml-2" title="Downloaded">&#10003;</span>
+                    <button @click.stop="downloadChapter(ch)"
+                            x-show="!ch.downloaded && ch.downloadState !== 'running'"
+                            class="text-xs font-medium bg-primary/20 hover:bg-primary/40 text-primary px-2 py-1 rounded transition-colors flex-shrink-0"
+                            :disabled="ch.downloadState === 'running'"
+                            title="Download for offline reading">
+                        Download
+                    </button>
+                    <span x-show="ch.downloadState === 'running'" class="text-xs text-muted/80 flex-shrink-0" x-text="ch.downloadProgress || 'Starting...'"></span>
+                    <span x-show="ch.downloadState === 'failed'" class="text-xs text-red-400 flex-shrink-0" title="Download failed">&#9888;</span>
                 </div>
             </template>
             <div x-show="currentChapters.length === 0" class="px-4 py-8 text-center text-sm text-muted/60">
@@ -259,6 +268,46 @@ function comicApp() {
         },
         openReader(chapterId) {
             window.location.href = '/comics/read/' + chapterId;
+        },
+        downloadChapter(ch) {
+            if (ch.downloadState === 'running') return;
+            ch.downloadState = 'running';
+            ch.downloadProgress = 'Starting...';
+            fetch('/api/comics/chapter/' + ch.id + '/download', {
+                method: 'POST',
+                headers: {'X-CSRF-Token': _csrf}
+            })
+            .then(function(r) { return r.json() })
+            .then(function() {
+                this.pollDownload(ch);
+            }.bind(this))
+            .catch(function(err) {
+                ch.downloadState = 'failed';
+                ch.downloadProgress = '';
+            }.bind(this));
+        },
+        pollDownload(ch) {
+            var self = this;
+            var tick = function() {
+                fetch('/api/comics/chapter/' + ch.id + '/download/status')
+                .then(function(r) { return r.json() })
+                .then(function(s) {
+                    ch.downloadState = s.state;
+                    if (s.state === 'running') {
+                        ch.downloadProgress = (s.done || 0) + '/' + (s.total || '?');
+                        setTimeout(tick, 1500);
+                    } else {
+                        ch.downloadProgress = '';
+                        if (s.state === 'complete') {
+                            ch.downloaded = true;
+                        }
+                    }
+                }.bind(self))
+                .catch(function() {
+                    ch.downloadState = 'failed';
+                }.bind(self));
+            };
+            tick();
         }
     };
 }
