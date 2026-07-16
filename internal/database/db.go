@@ -149,6 +149,20 @@ var migrations = []migration{
 		FOREIGN KEY (series_id) REFERENCES comic_series(id) ON DELETE CASCADE,
 		FOREIGN KEY (chapter_id) REFERENCES comic_chapters(id) ON DELETE CASCADE
 	)`},
+	{"api_tokens", `CREATE TABLE IF NOT EXISTS api_tokens (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		token_hash TEXT NOT NULL UNIQUE,
+		label TEXT NOT NULL DEFAULT '',
+		device_id TEXT DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_used_at DATETIME,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	)`},
+	{"api_tokens_idx", `CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id)`},
+	{"api_tokens_hash_idx", `CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash)`},
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {

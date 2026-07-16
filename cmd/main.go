@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -18,6 +19,8 @@ import (
 	"github.com/justinas/nosurf"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
+	apiv1 "github.com/linuxnoodle/webfictionpoller/internal/api/v1"
+	"github.com/linuxnoodle/webfictionpoller/internal/api"
 	"github.com/linuxnoodle/webfictionpoller/internal/blob"
 	"github.com/linuxnoodle/webfictionpoller/internal/comics"
 	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
@@ -102,9 +105,17 @@ func main() {
 	archiver := worker.NewArchiver(store, providerList, envOrDefault("ARCHIVE_ALL", "false") == "true")
 	h.SetArchiver(archiver)
 
+	// v1 API (mobile / iOS). Authenticator falls back to browser sessions so
+	// the web UI can call /api/v1/* during the transition.
+	apiTokens := api.NewTokenStore(db)
+	apiAuth := api.NewAuthenticator(apiTokens, sessionManager)
+	v1Server := apiv1.NewServer(db, apiTokens, store)
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	r.Mount("/api/v1", v1Server.Routes(apiAuth.Middleware(true), apiAuth.HasUsersGate(db)))
 
 	r.Group(func(r chi.Router) {
 		r.Use(opdsBasicAuth(db))
@@ -230,6 +241,9 @@ func main() {
 		SameSite: http.SameSiteLaxMode,
 	})
 	csrfHandler.ExemptFunc(func(r *http.Request) bool {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/") {
+			return true // bearer-token API; CSRF does not apply
+		}
 		return r.Method == "GET" || r.Method == "HEAD" || r.Method == "OPTIONS"
 	})
 
