@@ -18,6 +18,7 @@ import (
 	"github.com/justinas/nosurf"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
+	"github.com/linuxnoodle/webfictionpoller/internal/blob"
 	"github.com/linuxnoodle/webfictionpoller/internal/comics"
 	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
 	"github.com/linuxnoodle/webfictionpoller/internal/database"
@@ -72,6 +73,14 @@ func main() {
 	}
 
 	store := handlers.NewStore(db)
+
+	blobStore, err := blob.FromConfig(context.Background(), blob.FromEnv())
+	if err != nil {
+		logging.Error("failed to init blob store: %v", err)
+		log.Fatalf("failed to init blob store: %v", err)
+	}
+	handlers.SetBlobStore(blobStore)
+	logging.Info("blob store initialized: backend=%s", blob.FromEnv().Backend)
 
 	pool := worker.NewWorkerPool(4, providerList, func(seriesID int64, chapters []models.Chapter) {
 		_, err := store.InsertChapters(seriesID, chapters)
