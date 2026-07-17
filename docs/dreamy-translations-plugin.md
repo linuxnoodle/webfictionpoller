@@ -515,28 +515,97 @@ Run the full list through the plugin's smoke test before declaring done.
 4. Scheduler picks it up on next cycle (default 1h for this provider).
 5. No DB migration, no schema change, no UI change. Pure additive Go package.
 
-## Cross-cutting prerequisite: `ChapterContent` + `ContentFetcher`
+## Cross-cutting prerequisite: provider unification
 
-Before the dreamy plugin ships, the plugin system needs the new
-`ContentFetcher` interface and `ChapterContent` type. This is a small but
-non-trivial change to the registry:
+Before the dreamy plugin ships, the plugin system needs an explicit split
+between **book plugins** (text-based media, optional formatting + inline
+images) and **comic plugins** (image-sequence media), with every plugin
+returning a canonical content shape rather than raw HTML.
 
-- [ ] New file `internal/plugin/content.go` defining `ChapterContent` +
-      `ContentFetcher`.
-- [ ] Default adapter in the same file: any provider implementing the
-      legacy `HTMLFetcher` automatically satisfies `ContentFetcher` by
-      wrapping the returned HTML in `ChapterContent.BodyHTML`.
-- [ ] Archiver worker (`internal/worker/archiver.go`) switches to calling
-      `ContentFetcher.FetchChapter` when present, falling back to
-      `HTMLFetcher.FetchChapterContent` otherwise.
-- [ ] Schema migration: add `word_count INTEGER DEFAULT 0`,
-      `premium BOOLEAN DEFAULT 0`, and surface `published_at` (already
-      present) on the `chapters` table.
-- [ ] One test verifying the adapter + one test verifying direct
-      `ContentFetcher` implementation.
+### Plugin types
 
-Estimated extra effort: ~0.5 days. Unlocks every future plugin to return
-structured content instead of raw HTML.
+| Type | Media shape | Sync capability | Existing providers |
+|---|---|---|---|
+| **Book** | HTML/text body + optional images + metadata | `ContentFetcher` returns `ChapterContent` | royalroad, ao3, fanfictionnet, spacebattles, sufficientvelocity, questionablequesting, **dreamy (new)** |
+| **Comic** | Ordered image sequence | `ComicPageLister` returns `[]ComicPage` (already structured) | mangadex |
+
+The two types have different content shapes because their storage patterns
+differ fundamentally: book chapters gzip into a single HTML blob in SQLite;
+comic chapters become N individual image blobs in the BlobStore. Forcing
+them through one interface would lose type fidelity.
+
+**`KindText`** and **`KindComic`** in `plugin.Meta` already encode this split
+— the unification makes the capability contracts match.
+
+### Migration table: every provider
+
+All current providers migrate to the unified format. Book providers gain
+`ContentFetcher`; comic provider already has structured output but gets an
+explicit interface rename for clarity.
+
+| Provider | Kind | Current interface | Target interface | Migration work |
+|---|---|---|---|---|
+| **royalroad** | book | `HTMLFetcher` (raw HTML string) | `ContentFetcher` returning `ChapterContent` with parsed title, body, images, word count | Parse `.chapter-content` div + first `h1`/chapter-title; extract image URLs; count words. ~2h. |
+| **ao3** | book | `HTMLFetcher` | `ContentFetcher` | AO3 chapters are inside `#workskin`; title in `.chapter-title`. Already usermeta-aware. ~2h. |
+| **fanfictionnet** | book | `HTMLFetcher` (FlareSolverr-wrapped) | `ContentFetcher` | Wrap existing FFN parser to populate `ChapterContent`. FlareSolverr flow unchanged. ~1.5h. |
+| **spacebattles** | book | `HTMLFetcher` (XenForo) | `ContentFetcher` | Shared xenforo parser. See below. ~1h (once xenforo shared). |
+| **sufficientvelocity** | book | `HTMLFetcher` (XenForo) | `ContentFetcher` | Same as spacebattles — one change covers both. |
+| **questionablequesting** | book | `HTMLFetcher` (XenForo) | `ContentFetcher` | Same — auth/cookies unchanged. |
+| **mangadex** | comic | `PageLister` returning `[]ComicPage` | Rename to `ComicPageLister` (same signature); no behavioural change | Pure rename. ~30min. |
+| **dreamy** | book | n/a (new) | `ContentFetcher` from day one | Built per this plan. |
+
+**Total migration effort: ~10 hours** of mechanical parser upgrades across
+existing providers, plus the cross-cutting infrastructure below.
+
+### Infrastructure work (cross-cutting)
+
+These changes land before any individual provider migration:
+
+- [ ] **`internal/plugin/content.go`** (new): defines `ChapterContent` +
+      `ContentFetcher` interface for book plugins.
+- [ ] **`internal/plugin/comic_content.go`** (new): defines
+      `ComicPageLister` (rename of existing `PageLister`); document that
+      comic sync happens via `[]ComicPage` → BlobStore, no separate
+      content-fetcher needed.
+- [ ] **Default adapter**: any book provider implementing legacy
+      `HTMLFetcher` automatically satisfies `ContentFetcher` via a wrapper
+      that puts the HTML into `ChapterContent.BodyHTML` (other fields
+      empty). Zero churn during transition.
+- [ ] **Archiver worker** (`internal/worker/archiver.go`): switches to
+      `ContentFetcher.FetchChapter` when the provider implements it
+      directly, falls back to the adapter otherwise. Existing providers
+      keep working until upgraded.
+- [ ] **Schema migration**: add `word_count INTEGER NOT NULL DEFAULT 0`
+      and `premium BOOLEAN NOT NULL DEFAULT 0` columns on `chapters`.
+      `published_at` already exists.
+- [ ] **Plugin type badges**: update `/admin/plugins` UI to show
+      "book"/"comic" badges (already does via `Kind`; just verify
+      capability badges reflect the new interface names).
+- [ ] **Tests**: one for the adapter wrapping, one for a direct
+      `ContentFetcher` impl, registry integration test updated to assert
+      the new capability on each provider.
+
+Estimated effort: **~1 day**. Unlocks every future plugin to return
+structured content.
+
+### Migration sequencing
+
+1. **Infrastructure first**: `content.go` + adapter + schema migration +
+   archiver switch. All existing providers continue to work via the adapter.
+2. **Dreamy plugin** (this plan): builds directly against
+   `ContentFetcher`, validates the design with a real second book plugin.
+3. **Existing book providers upgraded one at a time**: royalroad first
+   (highest traffic), then ao3, then the xenforo family (one change
+   covers SB/SV/QQ), then fanfictionnet. Each upgrade is independently
+   shippable; the adapter keeps unchanged providers working.
+4. **Mangadex rename** (cosmetic): `PageLister` → `ComicPageLister`.
+5. **Adapter removal** (future): once every book provider implements
+   `ContentFetcher` directly, delete the legacy `HTMLFetcher` interface
+   and the adapter. Track as a follow-up issue, not part of this work.
+
+Sequencing means the dreamy plugin can ship as soon as step 1 lands; the
+existing-provider upgrades (step 3) can happen in parallel without
+blocking dreamy.
 
 ## Open questions
 
@@ -551,7 +620,13 @@ structured content instead of raw HTML.
 3. **XPath fallback dep** — not needed. User confirmed XPaths were just
   for identification. CSS selectors against semantic tags (`<main>`,
   `<article>`, `<h1>`) cover every extraction; no `gxpath` dependency.
-4. **Storage layer migration** — `ChapterContent` requires a small schema
-  addition (word_count, premium, published_at columns on `chapters`) and
-  a new `ContentFetcher` interface on the plugin system. This is a
-  cross-cutting change, not dreamy-specific; tracked separately below.
+4. **Adapter lifecycle** — keep the legacy `HTMLFetcher` + adapter
+  indefinitely, or sunset once every provider migrates? **Tentative:**
+  track as a follow-up issue; leave both interfaces available for at
+  least one release after the last migration to allow third-party
+  provider authors time to upgrade.
+5. **`ChapterContent.BodyText` derivation** — should the plugin compute it
+  (via html-to-text), or should storage derive it lazily from `BodyHTML`?
+  **Tentative:** plugin computes when cheap (one regex pass); otherwise
+  leave empty and let storage derive. Avoids storing both fields when
+  one is recoverable from the other.
