@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestInitDB(t *testing.T) {
+func TestOpen(t *testing.T) {
 	tmp, err := os.CreateTemp("", "test-*.db")
 	if err != nil {
 		t.Fatal(err)
@@ -13,9 +13,9 @@ func TestInitDB(t *testing.T) {
 	tmp.Close()
 	defer os.Remove(tmp.Name())
 
-	db, err := InitDB(tmp.Name())
+	db, err := Open(tmp.Name() + "?_foreign_keys=1&_journal_mode=WAL")
 	if err != nil {
-		t.Fatalf("InitDB failed: %v", err)
+		t.Fatalf("Open failed: %v", err)
 	}
 	defer db.Close()
 
@@ -41,7 +41,7 @@ func TestInitDB(t *testing.T) {
 	}
 }
 
-func TestInitDB_Idempotent(t *testing.T) {
+func TestOpenIdempotent(t *testing.T) {
 	tmp, err := os.CreateTemp("", "test-*.db")
 	if err != nil {
 		t.Fatal(err)
@@ -49,15 +49,15 @@ func TestInitDB_Idempotent(t *testing.T) {
 	tmp.Close()
 	defer os.Remove(tmp.Name())
 
-	db1, err := InitDB(tmp.Name())
+	db1, err := Open(tmp.Name() + "?_foreign_keys=1&_journal_mode=WAL")
 	if err != nil {
 		t.Fatal(err)
 	}
 	db1.Close()
 
-	db2, err := InitDB(tmp.Name())
+	db2, err := Open(tmp.Name() + "?_foreign_keys=1&_journal_mode=WAL")
 	if err != nil {
-		t.Fatalf("second InitDB failed: %v", err)
+		t.Fatalf("second Open failed: %v", err)
 	}
 	db2.Close()
 }

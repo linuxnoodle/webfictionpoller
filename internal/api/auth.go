@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/alexedwards/scs/v2"
 
@@ -177,9 +175,3 @@ func jsonDecode(w http.ResponseWriter, r *http.Request, dst interface{}) bool {
 	}
 	return true
 }
-
-// nowFunc is overridable in tests via build tags or context; for now, time.Now.
-var nowFunc = time.Now
-
-// ErrNoAuth is returned by helpers that require an authenticated user.
-var ErrNoAuth = errors.New("api: no authenticated user in context")

@@ -1,19 +1,12 @@
 package database
 
 import (
-	"context"
-	"database/sql"
 	_ "embed"
 	"fmt"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/db"
 	_ "github.com/mattn/go-sqlite3"
 )
-
-// SchemaPort holds the per-dialect bootstrap SQL. Each entry is applied at
-// startup. Postgres schema lives in pgschema.sql (embedded); SQLite schema
-// is the inline `schema` var above the migration list.
-var SchemaPort = schema // alias for callers that want the SQLite DDL
 
 var schema = `
 PRAGMA foreign_keys = ON;
@@ -193,81 +186,44 @@ var migrations = []migration{
 		WHERE NOT EXISTS (SELECT 1 FROM series_sources ss WHERE ss.series_id = s.id)`},
 }
 
-func InitDB(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", dbPath+"?_foreign_keys=1&_journal_mode=WAL")
-	if err != nil {
-		return nil, fmt.Errorf("opening database: %w", err)
-	}
-
-	db.SetMaxOpenConns(1)
-
-	if _, err := db.Exec(schema); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("running schema: %w", err)
-	}
-
-	for _, m := range migrations {
-		var count int
-		if err := db.QueryRow("SELECT COUNT(*) FROM _migrations WHERE name = ?", m.name).Scan(&count); err != nil {
-			continue
-		}
-		if count == 0 {
-			db.Exec(m.sql)
-			db.Exec("INSERT INTO _migrations (name) VALUES (?)", m.name)
-		}
-	}
-
-	return db, nil
-}
-
 //go:embed pgschema.sql
 var pgSchema string
 
 // Open is the dialect-aware entry point used by cmd/main.go. It inspects
 // connStr: if it looks like a Postgres URL/DSN, opens Postgres via pgx/stdlib
-// and applies the Postgres schema; otherwise falls back to SQLite (preserving
-// the old DB_PATH behavior).
+// and applies the Postgres schema; otherwise opens SQLite (preserving the
+// legacy DB_PATH behavior) and applies the SQLite schema + migrations.
 //
 // Returns our *db.DB wrapper so callers benefit from dialect-aware rebinding
 // when writing portable SQL with `?` placeholders.
 func Open(connStr string) (*db.DB, error) {
-	return openWithDialect(connStr)
-}
-
-// openWithDialect is split from Open so tests can target it directly.
-func openWithDialect(connStr string) (*db.DB, error) {
-	testDB, err := db.Open(connStr)
+	opened, err := db.Open(connStr)
 	if err != nil {
 		return nil, err
 	}
-	switch testDB.Dialect() {
+	switch opened.Dialect() {
 	case db.DialectPostgres:
 		// Postgres handles concurrent writes natively; no conn cap.
-		if err := applyPostgresSchema(testDB); err != nil {
-			testDB.Close()
+		if err := applyPostgresSchema(opened); err != nil {
+			opened.Close()
 			return nil, err
 		}
 	case db.DialectSQLite:
-		testDB.SetMaxOpenConns(1)
-		if err := applySQLiteSchema(testDB); err != nil {
-			testDB.Close()
+		opened.SetMaxOpenConns(1)
+		if err := applySQLiteSchema(opened); err != nil {
+			opened.Close()
 			return nil, err
 		}
 	}
-	return testDB, nil
+	return opened, nil
 }
 
 func applySQLiteSchema(d *db.DB) error {
-	return applySQLiteSchemaInternal(d)
-}
-
-// applySQLiteSchemaInternal is the historical impl; kept for the in-package
-// openWithDialect path above.
-func applySQLiteSchemaInternal(d *db.DB) error {
 	if _, err := d.Exec(schema); err != nil {
 		return fmt.Errorf("sqlite schema: %w", err)
 	}
-	// Ensure the migrations ledger exists (it's part of `schema` already).
+	// Apply pending migrations recorded in the _migrations ledger (created
+	// by the schema above). Each migration is idempotent via IF NOT EXISTS.
 	for _, m := range migrations {
 		var count int
 		if err := d.QueryRow("SELECT COUNT(*) FROM _migrations WHERE name = ?", m.name).Scan(&count); err != nil {
@@ -294,13 +250,3 @@ func EnsurePostgresSchema(d *db.DB) error {
 	}
 	return nil
 }
-
-// SQLiteSchema returns the bootstrap SQLite DDL. Exported for diagnostic use.
-func SQLiteSchema() string { return schema }
-
-// Close wraps *sql.DB.Close; convenience for callers holding *db.DB.
-func Close(d *db.DB) error { return d.Close() }
-
-// unused guard so `context` import stays valid even if future edits remove
-// the only ctx usage.
-var _ = context.Background

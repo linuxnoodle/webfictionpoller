@@ -10,9 +10,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -193,20 +191,4 @@ func generateToken() (string, error) {
 		return "", err
 	}
 	return TokenPrefix + hex.EncodeToString(b), nil
-}
-
-// ConstantTimePrefixEqual is exported for tests that need to compare tokens
-// without timing leakage.
-func ConstantTimePrefixEqual(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
-}
-
-// EncodeForDisplay turns a raw token into a base64 form that's safe to show
-// to users. (Currently the hex form is already URL-safe; this helper is a
-// placeholder if we later switch encodings.)
-func EncodeForDisplay(s string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(s))
 }

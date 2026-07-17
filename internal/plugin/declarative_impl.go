@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
@@ -285,7 +284,3 @@ var (
 	_ HTMLFetcher     = (*declarativeProvider)(nil)
 	_ CommentFetcher  = (*declarativeProvider)(nil)
 )
-
-// fetchClient is a small helper used internally; declared here so tests can
-// override the timeout if needed.
-var fetchClient = &http.Client{Timeout: 30 * time.Second}

@@ -149,7 +149,6 @@ func main() {
 		}
 		return out
 	})
-	_ = v1Server // keep ordering stable
 	h.SetTokenStore(apiTokens)
 	v1Server.SetPool(pool)
 

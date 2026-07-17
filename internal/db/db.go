@@ -160,23 +160,3 @@ func (db *DB) Prepare(query string) (*sql.Stmt, error) {
 func (db *DB) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
 	return db.DB.PrepareContext(ctx, db.rebind(query))
 }
-
-// ---------------------------------------------------------------------------
-// Dialect-portable SQL helpers
-// ---------------------------------------------------------------------------
-
-// IgnoreConflict returns the dialect-portable "insert, do nothing on conflict"
-// clause. Works on SQLite 3.24+ and Postgres.
-const IgnoreConflict = "ON CONFLICT DO NOTHING"
-
-// ILike returns a dialect-portable case-insensitive LIKE. SQLite's LIKE is
-// already case-insensitive for ASCII; Postgres's is case-sensitive so we wrap
-// both sides in LOWER(). Usage: ILike("title", "?") -> "LOWER(title) LIKE LOWER(?)".
-func ILike(column, placeholder string) string {
-	return fmt.Sprintf("LOWER(%s) LIKE LOWER(%s)", column, placeholder)
-}
-
-// LimitOffset returns a portable LIMIT/OFFSET clause.
-func LimitOffset(limit, offset int) string {
-	return fmt.Sprintf("LIMIT %d OFFSET %d", limit, offset)
-}

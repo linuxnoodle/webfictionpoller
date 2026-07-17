@@ -2,7 +2,6 @@ package blob
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -83,7 +82,3 @@ func getenvDefault(key, def string) string {
 	}
 	return def
 }
-
-// ErrNotConfigured is returned when a backend is selected but its required
-// configuration is missing. Used by callers to fall back gracefully.
-var ErrNotConfigured = errors.New("blob: backend not configured")

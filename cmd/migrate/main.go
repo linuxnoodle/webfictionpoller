@@ -16,9 +16,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/fs"
 	"log"
-	"os"
 	"time"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/database"
@@ -212,6 +210,3 @@ func joinStrings(in []string, sep string) string {
 	return out
 }
 
-// guard against unused import on platforms without fs.ErrNotExist.
-var _ = fs.ErrNotExist
-var _ = os.Args
