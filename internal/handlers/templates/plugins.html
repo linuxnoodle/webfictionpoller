@@ -1,0 +1,93 @@
+{{define "plugins.html"}}
+<!DOCTYPE html>
+<html lang="en" class="bg-background text-white">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plugins — WebFiction Tracker</title>
+    <script>var _csrf="{{.CSRFToken}}";</script>
+    <script src="/static/alpine.min.js" defer></script>
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="min-h-screen">
+{{template "nav.html" .}}
+<main class="max-w-5xl mx-auto px-4 py-8">
+    <div class="flex items-baseline justify-between mb-6">
+        <h1 class="text-2xl font-bold">Plugins</h1>
+        <a href="/admin/providers" class="text-sm text-primary hover:underline">Cookie / login credentials →</a>
+    </div>
+    <p class="text-sm text-muted/70 mb-6">
+        Every registered provider — compiled-in (Go) and declarative (TOML).
+        Badges show which capabilities each implements. Per-provider polling
+        intervals override the global <code>POLL_INTERVAL</code>.
+    </p>
+
+    <div class="space-y-3">
+        {{range .Providers}}
+        <div class="bg-surface rounded-lg border border-white/10 p-4">
+            <div class="flex items-start gap-3">
+                {{if .FaviconURL}}<img src="{{.FaviconURL}}" alt="" class="w-6 h-6 rounded mt-0.5">{{end}}
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-semibold text-white">{{.DisplayName}}</span>
+                        <code class="text-xs text-muted/70">{{.Name}}</code>
+                        <span class="text-xs px-2 py-0.5 rounded
+                            {{if eq .Kind "text"}}bg-blue-900/40 text-blue-300{{else if eq .Kind "comic"}}bg-purple-900/40 text-purple-300{{end}}">
+                            {{.Kind}}
+                        </span>
+                        {{if .Declarative}}
+                        <span class="text-xs px-2 py-0.5 rounded bg-emerald-900/40 text-emerald-300" title="Configured via TOML in data/providers/">toml</span>
+                        {{else}}
+                        <span class="text-xs px-2 py-0.5 rounded bg-slate-700/50 text-slate-300" title="Compiled into the binary">go</span>
+                        {{end}}
+                    </div>
+                    {{if .Homepage}}<a href="{{.Homepage}}" target="_blank" rel="noopener" class="text-xs text-muted/60 hover:text-primary">{{.Homepage}}</a>{{end}}
+
+                    <div class="mt-2 flex flex-wrap gap-1">
+                        {{range .Capabilities}}
+                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted/80 font-mono">{{.}}</span>
+                        {{end}}
+                    </div>
+                    <div class="mt-2 flex flex-wrap gap-2 text-xs text-muted/70">
+                        <span title="Authentication modes"><strong>auth:</strong> {{range .AuthModes}}<code>{{.}}</code> {{end}}</span>
+                        <span title="Rate budget"><strong>rate:</strong> {{printf "%.2f" .Rate.RequestsPerSecond}}/s · burst {{.Rate.Burst}} · concurrency {{.Rate.Concurrency}}</span>
+                    </div>
+
+                    {{if .Metrics}}
+                    <div class="mt-2 text-xs text-muted/60 grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <span><strong>last poll:</strong> {{if .Metrics.LastPollAt.IsZero}}never{{else}}{{.Metrics.LastPollAt.Format "2006-01-02 15:04"}}{{end}}</span>
+                        <span><strong>polls:</strong> {{.Metrics.TotalPolls}} ({{.Metrics.TotalErrors}} errors)</span>
+                        <span><strong>chapters:</strong> {{.Metrics.TotalChapters}} total</span>
+                        <span><strong>last yield:</strong> {{.Metrics.LastChapterCount}}</span>
+                    </div>
+                    {{if .Metrics.LastError}}
+                    <div class="mt-1 text-xs text-red-400/80 truncate" title="{{.Metrics.LastError}}">⚠ {{.Metrics.LastError}}</div>
+                    {{end}}
+                    {{end}}
+
+                    {{if eq .Kind "text"}}
+                    <form method="POST" action="/admin/plugins/poll-interval" class="mt-3 flex items-center gap-2 flex-wrap">
+                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                        <input type="hidden" name="name" value="{{.Name}}">
+                        <label class="text-xs text-muted/70">poll interval override:</label>
+                        <input type="text" name="interval" value="{{.PollIntervalCurrent}}" placeholder="{{if .PollIntervalDefault}}{{.PollIntervalDefault}} (default){{else}}global{{end}}"
+                               class="px-2 py-1 bg-background border border-white/10 rounded text-xs w-32 focus:border-primary outline-none">
+                        <button type="submit" class="text-xs font-medium bg-primary/30 hover:bg-primary/50 px-3 py-1 rounded">Save</button>
+                        {{if .PollIntervalCurrent}}
+                        <button type="submit" name="interval" value="" class="text-xs text-muted/60 hover:text-white" title="Clear override">clear</button>
+                        {{end}}
+                    </form>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+        {{else}}
+        <div class="bg-surface rounded-lg border border-white/10 p-8 text-center text-sm text-muted/60">
+            No providers registered. Check that the binary's provider packages are imported.
+        </div>
+        {{end}}
+    </div>
+</main>
+</body>
+</html>
+{{end}}

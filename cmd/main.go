@@ -123,6 +123,24 @@ func main() {
 	v1Server := apiv1.NewServer(db, apiTokens, store)
 	v1Server.SetPool(pool)
 	v1Server.SetBlobStore(blobStore)
+
+	// Wire worker metrics into the plugins page adapter.
+	h.SetPoolMetricsFn(func() map[string]handlers.MetricsView {
+		out := make(map[string]handlers.MetricsView, 16)
+		for _, m := range pool.MetricsSnapshots() {
+			out[m.Name] = handlers.MetricsView{
+				LastPollAt:       m.LastPollAt,
+				LastErrorAt:      m.LastErrorAt,
+				LastError:        m.LastError,
+				LastChapterCount: m.LastChapterCount,
+				TotalPolls:       m.TotalPolls,
+				TotalErrors:      m.TotalErrors,
+				TotalChapters:    m.TotalChapters,
+			}
+		}
+		return out
+	})
+	_ = v1Server // keep ordering stable
 	h.SetTokenStore(apiTokens)
 	v1Server.SetPool(pool)
 	h.SetUserIDResolver(func(r *http.Request) (int64, bool) {
@@ -195,6 +213,8 @@ func main() {
 			r.Get("/series/export", h.ExportOPML)
 			r.Get("/series/backup", h.ExportBackup)
 			r.Post("/series/backup", h.ImportBackup)
+			r.Get("/admin/plugins", h.PluginsPage)
+			r.Post("/admin/plugins/poll-interval", h.SavePluginPollInterval)
 			r.Get("/admin/providers", h.ProviderConfigPage)
 			r.Post("/admin/providers", h.SaveProviderConfig)
 			r.Get("/admin/logs", h.LogsPage)

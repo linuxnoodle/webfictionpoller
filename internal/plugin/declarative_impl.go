@@ -271,6 +271,11 @@ func (p *declarativeProvider) FetchComments(_ string) ([]models.Comment, error) 
 	return nil, nil
 }
 
+// IsDeclarative marks the provider as TOML-driven so the plugins page can
+// badge it distinctly from compiled-in providers. The method is matched by
+// interface probe in handlers.isDeclarative (we don't export the type).
+func (p *declarativeProvider) IsDeclarative() bool { return true }
+
 // Compile-time capability assertions: declarativeProvider implements Provider
 // plus the Poller, SeriesLister, HTMLFetcher, and CommentFetcher interfaces.
 var (

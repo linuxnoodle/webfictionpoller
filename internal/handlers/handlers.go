@@ -35,6 +35,10 @@ type Handler struct {
 	// userIDOf resolves the authenticated user ID from the browser session.
 	// Injected by main.go to avoid handlers depending on the scs package.
 	userIDOf      func(*http.Request) (int64, bool)
+
+	// poolMetricsFn returns per-provider worker metrics for the plugins page.
+	// Optional; nil when no pool is wired.
+	poolMetricsFn func() map[string]MetricsView
 }
 
 func NewHandler(store *Store, pool *worker.WorkerPool, logDir string, vault *crypto.Vault) *Handler {
