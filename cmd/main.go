@@ -67,6 +67,17 @@ func main() {
 	sessionManager.Cookie.Secure = os.Getenv("COOKIE_SECURE") != "false"
 
 	// Providers self-register via init() in internal/providers and internal/comics.
+	// Declarative TOML providers are loaded next so they coexist with the
+	// compiled-in set.
+	declDir := envOrDefault("PROVIDERS_DIR", "data/providers")
+	declCount, declErrs := plugin.LoadDeclarativeProviders(declDir, plugin.Default)
+	if declCount > 0 {
+		logging.Info("[main] loaded %d declarative provider(s) from %s", declCount, declDir)
+	}
+	for _, e := range declErrs {
+		logging.Error("[main] declarative provider load error: %v", e)
+	}
+
 	// Derive the runtime list from the global plugin registry.
 	providerList := registryTextProviders()
 	for _, p := range plugin.Default.ByKind(plugin.KindComic) {

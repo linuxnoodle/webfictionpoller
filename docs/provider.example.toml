@@ -1,0 +1,38 @@
+# Sample declarative provider.
+#
+# Drop a copy into data/providers/<name>.toml (after `mkdir -p data/providers`
+# in your install) and restart to register a new text provider without
+# recompiling. The provider implements Poller + SeriesLister + HTMLFetcher
+# only (no auth, no comments, no search).
+#
+# Required fields: name, homepage, and either poll.rss_feed_template or
+# scrape.chapter_list_selector.
+
+name = "example"
+display_name = "Example Fiction Site"
+homepage = "https://example-fiction.test"
+kind = "text"
+
+[poll]
+# RSS-first polling. {id} is replaced with the numeric ID parsed from the
+# series URL's path (the last all-digit segment). Leave empty to scrape the
+# chapter list selector below instead.
+rss_feed_template = "https://example-fiction.test/rss/{id}"
+interval = "30m"
+
+[scrape]
+# CSS selectors (goquery/Cascadia syntax). Used by FetchSeriesMetadata to
+# populate the series record and by FetchChapterContent to extract the body.
+series_title_selector    = "h1.fic-title"
+series_author_selector   = "a.author"
+series_summary_selector  = "div.description"
+chapter_list_selector    = "a.chapter-link"
+chapter_title_selector   = ""                  # optional: defaults to element text
+chapter_content_selector = "div.chapter-content"
+chapter_url_attribute    = "href"              # optional: defaults to "href"
+
+[rate]
+# Optional politeness budget. Defaults to 1 request/sec, burst 1, concurrency 1.
+requests_per_second = 0.5
+burst               = 1
+concurrency         = 1
