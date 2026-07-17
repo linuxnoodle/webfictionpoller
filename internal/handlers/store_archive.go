@@ -118,8 +118,9 @@ func (s *Store) GetChaptersNeedingContent(seriesID int64) ([]models.Chapter, err
 
 func (s *Store) SaveChapterImage(chapterID int64, url string, data []byte, contentType string) error {
 	_, err := s.db.Exec(`
-		INSERT OR REPLACE INTO chapter_images (chapter_id, url, data, content_type)
+		INSERT INTO chapter_images (chapter_id, url, data, content_type)
 		VALUES (?, ?, ?, ?)
+		ON CONFLICT (chapter_id, url) DO UPDATE SET data = EXCLUDED.data, content_type = EXCLUDED.content_type
 	`, chapterID, url, data, contentType)
 	return err
 }

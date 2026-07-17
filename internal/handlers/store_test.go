@@ -17,7 +17,7 @@ func newTestStore(t *testing.T) *Store {
 	tmp.Close()
 	t.Cleanup(func() { os.Remove(tmp.Name()) })
 
-	db, err := database.InitDB(tmp.Name())
+	db, err := database.Open(tmp.Name() + "?_foreign_keys=1&_journal_mode=WAL")
 	if err != nil {
 		t.Fatal(err)
 	}

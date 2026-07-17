@@ -115,8 +115,9 @@ func (s *Store) InsertChapters(seriesID int64, chapters []models.Chapter) (int, 
 			publishedAt = time.Now()
 		}
 		result, err := s.db.Exec(`
-			INSERT OR IGNORE INTO chapters (series_id, title, url, published_at)
+			INSERT INTO chapters (series_id, title, url, published_at)
 			VALUES (?, ?, ?, ?)
+			ON CONFLICT DO NOTHING
 		`, seriesID, ch.Title, ch.URL, publishedAt)
 		if err != nil {
 			return inserted, err
@@ -130,8 +131,9 @@ func (s *Store) InsertChapters(seriesID int64, chapters []models.Chapter) (int, 
 
 func (s *Store) AddSeries(series models.Series) (int64, error) {
 	result, err := s.db.Exec(`
-		INSERT OR IGNORE INTO series (title, author, source_url, provider_name, rating, status, summary, image_url, archive)
+		INSERT INTO series (title, author, source_url, provider_name, rating, status, summary, image_url, archive)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT DO NOTHING
 	`, series.Title, series.Author, series.SourceURL, series.ProviderName, series.Rating, series.Status, series.Summary, series.ImageURL, series.Archive)
 	if err != nil {
 		return 0, err

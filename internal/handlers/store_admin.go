@@ -160,8 +160,9 @@ func (s *Store) ImportBackup(backup *models.Backup) (imported, skipped int, err 
 				publishedAt = time.Now()
 			}
 			_, cerr := s.db.Exec(`
-				INSERT OR IGNORE INTO chapters (series_id, title, url, published_at, is_read)
+				INSERT INTO chapters (series_id, title, url, published_at, is_read)
 				VALUES (?, ?, ?, ?, ?)
+				ON CONFLICT DO NOTHING
 			`, id, cb.Title, cb.URL, publishedAt, cb.IsRead)
 			if cerr != nil {
 				return imported, skipped, cerr
@@ -187,6 +188,6 @@ func (s *Store) GetSetting(key string) string {
 }
 
 func (s *Store) SetSetting(key, value string) error {
-	_, err := s.db.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", key, value)
+	_, err := s.db.Exec("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", key, value)
 	return err
 }

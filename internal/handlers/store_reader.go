@@ -73,8 +73,9 @@ func (s *Store) GetReadingProgress(seriesID int64) (int64, float64, error) {
 
 func (s *Store) SaveReadingProgress(seriesID, chapterID int64, scrollPos float64) error {
 	_, err := s.db.Exec(`
-		INSERT OR REPLACE INTO reading_progress (series_id, chapter_id, scroll_position, updated_at)
+		INSERT INTO reading_progress (series_id, chapter_id, scroll_position, updated_at)
 		VALUES (?, ?, ?, ?)
+		ON CONFLICT (series_id) DO UPDATE SET chapter_id = EXCLUDED.chapter_id, scroll_position = EXCLUDED.scroll_position, updated_at = EXCLUDED.updated_at
 	`, seriesID, chapterID, scrollPos, time.Now())
 	return err
 }
@@ -101,6 +102,6 @@ func (s *Store) GetReaderSettings() (string, error) {
 }
 
 func (s *Store) SaveReaderSettings(jsonStr string) error {
-	_, err := s.db.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('reader_settings', ?)", jsonStr)
+	_, err := s.db.Exec("INSERT INTO settings (key, value) VALUES ('reader_settings', ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", jsonStr)
 	return err
 }

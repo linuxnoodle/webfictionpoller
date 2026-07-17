@@ -35,7 +35,7 @@ func setupServerWithStore(t *testing.T) (*v1.Server, *api.TokenStore, *sql.DB, *
 	tmp.Close()
 	t.Cleanup(func() { os.Remove(tmp.Name()) })
 
-	db, err := database.InitDB(tmp.Name())
+	db, err := database.Open(tmp.Name() + "?_foreign_keys=1&_journal_mode=WAL")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,14 +43,14 @@ func setupServerWithStore(t *testing.T) (*v1.Server, *api.TokenStore, *sql.DB, *
 
 	username := "alice"
 	password := "correct-horse-battery-staple"
-	if err := auth.CreateUser(db, username, password); err != nil {
+	if err := auth.CreateUser(db.SQL(), username, password); err != nil {
 		t.Fatal(err)
 	}
 
-	tokens := api.NewTokenStore(db)
+	tokens := api.NewTokenStore(db.SQL())
 	store := handlers.NewStore(db)
-	srv := v1.NewServer(db, tokens, store)
-	return srv, tokens, db, store, username, password
+	srv := v1.NewServer(db.SQL(), tokens, store)
+	return srv, tokens, db.SQL(), store, username, password
 }
 
 func newAuthenticatedMux(t *testing.T, srv *v1.Server, db *sql.DB) *http.ServeMux {

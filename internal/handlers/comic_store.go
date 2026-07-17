@@ -17,8 +17,9 @@ import (
 
 func (s *Store) AddComicSeries(series comics.ComicSeries) (int64, error) {
 	result, err := s.db.Exec(`
-		INSERT OR IGNORE INTO comic_series (source_id, title, author, artist, description, cover_url, source_url, provider_name, status, genres, rating)
+		INSERT INTO comic_series (source_id, title, author, artist, description, cover_url, source_url, provider_name, status, genres, rating)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT DO NOTHING
 	`, series.SourceID, series.Title, series.Author, series.Artist, series.Description, series.CoverURL, series.SourceURL, series.ProviderName, series.Status, series.Genres, series.Rating)
 	if err != nil {
 		return 0, err
@@ -92,8 +93,9 @@ func (s *Store) UpsertComicChapters(seriesID int64, chapters []comics.ComicChapt
 	inserted := 0
 	for _, ch := range chapters {
 		result, err := s.db.Exec(`
-			INSERT OR IGNORE INTO comic_chapters (series_id, source_id, title, chapter_num, volume_num, source_url, pages, published_at)
+			INSERT INTO comic_chapters (series_id, source_id, title, chapter_num, volume_num, source_url, pages, published_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT DO NOTHING
 		`, seriesID, ch.SourceID, ch.Title, ch.ChapterNum, ch.VolumeNum, ch.SourceURL, ch.Pages, ch.PublishedAt)
 		if err != nil {
 			return inserted, err
@@ -163,8 +165,9 @@ func (s *Store) SaveComicPage(chapterID int64, pageIndex int, imageURL string, d
 		dataArg = data // legacy path: store bytes inline
 	}
 	if _, err := s.db.Exec(`
-		INSERT OR REPLACE INTO comic_pages (chapter_id, page_index, image_url, data, content_type)
+		INSERT INTO comic_pages (chapter_id, page_index, image_url, data, content_type)
 		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT (chapter_id, page_index) DO UPDATE SET image_url = EXCLUDED.image_url, data = EXCLUDED.data, content_type = EXCLUDED.content_type
 	`, chapterID, pageIndex, imageURL, dataArg, contentType); err != nil {
 		return err
 	}
@@ -309,8 +312,9 @@ func (s *Store) GetComicReadingProgress(seriesID int64) (int64, int, error) {
 
 func (s *Store) SaveComicReadingProgress(seriesID, chapterID int64, pageIndex int) error {
 	_, err := s.db.Exec(`
-		INSERT OR REPLACE INTO comic_reading_progress (series_id, chapter_id, page_index, updated_at)
+		INSERT INTO comic_reading_progress (series_id, chapter_id, page_index, updated_at)
 		VALUES (?, ?, ?, ?)
+		ON CONFLICT (series_id) DO UPDATE SET chapter_id = EXCLUDED.chapter_id, page_index = EXCLUDED.page_index, updated_at = EXCLUDED.updated_at
 	`, seriesID, chapterID, pageIndex, time.Now())
 	return err
 }

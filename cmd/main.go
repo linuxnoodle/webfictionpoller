@@ -46,12 +46,20 @@ func main() {
 	defer logging.Close()
 	logging.Info("starting webfiction_poller")
 
-	db, err := database.InitDB(dbPath)
+	// DATABASE_URL overrides DB_PATH when set. Postgres URLs route through
+	// pgx; SQLite paths use mattn/go-sqlite3. Both return the dialect-aware
+	// wrapper so query code stays portable.
+	dbConnStr := dbPath
+	if env := os.Getenv("DATABASE_URL"); env != "" {
+		dbConnStr = env
+	}
+	db, err := database.Open(dbConnStr)
 	if err != nil {
 		logging.Error("failed to init database: %v", err)
 		log.Fatalf("failed to init database: %v", err)
 	}
 	defer db.Close()
+	logging.Info("[main] database dialect: %s", db.Dialect())
 
 	vault, err := crypto.OpenVault(envOrDefault("SECRET_KEY_PATH", "data/secret.key"))
 	if err != nil {
@@ -60,7 +68,7 @@ func main() {
 	}
 
 	sessionManager := scs.New()
-	sessionManager.Store = sqlite3store.New(db)
+	sessionManager.Store = sqlite3store.New(db.SQL())
 	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
@@ -118,9 +126,9 @@ func main() {
 
 	// v1 API (mobile / iOS). Authenticator falls back to browser sessions so
 	// the web UI can call /api/v1/* during the transition.
-	apiTokens := api.NewTokenStore(db)
+	apiTokens := api.NewTokenStore(db.SQL())
 	apiAuth := api.NewAuthenticator(apiTokens, sessionManager)
-	v1Server := apiv1.NewServer(db, apiTokens, store)
+	v1Server := apiv1.NewServer(db.SQL(), apiTokens, store)
 	v1Server.SetPool(pool)
 	v1Server.SetBlobStore(blobStore)
 
@@ -161,10 +169,10 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	r.Mount("/api/v1", v1Server.Routes(apiAuth.Middleware(true), apiAuth.HasUsersGate(db)))
+	r.Mount("/api/v1", v1Server.Routes(apiAuth.Middleware(true), apiAuth.HasUsersGate(db.SQL())))
 
 	r.Group(func(r chi.Router) {
-		r.Use(opdsAuth(db, apiTokens))
+		r.Use(opdsAuth(db.SQL(), apiTokens))
 		r.Get("/opds", h.OPDSRoot)
 		r.Get("/opds/cover/{id}", h.OPDSCover)
 		r.Get("/opds/epub/{id}", h.OPDSEpub)
@@ -177,9 +185,9 @@ func main() {
 		r.Use(securityHeaders)
 
 		r.Get("/login", loginPage)
-		r.Post("/login", loginBanMiddleware(loginHandler(db, sessionManager)))
-		r.Get("/setup", setupPage(db))
-		r.Post("/setup", setupHandler(db, sessionManager))
+		r.Post("/login", loginBanMiddleware(loginHandler(db.SQL(), sessionManager)))
+		r.Get("/setup", setupPage(db.SQL()))
+		r.Post("/setup", setupHandler(db.SQL(), sessionManager))
 
 		r.Get("/static/app.css", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/css; charset=utf-8")
@@ -204,7 +212,7 @@ func main() {
 		r.Post("/logout", logoutHandler(sessionManager))
 
 		r.Group(func(r chi.Router) {
-			r.Use(authMiddleware(sessionManager, db))
+			r.Use(authMiddleware(sessionManager, db.SQL()))
 
 			r.Get("/", h.Dashboard)
 			r.Get("/series/add", h.AddSeriesPage)
