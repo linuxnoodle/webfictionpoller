@@ -52,8 +52,6 @@ func scanSeries(rows *sql.Rows) (models.Series, error) {
 	return s, err
 }
 
-type DashboardStats struct {
-	TotalSeries   int `json:"total_series"`
-	ActiveSeries  int `json:"active_series"`
-	UnreadChapter int `json:"unread_chapters"`
-}
+// DashboardStats is aliased to models.DashboardStats so existing callers
+// keep working during the store split. Prefer models.DashboardStats directly.
+type DashboardStats = models.DashboardStats

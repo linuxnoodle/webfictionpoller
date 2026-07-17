@@ -1,12 +1,3 @@
-// Package v1 hosts the canonical, versioned JSON API. All routes are mounted
-// under /api/v1 by the parent api package's Router function.
-//
-// Design notes:
-//   - DTOs in dto.go decouple the wire format from internal models so the
-//     schema can evolve without breaking mobile clients.
-//   - Every handler reads the authenticated userID from the request context
-//     (set by api.Authenticator).
-//   - Errors use the structured {error, detail} envelope via writeAPIError.
 package v1
 
 import (
@@ -26,7 +17,6 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/blob"
 	"github.com/linuxnoodle/webfictionpoller/internal/comics"
 	"github.com/linuxnoodle/webfictionpoller/internal/download"
-	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
@@ -38,13 +28,13 @@ import (
 type Server struct {
 	db       *sql.DB
 	tokens   *api.TokenStore
-	store    *handlers.Store
+	store    Store
 	pool     *worker.WorkerPool
 	downloads *download.Tracker
 	blob     blob.Store
 }
 
-func NewServer(db *sql.DB, tokens *api.TokenStore, store *handlers.Store) *Server {
+func NewServer(db *sql.DB, tokens *api.TokenStore, store Store) *Server {
 	return &Server{db: db, tokens: tokens, store: store, downloads: download.NewTracker()}
 }
 
@@ -632,7 +622,7 @@ func lookupComicProvider(series *models.ComicSeries) (comics.ComicProvider, erro
 
 // fetchAndCacheComicPageV1 mirrors handlers.fetchAndCacheComicPage but lives
 // in the API package to avoid a dependency cycle.
-func fetchAndCacheComicPageV1(ctx context.Context, store *handlers.Store, provider comics.ComicProvider, chapterID int64, pg models.ComicPage) error {
+func fetchAndCacheComicPageV1(ctx context.Context, store Store, provider comics.ComicProvider, chapterID int64, pg models.ComicPage) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", pg.ImageURL, nil)
 	if err != nil {
 		return err

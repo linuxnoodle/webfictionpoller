@@ -11,6 +11,15 @@ type Comment struct {
 	AvatarURL string `json:"avatar_url,omitempty"`
 }
 
+// DashboardStats summarizes library-wide counts for the dashboard and
+// /unread-count API. Lives in models so it can be referenced by handlers,
+// api, and the worker package without import cycles.
+type DashboardStats struct {
+	TotalSeries   int `json:"total_series"`
+	ActiveSeries  int `json:"active_series"`
+	UnreadChapter int `json:"unread_chapters"`
+}
+
 type Series struct {
 	ID           int64     `json:"id"`
 	Title        string    `json:"title"`

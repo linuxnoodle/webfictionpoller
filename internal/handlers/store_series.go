@@ -170,7 +170,7 @@ func (s *Store) DeleteSeries(id int64) error {
 	return err
 }
 
-func (s *Store) GetDashboardStats() (*DashboardStats, error) {
+func (s *Store) GetDashboardStats() (DashboardStats, error) {
 	var stats DashboardStats
 	err := s.db.QueryRow(`
 		SELECT
@@ -179,9 +179,9 @@ func (s *Store) GetDashboardStats() (*DashboardStats, error) {
 			(SELECT COUNT(*) FROM chapters WHERE is_read = 0) as unread_chapters
 	`).Scan(&stats.TotalSeries, &stats.ActiveSeries, &stats.UnreadChapter)
 	if err != nil {
-		return nil, err
+		return stats, err
 	}
-	return &stats, nil
+	return stats, nil
 }
 
 func (s *Store) SearchSeries(query string) ([]models.Series, error) {
