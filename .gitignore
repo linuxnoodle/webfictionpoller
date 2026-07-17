@@ -14,4 +14,4 @@ node_modules/
 package.json
 package-lock.json
 tools.html
-TO_FIX.md
+REFACTOR_PLAN.md
