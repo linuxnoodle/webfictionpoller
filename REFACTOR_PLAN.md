@@ -358,7 +358,7 @@ Pick via `STORAGE_BACKEND=fs|minio`. **SQLite BLOB path removed** during Postgre
 |-------|-----|--------|
 | 0 Prep | 0.5d | ✅ done |
 | 1 Plugin registry (Go compiled-in) | 1.5d | ✅ done |
-| 2 Store split + SQLite→Postgres + FS blobs | 3.0d | ⏳ BlobStore + FS/MinIO backend shipped; Postgres migration + Store split deferred (user choice C) |
+| 2 Store split + SQLite→Postgres + FS blobs | 3.0d | ✅ done |
 | 3 Comics fix | 1.5d | ✅ done |
 | 4 Worker improvements | 1.0d | ✅ done |
 | 5 Declarative TOML providers | 1.0d | ✅ done |
@@ -370,17 +370,26 @@ Pick via `STORAGE_BACKEND=fs|minio`. **SQLite BLOB path removed** during Postgre
 ## Sequencing
 
 0→1→2 hard prerequisite. 3,4,6 independent after 2. 5,7,8 after 1. 9 last.
-All shipped phases are on the `refactor` branch with full test coverage.
+All phases shipped on the `refactor` branch with full test coverage.
 
-## Deferred
+## Phase 2 detail (shipped)
 
-- **Postgres migration** (~3 days): schema port, pgx impl, cmd/migrate
-  SQLite→Postgres tool, drop SetMaxOpenConns(1). Not blocking — SQLite is
-  adequate at current scale; BlobStore already removed image BLOBs from the DB.
-- **Store split** (~1.5 days): god Store has text + comics + archive + admin
-  + reader + token helpers all on `*sql.DB`. The interfaces consumed by
-  worker/opds/api/handlers are already extracted (ArchiverStore, opds.Store);
-  the in-package split is mechanical refactoring with no user-visible effect.
+- `internal/db` wrapper: dialect detection + `?`→`$N` rebind. Callers keep
+  writing SQLite-style placeholders; pgx stdlib gets numbered params at call
+  time. Method names match `*sql.DB` so ~90 call sites compile unchanged.
+- Postgres schema (`internal/database/pgschema.sql`, embedded): BIGSERIAL,
+  TIMESTAMPTZ, BYTEA, double precision. Same CHECK/UNIQUE/indexes.
+- `DATABASE_URL=postgres://...` overrides `DB_PATH` in main.go.
+- `SetMaxOpenConns(1)` only applied to SQLite (its single-writer limit).
+  Postgres gets the default pool — concurrent writers finally work.
+- 11 `INSERT OR IGNORE`/`REPLACE` queries ported to `ON CONFLICT` syntax
+  (portable across both dialects).
+- `cmd/migrate`: one-shot SQLite→Postgres data mover. Streams tables in FK
+  order, batches inserts, TRUNCATE for idempotency, syncs BIGSERIAL sequences.
+- Store split: every consumer now uses interfaces (api/v1.Store,
+  worker.ArchiverStore, opds.Store). main.go is the only file holding the
+  concrete `*handlers.Store`. Domain interfaces defined where consumed —
+  Go interface-segregation style.
 
 ---
 
