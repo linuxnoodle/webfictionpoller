@@ -354,21 +354,33 @@ Pick via `STORAGE_BACKEND=fs|minio`. **SQLite BLOB path removed** during Postgre
 
 ## Total effort
 
-| Phase | Est |
-|-------|-----|
-| 0 Prep | 0.5d |
-| 1 Plugin registry (Go compiled-in) | 1.5d |
-| 2 Store split + SQLite→Postgres + FS blobs | 3.0d |
-| 3 Comics fix | 1.5d |
-| 4 Worker improvements | 1.0d |
-| 5 Declarative TOML providers | 1.0d |
-| 6 iOS API (per-device tokens) | 2.5d |
-| 7 Plugins page | 0.5d |
-| 8 OPDS extension | 0.5d |
-| 9 Docs/release | 0.5d |
-| **Total** | **~12.5 days** |
+| Phase | Est | Status |
+|-------|-----|--------|
+| 0 Prep | 0.5d | ✅ done |
+| 1 Plugin registry (Go compiled-in) | 1.5d | ✅ done |
+| 2 Store split + SQLite→Postgres + FS blobs | 3.0d | ⏳ BlobStore + FS/MinIO backend shipped; Postgres migration + Store split deferred (user choice C) |
+| 3 Comics fix | 1.5d | ✅ done |
+| 4 Worker improvements | 1.0d | ✅ done |
+| 5 Declarative TOML providers | 1.0d | ✅ done |
+| 6 iOS API (per-device tokens) | 2.5d | ✅ done |
+| 7 Plugins page | 0.5d | ✅ done |
+| 8 OPDS extension | 0.5d | ✅ done |
+| 9 Docs/release | 0.5d | ✅ done |
 
-Sequencing: 0→1→2 hard prerequisite. 3,4,6 independent after 2. 5,7,8 after 1. 9 last.
+## Sequencing
+
+0→1→2 hard prerequisite. 3,4,6 independent after 2. 5,7,8 after 1. 9 last.
+All shipped phases are on the `refactor` branch with full test coverage.
+
+## Deferred
+
+- **Postgres migration** (~3 days): schema port, pgx impl, cmd/migrate
+  SQLite→Postgres tool, drop SetMaxOpenConns(1). Not blocking — SQLite is
+  adequate at current scale; BlobStore already removed image BLOBs from the DB.
+- **Store split** (~1.5 days): god Store has text + comics + archive + admin
+  + reader + token helpers all on `*sql.DB`. The interfaces consumed by
+  worker/opds/api/handlers are already extracted (ArchiverStore, opds.Store);
+  the in-package split is mechanical refactoring with no user-visible effect.
 
 ---
 

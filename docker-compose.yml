@@ -7,8 +7,12 @@ services:
       - DB_PATH=/data/data.db
       - ADDR=:8080
       - POLL_INTERVAL=15m
+      - COMIC_POLL_INTERVAL=1h
       - FLARESOLVERR_URL=http://flaresolverr:8191
       - LOG_DIR=/data/logs
+      - PROVIDERS_DIR=/data/providers
+      - STORAGE_BACKEND=fs
+      - STORAGE_FS_ROOT=/data/blobs
       - COMPOSE_PROJECT_DIR=/opt/webfictionpoller
     volumes:
       - ./data:/data
