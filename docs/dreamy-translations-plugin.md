@@ -43,10 +43,16 @@ user can wire FlareSolverr if their IP gets flagged later.
 ### Backend stack
 
 - Next.js frontend (SSR — content is in the initial HTML, no JS execution needed)
-- **Supabase backend** confirmed via cover image host. This means there is
-  almost certainly a public Supabase REST endpoint exposing novel/chapter
-  data as JSON. **Investigate this first** during implementation — it would
-  replace HTML scraping entirely and be far more robust.
+- **Supabase backend** confirmed via cover image host. REST endpoint at
+  `https://supabase.dreamy-translations.com/rest/v1/` requires the anon
+  API key; key extracted from a JS chunk is
+  `eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTQ2ODUwMCwiZXhwIjo0OTIxMTQyMTAwLCJyb2xlIjoiYW5vbiJ9.RpZtGEq3Pik5K07fANkOcXUthOFB83MvN97L_yzpoQk`
+  (expires 2125, anon role). Authenticated calls succeed but the obvious
+  table names (`novels`, `chapters`) don't exist — site uses different
+  names that the minified JS accesses via computed/template strings.
+- **Status:** API is reachable; schema discovery needs more work (try the
+  PostgREST OpenAPI root at `/rest/v1/` or grep a sourcemap). Plan
+  defaults to HTML scraping; Supabase is a stretch goal for phase 2.
 
 ## Architecture decision: compiled-in Go provider
 
@@ -71,12 +77,76 @@ Implements `plugin.Provider` base + four capabilities:
 |---|---|---|
 | base | `Meta()`, `MatchURL()` | trivial |
 | `SeriesLister` | `FetchSeriesMetadata(url)` | scrape story page |
-| `Poller` | `PollUpdates(series)` | scrape chapter list on story page |
-| `HTMLFetcher` | `FetchChapterContent(url)` | scrape chapter page |
+| `Poller` (update detection) | `PollUpdates(series)` | scrape chapter list on story page; returns `[]models.Chapter` |
+| `ContentFetcher` (chapter sync) | `FetchChapter(url)` | scrape chapter page; returns canonical `ChapterContent` |
 | `CommentFetcher` | `FetchComments(url)` | returns nil (site has no comments) |
 
 Does **not** implement: `Searcher`, `ChapterLister`, `PageLister` (comic
 capabilities), `LoginAuth`, `CookieAuth` (no auth required for free content).
+
+### Two-interface contract (required for every plugin)
+
+Every plugin must expose **both** a chapter-update interface and a
+chapter-sync interface:
+
+- **Update detection** (`Poller`): returns `[]models.Chapter` listing new
+  chapters discovered on the source. Called by the scheduler on the
+  provider's polling interval.
+- **Chapter sync** (`ContentFetcher`): downloads a single chapter and parses
+  it into the canonical `ChapterContent` shape (title + body + metadata),
+  which the storage layer persists. **Does not return raw HTML.**
+
+The plugin is the only code that knows the source format (HTML, JSON API,
+markdown). Everything downstream — archiver, reader, OPDS — consumes the
+unified `ChapterContent` shape.
+
+### The `ChapterContent` shape
+
+Proposed addition to `internal/plugin/content.go` (affects the whole plugin
+system, not just dreamy):
+
+```go
+package plugin
+
+// ChapterContent is the canonical parsed-chapter shape every provider
+// returns from a content fetch. Plugins convert their source format
+// (HTML, JSON, markdown) into this structure. Storage / archiver / reader
+// consume only this shape and never touch provider-specific HTML.
+type ChapterContent struct {
+    Title       string       // stripped of decorations ("Ch. N", word counts)
+    BodyHTML    string       // sanitized chapter prose (paragraphs + images)
+    BodyText    string       // plain-text rendering; empty -> derived downstream
+    PublishedAt time.Time    // zero if unknown
+    WordCount   int          // 0 if unknown
+    Premium     bool         // true = paywalled, BodyHTML empty
+    AuthorNote  string       // separated author's note, if site splits it
+    Images      []string     // image URLs in BodyHTML for the archiver to cache
+}
+
+// ContentFetcher is the chapter-sync capability: downloads a chapter from
+// the source and parses it into the canonical ChapterContent shape that
+// gets persisted. This is the "sync to storage" interface — every plugin
+// implements it.
+type ContentFetcher interface {
+    FetchChapter(url string) (ChapterContent, error)
+}
+```
+
+### Migration path for existing providers
+
+RoyalRoad / AO3 / XenForo / FFN currently implement `HTMLFetcher`
+(returns raw string). Three options:
+
+1. **Adapter** — default `ContentFetcher` wrapper calls the provider's
+   `HTMLFetcher` and shoves the result into `ChapterContent.BodyHTML`
+   (other fields empty). Zero churn to existing providers.
+2. **Incremental upgrade** — each provider gains a real `FetchChapter`
+   that populates Title/WordCount/PublishedAt. Better data over time.
+3. **Both (recommended)** — adapter now so storage layer switches to
+   `ContentFetcher` immediately; upgrade providers opportunistically as
+   we touch them.
+
+Dreamy implements `ContentFetcher` directly from day one — no legacy path.
 
 ## File layout
 
@@ -224,40 +294,72 @@ infinite scroll. Investigate during implementation; the live fetch showed
 `Chapters (1) (2) (3) ... (6)` markers indicating 6 pages for a 258-chapter
 novel. The plugin must walk every page.
 
-### `content.go` — FetchChapterContent
+### `content.go` — FetchChapter (ContentFetcher)
 
 ```go
-func (p *Provider) FetchChapterContent(chapterURL string) (string, error) {
+func (p *Provider) FetchChapter(chapterURL string) (plugin.ChapterContent, error) {
     doc := p.fetchDoc(chapterURL)
 
     // Title: prefer main > h1, fall back to main > button > span > span
-    // (the XPath the user provided).
+    // (positional XPath from the user, used only as a fallback signal).
     titleNode := doc.Find("main h1")
     if titleNode.Length() == 0 {
         titleNode = doc.Find("main button span span").First()
     }
+    title := cleanChapterTitle(titleNode.Text())  // strip "Ch. N" prefix
 
     // Body: main > article. Grab inner HTML.
     bodyHtml, err := doc.Find("main article").First().Html()
     if err != nil || strings.TrimSpace(bodyHtml) == "" {
-        return "", fmt.Errorf("no chapter content found at %s", chapterURL)
+        // Premium interstitial detection: page renders a "Sign in for Pass"
+        // CTA instead of an article element.
+        if doc.Find(":contains('Sign in for Pass')").Length() > 0 {
+            return plugin.ChapterContent{
+                Title:    title,
+                Premium:  true,
+                SourceURL: chapterURL,
+            }, nil
+        }
+        return plugin.ChapterContent{}, fmt.Errorf("no chapter content found at %s", chapterURL)
     }
-    return bodyHtml, nil
+
+    // Collect image URLs for the archiver to cache.
+    var images []string
+    doc.Find("main article img").Each(func(_ int, s *goquery.Selection) {
+        if src, _ := s.Attr("src"); src != "" {
+            images = append(images, absURL(src))
+        }
+    })
+
+    bodyText := htmlToText(bodyHtml)  // strip tags for full-text search
+
+    return plugin.ChapterContent{
+        Title:     title,
+        BodyHTML:  bodyHtml,
+        BodyText:  bodyText,
+        WordCount: countWords(bodyText),
+        Images:    images,
+        SourceURL: chapterURL,
+        // PublishedAt: not on chapter page in the captured fixture;
+        //              could be scraped from Supabase if the REST shortcut
+        //              pans out, else left zero.
+    }, nil
 }
 ```
 
+**The plugin owns the parsing.** Storage code receives a fully-formed
+`ChapterContent` and persists its fields; it never sees the raw HTML or
+knows the site's DOM structure.
+
 **Sanitization**: NOT done in the provider. The archiver/reader pipeline
-already runs `bluemonday.UGCPolicy()` on every chapter body. Provider
-returns raw HTML; downstream policy applies uniformly across all providers.
+still runs `bluemonday.UGCPolicy()` on `BodyHTML` downstream, uniformly
+across every provider. Provider returns extracted-but-unsanitized HTML;
+policy applied once at the storage boundary.
 
-**Premium chapter detection**: if FetchChapterContent hits a "Sign in for
-Pass" interstitial instead of article content, return a typed error so the
-scheduler can mark the chapter as permanently unfetchable (don't retry
-forever):
-
-```go
-var ErrPremiumContent = errors.New("premium chapter — pass required")
-```
+**Premium chapter**: when the body area is missing and the page contains a
+Pass upsell, return `ChapterContent{Premium: true}`. Storage marks the
+chapter row so the UI can show "locked" and the scheduler doesn't retry
+the fetch forever.
 
 ### `supabase.go` — optional REST shortcut
 
@@ -413,19 +515,43 @@ Run the full list through the plugin's smoke test before declaring done.
 4. Scheduler picks it up on next cycle (default 1h for this provider).
 5. No DB migration, no schema change, no UI change. Pure additive Go package.
 
+## Cross-cutting prerequisite: `ChapterContent` + `ContentFetcher`
+
+Before the dreamy plugin ships, the plugin system needs the new
+`ContentFetcher` interface and `ChapterContent` type. This is a small but
+non-trivial change to the registry:
+
+- [ ] New file `internal/plugin/content.go` defining `ChapterContent` +
+      `ContentFetcher`.
+- [ ] Default adapter in the same file: any provider implementing the
+      legacy `HTMLFetcher` automatically satisfies `ContentFetcher` by
+      wrapping the returned HTML in `ChapterContent.BodyHTML`.
+- [ ] Archiver worker (`internal/worker/archiver.go`) switches to calling
+      `ContentFetcher.FetchChapter` when present, falling back to
+      `HTMLFetcher.FetchChapterContent` otherwise.
+- [ ] Schema migration: add `word_count INTEGER DEFAULT 0`,
+      `premium BOOLEAN DEFAULT 0`, and surface `published_at` (already
+      present) on the `chapters` table.
+- [ ] One test verifying the adapter + one test verifying direct
+      `ContentFetcher` implementation.
+
+Estimated extra effort: ~0.5 days. Unlocks every future plugin to return
+structured content instead of raw HTML.
+
 ## Open questions
 
-1. **Supabase REST availability** — phase 2 determines whether we get a clean
-   JSON API or stick with HTML scraping. **Default assumption:** scraping;
-   **upgrade if** the anon REST endpoint works.
-2. **Premium chapter handling** — skip silently, or include as "locked"
-   rows the user can see but not read? **Tentative:** skip silently; the
-   chapter list endpoint only returns free chapters, so they don't appear
-   at all. If a user has a Pass, future work could add cookie-based auth
-   to fetch premium content too.
-3. **Pagination format** — `?page=N` query param, infinite scroll, or
-   something else? **Investigate** in phase 1 fixture capture.
-4. **XPath fallback dep** — does goquery's XPath support
-   (`github.com/antchfx/xmlquery` + a bridge) justify the extra dep, or
-   are CSS selectors enough? **Tentative:** CSS-only; if a selector can't
-   express what the user's XPath does, add the dep then.
+1. **Supabase REST schema** — anon key found + auth works, but table names
+  are non-obvious (`novels`/`chapters` rejected with `42P01`). Phase 2
+  tries the PostgREST OpenAPI root (`/rest/v1/`) or sourcemaps. **Default:**
+  HTML scraping; upgrade to API only if schema is recovered cleanly.
+2. **Pagination format** — irrelevant for chapter CONTENT (each chapter is
+  one URL, one fetch, full body). Matters only for chapter LIST discovery:
+  long novels split the chapter list across multiple pages. Plugin walks
+  every page during `PollUpdates` so the discovered set is complete.
+3. **XPath fallback dep** — not needed. User confirmed XPaths were just
+  for identification. CSS selectors against semantic tags (`<main>`,
+  `<article>`, `<h1>`) cover every extraction; no `gxpath` dependency.
+4. **Storage layer migration** — `ChapterContent` requires a small schema
+  addition (word_count, premium, published_at columns on `chapters`) and
+  a new `ContentFetcher` interface on the plugin system. This is a
+  cross-cutting change, not dreamy-specific; tracked separately below.
