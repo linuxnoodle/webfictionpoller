@@ -19,3 +19,7 @@ func (h *Handler) OPDSEpub(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) OPDSImage(w http.ResponseWriter, r *http.Request) {
 	h.opdsCatalog.ServeImage(w, r)
 }
+
+func (h *Handler) OPDSComicCBZ(w http.ResponseWriter, r *http.Request) {
+	h.opdsCatalog.ServeComicCBZ(w, r)
+}

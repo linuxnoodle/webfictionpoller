@@ -3,6 +3,7 @@ package opds
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"fmt"
 	"html"
 	"io"
@@ -24,6 +25,14 @@ type Store interface {
 	GetChapterImage(chapterID int64, url string) ([]byte, string, error)
 	GetSeriesByID(id int64) (*models.Series, error)
 	GetSetting(key string) string
+
+	// Comic support — returns empty slices when no comics are tracked.
+	ListComicSeries() ([]models.ComicSeries, error)
+	GetComicSeriesByID(id int64) (*models.ComicSeries, error)
+	GetComicChapters(seriesID int64) ([]models.ComicChapter, error)
+	GetComicChapterByID(id int64) (*models.ComicChapter, error)
+	GetComicChapterPages(chapterID int64) ([]models.ComicPage, error)
+	GetComicPageReader(ctx context.Context, chapterID int64, pageIndex int) (io.ReadCloser, string, error)
 }
 
 type Catalog struct {
@@ -77,6 +86,39 @@ func (c *Catalog) ServeRoot(w http.ResponseWriter, r *http.Request) {
     <link rel="http://opds-spec.org/acquisition" href="/opds/epub/%d" type="application/epub+zip" title="Download EPUB"%s/>
   </entry>
 `, s.ID, html.EscapeString(s.Title), updated, html.EscapeString(s.Author), content, s.ID, coverAttr))
+	}
+
+	// Comic section — acquisition link points to /opds/comic/{id}/cbz.
+	comics, err := c.store.ListComicSeries()
+	if err != nil {
+		logging.Error("[opds] list comic series: %v", err)
+	}
+	for _, cs := range comics {
+		updated := ""
+		if cs.CreatedAt != "" {
+			if t, perr := time.Parse(time.RFC3339, cs.CreatedAt); perr == nil {
+				updated = t.UTC().Format(time.RFC3339)
+			} else {
+				updated = cs.CreatedAt
+			}
+		}
+		if updated == "" {
+			updated = time.Now().UTC().Format(time.RFC3339)
+		}
+		content := html.EscapeString(cs.Description)
+		coverAttr := ""
+		if cs.CoverURL != "" {
+			coverAttr = ` opds:image="` + html.EscapeString(cs.CoverURL) + `"`
+		}
+		buf.WriteString(fmt.Sprintf(`  <entry>
+    <id>urn:uuid:comic-series-%d</id>
+    <title>%s (comic)</title>
+    <updated>%s</updated>
+    <author><name>%s</name></author>
+    <content type="text">%s</content>
+    <link rel="http://opds-spec.org/acquisition" href="/opds/comic/%d/cbz" type="application/vnd.comicbook+zip" title="Download CBZ"%s/>
+  </entry>
+`, cs.ID, html.EscapeString(cs.Title), updated, html.EscapeString(cs.Author), content, cs.ID, coverAttr))
 	}
 
 	buf.WriteString(`</feed>`)
@@ -416,4 +458,77 @@ func sanitizeFilename(name string) string {
 		"|", "_",
 	)
 	return r.Replace(path.Base(name))
+}
+
+// ServeComicCBZ streams a CBZ bundle of cached pages for a comic chapter.
+// Acquisition link in the OPDS feed points here. Pages are read from the
+// blob store on the fly and zipped into a stream so memory stays flat.
+func (c *Catalog) ServeComicCBZ(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/opds/comic/")
+	idStr = strings.TrimSuffix(idStr, "/cbz")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	series, err := c.store.GetComicSeriesByID(id)
+	if err != nil || series == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	// Collect every downloaded chapter for the series so a single CBZ holds
+	// the whole work. Each chapter becomes a name-prefixed subdirectory so
+	// readers display them in order.
+	chapters, err := c.store.GetComicChapters(id)
+	if err != nil {
+		logging.Error("[opds] comic chapters for %d: %v", id, err)
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	if len(chapters) == 0 {
+		http.Error(w, "no chapters", http.StatusNoContent)
+		return
+	}
+
+	filename := sanitizeFilename(series.Title) + ".cbz"
+	w.Header().Set("Content-Type", "application/vnd.comicbook+zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	zw := zip.NewWriter(w)
+	ctx := r.Context()
+	written := 0
+	for _, ch := range chapters {
+		if ctx.Err() != nil {
+			return
+		}
+		pages, err := c.store.GetComicChapterPages(ch.ID)
+		if err != nil {
+			logging.Error("[opds] pages for chapter %d: %v", ch.ID, err)
+			continue
+		}
+		for _, pg := range pages {
+			name := fmt.Sprintf("%05d-%05d.jpg", ch.ID, pg.Index)
+			fw, err := zw.Create(name)
+			if err != nil {
+				return
+			}
+			rc, _, err := c.store.GetComicPageReader(ctx, ch.ID, pg.Index)
+			if err != nil {
+				logging.Error("[opds] cbz read %d/%d: %v", ch.ID, pg.Index, err)
+				continue
+			}
+			if _, err := io.Copy(fw, rc); err != nil {
+				rc.Close()
+				logging.Error("[opds] cbz copy %d/%d: %v", ch.ID, pg.Index, err)
+				continue
+			}
+			rc.Close()
+			written++
+		}
+	}
+	if err := zw.Close(); err != nil {
+		logging.Error("[opds] cbz close: %v", err)
+	}
+	logging.Info("[opds] served CBZ for comic %d (%q): %d pages", id, series.Title, written)
 }

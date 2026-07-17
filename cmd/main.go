@@ -164,11 +164,12 @@ func main() {
 	r.Mount("/api/v1", v1Server.Routes(apiAuth.Middleware(true), apiAuth.HasUsersGate(db)))
 
 	r.Group(func(r chi.Router) {
-		r.Use(opdsBasicAuth(db))
+		r.Use(opdsAuth(db, apiTokens))
 		r.Get("/opds", h.OPDSRoot)
 		r.Get("/opds/cover/{id}", h.OPDSCover)
 		r.Get("/opds/epub/{id}", h.OPDSEpub)
 		r.Get("/opds/images/{chapterId}/{url}", h.OPDSImage)
+		r.Get("/opds/comic/{id}/cbz", h.OPDSComicCBZ)
 	})
 
 	r.Group(func(r chi.Router) {
@@ -532,27 +533,37 @@ func authMiddleware(sm *scs.SessionManager, db *sql.DB) func(http.Handler) http.
 	}
 }
 
-func opdsBasicAuth(db *sql.DB) func(http.Handler) http.Handler {
+// opdsAuth gates /opds/* behind either HTTP Basic (for traditional OPDS
+// readers likemarvin, Booky) or a bearer token (for the iOS app and any
+// /api/v1 client). Basic auth checks the users table directly; bearer
+// auth consults the api.TokenStore. Both forms return 401 with a Basic
+// challenge on failure so OPDS readers that only speak Basic still work.
+func opdsAuth(db *sql.DB, tokens *api.TokenStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			hasUsers, err := auth.HasUsers(db)
-			if err != nil || !hasUsers {
+			if err == nil && !hasUsers {
 				next.ServeHTTP(w, r)
 				return
 			}
+			// Bearer token path.
+			if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+				tok := strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
+				if t, lerr := tokens.LookupToken(r.Context(), tok); lerr == nil && t != nil {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			// Basic auth path.
 			username, password, ok := r.BasicAuth()
-			if !ok {
-				w.Header().Set("WWW-Authenticate", `Basic realm="WebFiction Poller OPDS"`)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
+			if ok {
+				if _, aerr := auth.Authenticate(db, username, password); aerr == nil {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
-			_, err = auth.Authenticate(db, username, password)
-			if err != nil {
-				w.Header().Set("WWW-Authenticate", `Basic realm="WebFiction Poller OPDS"`)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
-			next.ServeHTTP(w, r)
+			w.Header().Set("WWW-Authenticate", `Basic realm="WebFiction Poller OPDS"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		})
 	}
 }
