@@ -17,6 +17,7 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/blob"
 	"github.com/linuxnoodle/webfictionpoller/internal/comics"
 	"github.com/linuxnoodle/webfictionpoller/internal/download"
+	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
@@ -69,6 +70,11 @@ func (s *Server) Routes(authz func(http.Handler) http.Handler, hasUsersGate func
 		// Library + chapter discovery.
 		r.Get("/library", s.libraryIndex)
 		r.Get("/library/{id}", s.libraryDetail)
+		r.Get("/library/{id}/sources", s.listSeriesSources)
+		r.Post("/library/{id}/sources", s.addSeriesSource)
+		r.Patch("/library/{id}/sources/{sourceID}", s.updateSeriesSource)
+		r.Delete("/library/{id}/sources/{sourceID}", s.deleteSeriesSource)
+		r.Post("/library/{id}/sources/{sourceID}/promote", s.promoteSeriesSource)
 		r.Get("/chapters", s.chapterList)
 		r.Get("/chapters/{id}", s.chapterGet)
 		r.Get("/chapters/{id}/content", s.chapterContent)
@@ -310,6 +316,144 @@ func (s *Server) comicLibraryDetail(w http.ResponseWriter, r *http.Request, id i
 		"chapters": toComicChapters(chapters),
 	}
 	api.WriteJSON(w, http.StatusOK, resp)
+}
+
+// ---------------------------------------------------------------------------
+// Multi-source failover endpoints
+// ---------------------------------------------------------------------------
+
+// listSeriesSources returns every source for a series with health metadata.
+//
+//	GET /api/v1/library/{id}/sources
+func (s *Server) listSeriesSources(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	sources, err := s.store.ListSources(id)
+	if err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	if sources == nil {
+		sources = []models.SeriesSource{}
+	}
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{"sources": sources})
+}
+
+type addSourceRequest struct {
+	ProviderName string `json:"provider_name"`
+	SourceURL    string `json:"source_url"`
+	Priority     int    `json:"priority"`
+}
+
+// addSeriesSource attaches a new alternate source to a series.
+//
+//	POST /api/v1/library/{id}/sources
+//
+// The provider must exist in the registry and its MatchURL must accept the
+// supplied URL. The first source for a series auto-becomes the primary.
+func (s *Server) addSeriesSource(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	var req addSourceRequest
+	if !api.JSONDecode(w, r, &req) {
+		return
+	}
+	if req.ProviderName == "" || req.SourceURL == "" {
+		api.WriteError(w, http.StatusBadRequest, "missing_fields", "provider_name and source_url required")
+		return
+	}
+	p, ok := plugin.Default.Get(req.ProviderName)
+	if !ok {
+		api.WriteError(w, http.StatusBadRequest, "unknown_provider", "no provider named "+req.ProviderName+" registered")
+		return
+	}
+	if !p.MatchURL(req.SourceURL) {
+		api.WriteError(w, http.StatusBadRequest, "url_mismatch",
+			"URL does not match the provider's expected pattern")
+		return
+	}
+	src, err := s.store.AddSource(id, req.ProviderName, req.SourceURL, req.Priority)
+	if err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	api.WriteJSON(w, http.StatusCreated, src)
+}
+
+type updateSourceRequest struct {
+	Priority int  `json:"priority"` // -1 = leave unchanged
+	Disabled bool `json:"disabled"`
+}
+
+// updateSeriesSource toggles disabled / adjusts priority.
+//
+//	PATCH /api/v1/library/{id}/sources/{sourceID}
+func (s *Server) updateSeriesSource(w http.ResponseWriter, r *http.Request) {
+	sourceID, err := parseID(chi.URLParam(r, "sourceID"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_source_id", "")
+		return
+	}
+	var req updateSourceRequest
+	if !api.JSONDecode(w, r, &req) {
+		return
+	}
+	if err := s.store.UpdateSource(sourceID, req.Priority, req.Disabled); err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+}
+
+// deleteSeriesSource removes a source. Deleting the last remaining source is
+// rejected (a series must always have at least one).
+//
+//	DELETE /api/v1/library/{id}/sources/{sourceID}
+func (s *Server) deleteSeriesSource(w http.ResponseWriter, r *http.Request) {
+	sourceID, err := parseID(chi.URLParam(r, "sourceID"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_source_id", "")
+		return
+	}
+	if err := s.store.DeleteSource(sourceID); err != nil {
+		switch err {
+		case handlers.ErrSourceNotFound:
+			api.WriteError(w, http.StatusNotFound, "source_not_found", "")
+		case handlers.ErrLastSource:
+			api.WriteError(w, http.StatusConflict, "last_source",
+				"cannot delete the only remaining source for a series")
+		default:
+			api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		}
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+}
+
+// promoteSeriesSource makes a source the primary for its series.
+//
+//	POST /api/v1/library/{id}/sources/{sourceID}/promote
+func (s *Server) promoteSeriesSource(w http.ResponseWriter, r *http.Request) {
+	sourceID, err := parseID(chi.URLParam(r, "sourceID"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_source_id", "")
+		return
+	}
+	if err := s.store.PromoteSource(sourceID); err != nil {
+		if err == handlers.ErrSourceNotFound {
+			api.WriteError(w, http.StatusNotFound, "source_not_found", "")
+			return
+		}
+		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
 }
 
 func (s *Server) chapterList(w http.ResponseWriter, r *http.Request) {

@@ -69,6 +69,14 @@ type Store interface {
 
 	// --- Comic page writes ---
 	SaveComicPage(chapterID int64, pageIndex int, imageURL string, data []byte, contentType string) error
+
+	// --- Multi-source failover ---
+	AddSource(seriesID int64, providerName, sourceURL string, priority int) (*models.SeriesSource, error)
+	ListSources(seriesID int64) ([]models.SeriesSource, error)
+	UpdateSource(id int64, priority int, disabled bool) error
+	DeleteSource(id int64) error
+	PromoteSource(id int64) error
+	GetSourceByID(id int64) (*models.SeriesSource, error)
 }
 
 // DashboardCounts is the small summary object surfaced by /unread-count and

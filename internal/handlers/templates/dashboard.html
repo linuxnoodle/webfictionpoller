@@ -450,6 +450,7 @@
                             <td class="py-2 pr-4">
                                 <button hx-post="/api/series/{{.ID}}/archive" hx-vals='{"archive":"{{if .Archive}}false{{else}}true{{end}}"}' hx-swap="none"
                                         class="text-xs px-1.5 py-0.5 rounded {{if .Archive}}bg-primary/20 text-primary{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">{{if .Archive}}On{{else}}Off{{end}}</button>
+                                <a href="/admin/series/{{.ID}}/sources" class="text-xs px-1.5 py-0.5 rounded glass-panel text-muted/60 hover:text-muted" title="Manage sources / fallbacks">Sources</a>
                             </td>
                             <td class="py-2 pr-4">
                                 <button onclick="syncSeries({{.ID}}, this)" class="text-muted/60 hover:text-muted p-1" title="Sync Series">

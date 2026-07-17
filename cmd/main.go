@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -151,6 +152,16 @@ func main() {
 	_ = v1Server // keep ordering stable
 	h.SetTokenStore(apiTokens)
 	v1Server.SetPool(pool)
+
+	// Multi-source failover: pool records per-source polling outcomes and
+	// auto-promotes the healthiest alternate after AUTO_PROMOTE_THRESHOLD
+	// consecutive failures on the primary (default 10; 0 disables).
+	pool.SetSourceHealthRecorder(store)
+	if n := envOrDefault("AUTO_PROMOTE_THRESHOLD", "10"); n != "" {
+		if parsed, err := strconv.Atoi(n); err == nil && parsed >= 0 {
+			pool.SetAutoPromoteThreshold(parsed)
+		}
+	}
 	h.SetUserIDResolver(func(r *http.Request) (int64, bool) {
 		v := sessionManager.Get(r.Context(), "userID")
 		if v == nil {
@@ -224,6 +235,13 @@ func main() {
 			r.Post("/series/backup", h.ImportBackup)
 			r.Get("/admin/plugins", h.PluginsPage)
 			r.Post("/admin/plugins/poll-interval", h.SavePluginPollInterval)
+
+			// Multi-source management per series.
+			r.Get("/admin/series/{id}/sources", h.SourcesPage)
+			r.Post("/admin/series/{id}/sources", h.AddSourceForm)
+			r.Post("/admin/series/{id}/sources/{sourceID}/promote", h.PromoteSourceForm)
+			r.Post("/admin/series/{id}/sources/{sourceID}/toggle", h.ToggleSourceForm)
+			r.Post("/admin/series/{id}/sources/{sourceID}/delete", h.DeleteSourceForm)
 			r.Get("/admin/providers", h.ProviderConfigPage)
 			r.Post("/admin/providers", h.SaveProviderConfig)
 			r.Get("/admin/logs", h.LogsPage)
@@ -776,7 +794,14 @@ func (s *scheduler) runPoll(ctx context.Context, force bool) {
 			continue
 		}
 		for _, ser := range series {
-			s.pool.Submit(worker.Job{Series: ser, Provider: p})
+			// Look up the series' source list for multi-source failover.
+			// When the series has only one source (the common case), we
+			// still attach it so processJob records per-source health.
+			sources, err := s.store.ActiveSourcesForPoll(ser.ID)
+			if err != nil {
+				logging.Error("[scheduler] load sources for series %d: %v", ser.ID, err)
+			}
+			s.pool.Submit(worker.Job{Series: ser, Provider: p, Sources: sources})
 			queued++
 		}
 	}

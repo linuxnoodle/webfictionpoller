@@ -138,7 +138,22 @@ func (s *Store) AddSeries(series models.Series) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		return id, err
+	}
+	// Maintain the series_sources invariant: every series has >=1 source,
+	// the first one being the primary. When AddSeries is a no-op due to an
+	// existing source_url, result.LastInsertId may be 0 or a stale id — in
+	// that case AddSource's ON CONFLICT clause handles the dup.
+	if id > 0 && series.SourceURL != "" {
+		_, _ = s.db.Exec(`
+			INSERT INTO series_sources (series_id, provider_name, source_url, priority, is_primary)
+			VALUES (?, ?, ?, 0, 1)
+			ON CONFLICT DO NOTHING
+		`, id, series.ProviderName, series.SourceURL)
+	}
+	return id, nil
 }
 
 func (s *Store) MarkAllSeriesRead(seriesID int64) error {

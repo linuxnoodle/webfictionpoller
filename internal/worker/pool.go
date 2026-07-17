@@ -17,6 +17,20 @@ import (
 type Job struct {
 	Series   models.Series
 	Provider providers.Provider
+
+	// Sources, when non-empty, is the ordered list of alternate hosting
+	// locations for the series. processJob tries each in order until one
+	// succeeds; failures are recorded via SourceHealthRecorder. When empty,
+	// processJob falls back to the single Provider+Series pair above.
+	Sources []models.SeriesSource
+}
+
+// SourceHealthRecorder lets processJob record per-source success/failure
+// without importing handlers. *handlers.Store implements it.
+type SourceHealthRecorder interface {
+	RecordSourceOK(id int64) error
+	RecordSourceFail(id int64, errMsg string) error
+	AutoPromoteIfFailing(seriesID int64, threshold int) (int64, error)
 }
 
 // ProviderMetrics is the per-provider observability surface exposed via the
@@ -64,6 +78,16 @@ type WorkerPool struct {
 	wg         sync.WaitGroup
 	stopCh     chan struct{}
 	onChapters func(seriesID int64, chapters []models.Chapter)
+
+	// sourceHealth, when set, lets processJob record per-source polling
+	// outcomes and trigger auto-promotion. Optional; nil disables multi-
+	// source failover (legacy single-source path).
+	sourceHealth SourceHealthRecorder
+
+	// autoPromoteThreshold is the consecutive-fail count at which the
+	// primary source is auto-demoted in favour of the healthiest alternate.
+	// 0 disables auto-promotion.
+	autoPromoteThreshold int
 
 	// Shared per-provider rate limiters + concurrency semaphores + metrics.
 	// Built once at construction from each provider's Meta().Rate.
@@ -212,6 +236,16 @@ func (wp *WorkerPool) Stop() {
 	}
 }
 
+// SetSourceHealthRecorder wires the per-source health recorder. Without it,
+// multi-source failover is silently disabled (jobs with .Sources still run
+// but their per-source outcomes aren't persisted).
+func (wp *WorkerPool) SetSourceHealthRecorder(r SourceHealthRecorder) { wp.sourceHealth = r }
+
+// SetAutoPromoteThreshold configures auto-promotion: when a primary source
+// exceeds this many consecutive failures, the pool calls AutoPromoteIfFailing
+// to swap in the healthiest alternate. Pass 0 to disable (default).
+func (wp *WorkerPool) SetAutoPromoteThreshold(n int) { wp.autoPromoteThreshold = n }
+
 func (wp *WorkerPool) run(id int) {
 	defer wp.wg.Done()
 	for {
@@ -227,77 +261,183 @@ func (wp *WorkerPool) run(id int) {
 // processJob handles a single polling job: acquire rate-limit token + concurrency
 // slot, run the poll, record metrics, dispatch any chapters found.
 func (wp *WorkerPool) processJob(workerID int, job Job) {
+	defer wp.FinishPoll()
+
+	// Multi-source path: try each source in priority order until one succeeds.
+	if len(job.Sources) > 0 {
+		wp.processJobMultiSource(workerID, job)
+		return
+	}
+
+	// Legacy single-source path.
 	name := job.Provider.Name()
 	rl, ok := wp.limiters[name]
 	if !ok {
 		logging.Error("[worker %d] no rate limiter for provider %q", workerID, name)
-		wp.FinishPoll()
 		return
 	}
 	sem := wp.semaphores[name]
 	metrics := wp.metrics[name]
 
-	// Rate limit first (wait for token). Concurrency slot after, so a
-	// pending token reservation doesn't hold a slot.
 	if !rl.wait(wp.stopCh) {
-		wp.FinishPoll()
 		return
 	}
 	select {
 	case sem <- struct{}{}:
 	case <-wp.stopCh:
-		wp.FinishPoll()
 		return
 	}
 	defer func() { <-sem }()
 
-	// Small jitter so providers with identical periods don't synchronize.
 	jitter := time.Duration(200+rand.IntN(800)) * time.Millisecond
 	select {
 	case <-time.After(jitter):
 	case <-wp.stopCh:
-		wp.FinishPoll()
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	// If the provider is context-aware, use the deadline-bearing ctx.
+	chapters, err := wp.pollOne(ctx, workerID, job.Provider, job.Series)
+	wp.recordProviderOutcome(name, metrics, len(chapters), err)
+	if err != nil {
+		logging.Error("[worker %d] series %d (%s): poll failed: %v", workerID, job.Series.ID, job.Series.Title, err)
+		return
+	}
+	if len(chapters) > 0 && wp.onChapters != nil {
+		wp.onChapters(job.Series.ID, chapters)
+	}
+	logging.Info("[worker %d] series %q: found %d chapters", workerID, job.Series.Title, len(chapters))
+}
+
+// processJobMultiSource iterates job.Sources in order, polling each until one
+// succeeds. Per-source outcomes are recorded via the health recorder; an
+// auto-promotion check runs at the end.
+func (wp *WorkerPool) processJobMultiSource(workerID int, job Job) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	var (
+		won              bool
+		winningChapters  []models.Chapter
+		winningProvider  string
+		winningSourceID  int64
+		lastErr          string
+	)
+
+	for _, src := range job.Sources {
+		if ctx.Err() != nil {
+			break
+		}
+		p, ok := wp.GetProvider(src.ProviderName)
+		if !ok {
+			logging.Error("[worker %d] source %d: provider %q not registered", workerID, src.ID, src.ProviderName)
+			if wp.sourceHealth != nil {
+				_ = wp.sourceHealth.RecordSourceFail(src.ID, "provider not registered")
+			}
+			continue
+		}
+
+		// Acquire the per-provider rate-limit token + concurrency slot.
+		rl := wp.limiters[src.ProviderName]
+		sem := wp.semaphores[src.ProviderName]
+		if rl != nil {
+			if !rl.wait(wp.stopCh) {
+				return
+			}
+		}
+		if sem != nil {
+			select {
+			case sem <- struct{}{}:
+			case <-wp.stopCh:
+				return
+			}
+		}
+
+		// Construct a series view pointing at this source so the provider's
+		// MatchURL/PollUpdates operate on the correct URL.
+		srcSeries := job.Series
+		srcSeries.SourceURL = src.SourceURL
+		srcSeries.ProviderName = src.ProviderName
+
+		chapters, err := wp.pollOne(ctx, workerID, p, srcSeries)
+		wp.recordProviderOutcome(src.ProviderName, wp.metrics[src.ProviderName], len(chapters), err)
+
+		if sem != nil {
+			<-sem
+		}
+
+		if err != nil {
+			lastErr = err.Error()
+			logging.Error("[worker %d] series %d source %d (%s): poll failed: %v", workerID, job.Series.ID, src.ID, src.ProviderName, err)
+			if wp.sourceHealth != nil {
+				_ = wp.sourceHealth.RecordSourceFail(src.ID, lastErr)
+			}
+			continue
+		}
+
+		// Success: record + dispatch + bail out (first source wins).
+		if wp.sourceHealth != nil {
+			_ = wp.sourceHealth.RecordSourceOK(src.ID)
+		}
+		won = true
+		winningChapters = chapters
+		winningProvider = src.ProviderName
+		winningSourceID = src.ID
+		break
+	}
+
+	if won {
+		if len(winningChapters) > 0 && wp.onChapters != nil {
+			wp.onChapters(job.Series.ID, winningChapters)
+		}
+		logging.Info("[worker %d] series %q: source %d (%s) yielded %d chapters",
+			workerID, job.Series.Title, winningSourceID, winningProvider, len(winningChapters))
+	} else {
+		logging.Error("[worker %d] series %q: all %d sources failed; last error: %s",
+			workerID, job.Series.Title, len(job.Sources), lastErr)
+	}
+
+	// Auto-promotion check: if the primary is failing hard, swap in the
+	// healthiest alternate for next cycle.
+	if wp.sourceHealth != nil && wp.autoPromoteThreshold > 0 {
+		if promoted, err := wp.sourceHealth.AutoPromoteIfFailing(job.Series.ID, wp.autoPromoteThreshold); err == nil && promoted > 0 {
+			logging.Info("[worker %d] series %d: auto-promoted source %d to primary", workerID, job.Series.ID, promoted)
+		}
+	}
+}
+
+// pollOne invokes a single provider's PollUpdates (or PollUpdatesCtx if the
+// provider is context-aware). Centralises the ctx-poller type assertion so
+// both the legacy and multi-source paths share it.
+func (wp *WorkerPool) pollOne(ctx context.Context, workerID int, p providers.Provider, series models.Series) ([]models.Chapter, error) {
 	type ctxPoller interface {
 		PollUpdatesCtx(ctx context.Context, s models.Series) ([]models.Chapter, error)
 	}
-	var chapters []models.Chapter
-	var err error
-	if cp, ok := job.Provider.(ctxPoller); ok {
-		chapters, err = cp.PollUpdatesCtx(ctx, job.Series)
-	} else {
-		chapters, err = job.Provider.PollUpdates(job.Series)
+	if cp, ok := p.(ctxPoller); ok {
+		return cp.PollUpdatesCtx(ctx, series)
 	}
+	return p.PollUpdates(series)
+}
 
+// recordProviderOutcome updates the per-provider metrics atomics after a poll.
+func (wp *WorkerPool) recordProviderOutcome(name string, metrics *ProviderMetrics, chapterCount int, err error) {
+	if metrics == nil {
+		return
+	}
 	now := time.Now().UnixNano()
 	metrics.LastPollAt.Store(now)
 	metrics.TotalPolls.Add(1)
-
 	if err != nil {
 		metrics.LastErrorAt.Store(now)
 		metrics.TotalErrors.Add(1)
 		errStr := err.Error()
 		metrics.LastError.Store(&errStr)
-		logging.Error("[worker %d] series %d (%s): poll failed: %v", workerID, job.Series.ID, job.Series.Title, err)
-		wp.FinishPoll()
 		return
 	}
-
-	metrics.LastChapterCount.Store(int64(len(chapters)))
-	metrics.TotalChapters.Add(int64(len(chapters)))
-
-	if len(chapters) > 0 && wp.onChapters != nil {
-		wp.onChapters(job.Series.ID, chapters)
-	}
-
-	wp.FinishPoll()
-	logging.Info("[worker %d] series %q: found %d chapters", workerID, job.Series.Title, len(chapters))
+	metrics.LastChapterCount.Store(int64(chapterCount))
+	metrics.TotalChapters.Add(int64(chapterCount))
 }
 
 // MetricsSnapshots returns a point-in-time copy of every provider's metrics.

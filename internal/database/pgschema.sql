@@ -151,3 +151,38 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     name TEXT PRIMARY KEY,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS series_sources (
+    id                BIGSERIAL PRIMARY KEY,
+    series_id         BIGINT NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+    provider_name     TEXT NOT NULL,
+    source_url        TEXT NOT NULL,
+    priority          INTEGER NOT NULL DEFAULT 100,
+    is_primary        BOOLEAN NOT NULL DEFAULT FALSE,
+    last_ok           TIMESTAMPTZ,
+    last_fail         TIMESTAMPTZ,
+    last_error        TEXT NOT NULL DEFAULT '',
+    consecutive_fails INTEGER NOT NULL DEFAULT 0,
+    disabled          BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(series_id, source_url)
+);
+CREATE INDEX IF NOT EXISTS idx_series_sources_series ON series_sources(series_id);
+
+-- Seed each existing series with a primary source reflecting the legacy
+-- series.source_url + provider_name columns. Idempotent: only inserts rows
+-- for series that don't yet have any source.
+INSERT INTO series_sources (series_id, provider_name, source_url, priority, is_primary)
+SELECT s.id, s.provider_name, s.source_url, 0, TRUE
+FROM series s
+WHERE NOT EXISTS (
+    SELECT 1 FROM series_sources ss WHERE ss.series_id = s.id
+);
+
+-- Mirror the SQLite _migrations ledger so both dialects report the same
+-- applied state.
+INSERT INTO schema_migrations (name) VALUES
+    ('series_sources'),
+    ('series_sources_idx'),
+    ('series_sources_seed')
+ON CONFLICT (name) DO NOTHING;

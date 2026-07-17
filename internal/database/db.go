@@ -171,6 +171,26 @@ var migrations = []migration{
 	)`},
 	{"api_tokens_idx", `CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id)`},
 	{"api_tokens_hash_idx", `CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash)`},
+	{"series_sources", `CREATE TABLE IF NOT EXISTS series_sources (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		series_id INTEGER NOT NULL,
+		provider_name TEXT NOT NULL,
+		source_url TEXT NOT NULL,
+		priority INTEGER NOT NULL DEFAULT 100,
+		is_primary INTEGER NOT NULL DEFAULT 0,
+		last_ok DATETIME,
+		last_fail DATETIME,
+		last_error TEXT DEFAULT '',
+		consecutive_fails INTEGER NOT NULL DEFAULT 0,
+		disabled INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE,
+		UNIQUE(series_id, source_url)
+	)`},
+	{"series_sources_idx", `CREATE INDEX IF NOT EXISTS idx_series_sources_series ON series_sources(series_id)`},
+	{"series_sources_seed", `INSERT INTO series_sources (series_id, provider_name, source_url, priority, is_primary)
+		SELECT s.id, s.provider_name, s.source_url, 0, 1 FROM series s
+		WHERE NOT EXISTS (SELECT 1 FROM series_sources ss WHERE ss.series_id = s.id)`},
 }
 
 func InitDB(dbPath string) (*sql.DB, error) {

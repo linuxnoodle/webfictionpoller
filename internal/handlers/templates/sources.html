@@ -1,0 +1,120 @@
+{{define "sources.html"}}
+<!DOCTYPE html>
+<html lang="en" class="bg-background text-white">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sources — {{.Series.Title}}</title>
+    <script>var _csrf="{{.CSRFToken}}";</script>
+    <script src="/static/alpine.min.js" defer></script>
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="min-h-screen">
+{{template "nav.html" .}}
+<main class="max-w-3xl mx-auto px-4 py-8">
+    <a href="/" class="text-sm text-muted/60 hover:text-primary">← back</a>
+    <h1 class="text-2xl font-bold mt-2 mb-1">Sources</h1>
+    <p class="text-sm text-muted/70 mb-6">
+        <strong>{{.Series.Title}}</strong> — alternate hosting locations for
+        the same work. The primary source is used by default; alternates are
+        tried in priority order when the primary fails (lower priority number
+        = polled first).
+    </p>
+
+    <h2 class="text-lg font-semibold mb-3">Configured Sources</h2>
+    <div class="bg-surface rounded-lg border border-white/10 divide-y divide-neutral-800/60 overflow-hidden mb-8">
+        {{range .Sources}}
+        <div class="px-4 py-3">
+            <div class="flex items-start gap-3">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-medium">{{.ProviderName}}</span>
+                        {{if .IsPrimary}}
+                        <span class="text-xs px-2 py-0.5 rounded bg-primary/30 text-primary font-semibold">PRIMARY</span>
+                        {{end}}
+                        {{if .Disabled}}
+                        <span class="text-xs px-2 py-0.5 rounded bg-slate-700/60 text-slate-300">disabled</span>
+                        {{end}}
+                        <span class="text-xs text-muted/60">priority {{.Priority}}</span>
+                    </div>
+                    <a href="{{.SourceURL}}" target="_blank" rel="noopener" class="text-xs text-muted/70 hover:text-primary break-all">{{.SourceURL}}</a>
+
+                    <div class="mt-1 text-xs text-muted/60 grid grid-cols-2 md:grid-cols-3 gap-1">
+                        <span title="Last successful poll">
+                            <strong>ok:</strong> {{if .LastOK}}{{.LastOK.Format "2006-01-02 15:04"}}{{else}}never{{end}}
+                        </span>
+                        <span title="Last failed poll">
+                            <strong>fail:</strong> {{if .LastFail}}{{.LastFail.Format "2006-01-02 15:04"}}{{else}}never{{end}}
+                        </span>
+                        <span title="Consecutive failures">
+                            <strong>fails:</strong> {{.ConsecutiveFails}}
+                        </span>
+                    </div>
+                    {{if .LastError}}<div class="mt-1 text-xs text-red-400/80 truncate" title="{{.LastError}}">⚠ {{.LastError}}</div>{{end}}
+                </div>
+
+                <div class="flex flex-col gap-1 flex-shrink-0">
+                    {{if not .IsPrimary}}
+                    <form method="POST" action="/admin/series/{{$.Series.ID}}/sources/{{.ID}}/promote" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                        <button type="submit" class="text-xs font-medium bg-primary/30 hover:bg-primary/50 px-2 py-1 rounded w-full">Make primary</button>
+                    </form>
+                    {{end}}
+                    <form method="POST" action="/admin/series/{{$.Series.ID}}/sources/{{.ID}}/toggle" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                        {{if .Disabled}}
+                        <input type="hidden" name="disabled" value="0">
+                        <button type="submit" class="text-xs font-medium bg-emerald-900/40 hover:bg-emerald-900/60 text-emerald-300 px-2 py-1 rounded w-full">Enable</button>
+                        {{else}}
+                        <input type="hidden" name="disabled" value="1">
+                        <button type="submit" class="text-xs font-medium bg-slate-700/40 hover:bg-slate-700/60 px-2 py-1 rounded w-full">Disable</button>
+                        {{end}}
+                    </form>
+                    <form method="POST" action="/admin/series/{{$.Series.ID}}/sources/{{.ID}}/delete" class="inline"
+                          onsubmit="return confirm('Remove this source?');">
+                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                        <button type="submit" class="text-xs font-medium bg-red-900/30 hover:bg-red-900/50 text-red-400 px-2 py-1 rounded w-full">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {{else}}
+        <div class="px-4 py-8 text-center text-sm text-muted/60">No sources configured.</div>
+        {{end}}
+    </div>
+
+    <h2 class="text-lg font-semibold mb-3">Add Source</h2>
+    <form method="POST" action="/admin/series/{{.Series.ID}}/sources" class="bg-surface rounded-lg border border-white/10 p-4 space-y-3">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <div>
+            <label class="block text-xs text-muted/70 mb-1">Provider</label>
+            <select name="provider_name" required class="w-full px-3 py-2 bg-background border border-white/10 rounded text-sm focus:border-primary outline-none">
+                <option value="">Select a provider…</option>
+                {{range .TextProviders}}
+                <option value="{{.Name}}">{{.DisplayName}} ({{.Name}})</option>
+                {{end}}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-muted/70 mb-1">Source URL</label>
+            <input type="url" name="source_url" required placeholder="https://…"
+                   class="w-full px-3 py-2 bg-background border border-white/10 rounded text-sm focus:border-primary outline-none">
+        </div>
+        <div class="flex items-center gap-2">
+            <label class="text-xs text-muted/70">Priority</label>
+            <input type="number" name="priority" value="100" min="0" max="9999"
+                   class="w-24 px-2 py-1.5 bg-background border border-white/10 rounded text-sm focus:border-primary outline-none">
+            <span class="text-xs text-muted/60">lower = polled first; primary uses 0</span>
+        </div>
+        <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary/80 rounded text-sm font-semibold">Add Source</button>
+    </form>
+
+    <p class="text-xs text-muted/60 mt-4">
+        Auto-promotion: after 10 consecutive failures on the primary source,
+        the healthiest alternate is promoted automatically. Configure via
+        <code>AUTO_PROMOTE_THRESHOLD</code>.
+    </p>
+</main>
+</body>
+</html>
+{{end}}
