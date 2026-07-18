@@ -354,10 +354,9 @@ func (p *XenForoProvider) FetchChapterContent(chapterURL string) (string, error)
 // threadmark element) or the chapter URL's anchor text as a fallback.
 func (p *XenForoProvider) FetchChapter(chapterURL string) (plugin.ChapterContent, error) {
 	var rawHTML string
-	var title string
 	err := p.withRelogin(func() error {
 		var innerErr error
-		rawHTML, title, innerErr = p.fetchContentWithMeta(chapterURL)
+		rawHTML, innerErr = p.fetchContentFromReader(chapterURL)
 		return innerErr
 	})
 	if err != nil {
@@ -367,55 +366,16 @@ func (p *XenForoProvider) FetchChapter(chapterURL string) (plugin.ChapterContent
 	logging.Info("[xenforo:%s] fetched chapter from %s (%d chars, %d words)",
 		p.name, chapterURL, len(rawHTML), plugin.CountWords(bodyText))
 	return plugin.ChapterContent{
-		Title:     title,
 		BodyHTML:  rawHTML,
 		BodyText:  bodyText,
 		WordCount: plugin.CountWords(bodyText),
 		Images:    p.extractContentImages(rawHTML, chapterURL),
 		SourceURL: chapterURL,
+		// Title: left empty — the reader-mode / direct-fetch paths return
+		// body-only HTML without the threadmark label. Making a separate
+		// request for the title caused rate-limit issues on SB/SV/QQ, so
+		// we skip it. The stored chapter title from PollUpdates is used.
 	}, nil
-}
-
-// fetchContentWithMeta delegates to the existing reader-mode / direct-fetch
-// pipeline and also harvests the chapter title (the threadmark label when
-// visible). Returns body HTML + title.
-func (p *XenForoProvider) fetchContentWithMeta(chapterURL string) (string, string, error) {
-	body, err := p.fetchContentFromReader(chapterURL)
-	if err != nil {
-		return "", "", err
-	}
-	// Best-effort title harvest: re-fetch the chapter page header. This is
-	// a second request only when the reader-mode path was used (which
-	// returns body-only). For direct-fetch we already have the doc but the
-	// current API doesn't surface it. Title is best-effort; readers fall
-	// back to the URL when empty.
-	title := p.fetchThreadmarkTitle(chapterURL)
-	return body, title, nil
-}
-
-// fetchThreadmarkTitle attempts to read the threadmark label for the
-// chapter post. Returns "" when not found — never an error, since title
-// is best-effort.
-func (p *XenForoProvider) fetchThreadmarkTitle(chapterURL string) string {
-	postID := p.extractPostID(chapterURL)
-	if postID == "" {
-		return ""
-	}
-	threadURL := p.normalizeThreadURL(chapterURL)
-	resp, err := doGet(p.client, threadURL+"#post-"+postID)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return ""
-	}
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return ""
-	}
-	// Look for the post's threadmark label.
-	return plugin.TextOrEmpty(doc.Find("#js-post-" + postID + " .threadmarkLabel").First())
 }
 
 // extractContentImages pulls every img src out of an HTML body string.

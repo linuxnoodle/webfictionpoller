@@ -40,6 +40,12 @@
                         {{else}}
                         <span class="text-xs px-2 py-0.5 rounded bg-slate-700/50 text-slate-300" title="Compiled into the binary">go</span>
                         {{end}}
+                        {{$name := .Name}}
+                    {{range .AuthModes}}
+                    {{if or (eq . "login") (eq . "cookies")}}
+                    <a href="/admin/providers#{{$name}}" class="text-xs px-2 py-0.5 rounded bg-amber-900/40 text-amber-300 hover:bg-amber-900/60" title="Configure credentials">configure</a>
+                    {{end}}
+                    {{end}}
                     </div>
                     {{if .Homepage}}<a href="{{.Homepage}}" target="_blank" rel="noopener" class="text-xs text-muted/60 hover:text-primary">{{.Homepage}}</a>{{end}}
 

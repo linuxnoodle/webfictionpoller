@@ -229,7 +229,16 @@ func (h *Handler) ReaderChapterContentAPI(w http.ResponseWriter, r *http.Request
 	}
 	content, fetchErr := cf.FetchChapter(ch.URL)
 	if fetchErr != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "failed to fetch"})
+		logging.Error("[reader] live-fetch chapter %d from %s: %v", id, ch.URL, fetchErr)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"content":    "",
+			"error":      fetchErr.Error(),
+			"premium":    false,
+			"word_count": 0,
+			"series_id":  meta.SeriesID,
+			"prev_id":    prevID,
+			"next_id":    nextID,
+		})
 		return
 	}
 
