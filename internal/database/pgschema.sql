@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS chapters (
     preview_html  TEXT NOT NULL DEFAULT '',
     content_html  BYTEA DEFAULT '',
     content_compressed BOOLEAN NOT NULL DEFAULT FALSE,
+    word_count    INTEGER NOT NULL DEFAULT 0,
+    premium       BOOLEAN NOT NULL DEFAULT FALSE,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(series_id, url)
 );

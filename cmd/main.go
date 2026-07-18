@@ -31,6 +31,7 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 	"github.com/linuxnoodle/webfictionpoller/internal/providers"
+	_ "github.com/linuxnoodle/webfictionpoller/internal/provider/text/dreamy"
 	"github.com/linuxnoodle/webfictionpoller/internal/static"
 	"github.com/linuxnoodle/webfictionpoller/internal/worker"
 )

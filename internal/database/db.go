@@ -184,6 +184,8 @@ var migrations = []migration{
 	{"series_sources_seed", `INSERT INTO series_sources (series_id, provider_name, source_url, priority, is_primary)
 		SELECT s.id, s.provider_name, s.source_url, 0, 1 FROM series s
 		WHERE NOT EXISTS (SELECT 1 FROM series_sources ss WHERE ss.series_id = s.id)`},
+	{"chapter_word_count", "ALTER TABLE chapters ADD COLUMN word_count INTEGER NOT NULL DEFAULT 0"},
+	{"chapter_premium", "ALTER TABLE chapters ADD COLUMN premium BOOLEAN NOT NULL DEFAULT 0"},
 }
 
 //go:embed pgschema.sql

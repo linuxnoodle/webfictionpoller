@@ -7,6 +7,7 @@ import (
 
 	// Side-effect imports: trigger init() self-registration.
 	_ "github.com/linuxnoodle/webfictionpoller/internal/comics"
+	_ "github.com/linuxnoodle/webfictionpoller/internal/provider/text/dreamy"
 	_ "github.com/linuxnoodle/webfictionpoller/internal/providers"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
@@ -25,6 +26,7 @@ var expectedRegistered = map[string]struct {
 	"fanfictionnet": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil)}},
 	"ao3":           {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil)}},
 	"mangadex":      {Kind: plugin.KindComic, Capabilities: []interface{}{(*plugin.Searcher)(nil), (*plugin.ComicDetailsFetcher)(nil), (*plugin.ChapterLister)(nil), (*plugin.PageLister)(nil)}},
+	"dreamytranslations": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.ContentFetcher)(nil), (*plugin.CommentFetcher)(nil)}},
 }
 
 func TestDefaultRegistryContainsAllBuiltins(t *testing.T) {
