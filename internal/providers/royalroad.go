@@ -138,15 +138,27 @@ func (p *RoyalRoadProvider) FetchSeriesMetadata(url string) (models.Series, erro
 }
 
 func (p *RoyalRoadProvider) FetchChapterContent(url string) (string, error) {
-	resp, err := doGet(p.client, url)
+	c, err := p.FetchChapter(url)
 	if err != nil {
 		return "", err
+	}
+	return c.BodyHTML, nil
+}
+
+// FetchChapter implements plugin.ContentFetcher. Fetches the chapter page,
+// extracts body + title + image list into the canonical ChapterContent
+// shape. Title is read from the chapter's h1 (Royal Road renders the
+// chapter title in an h1 inside the chapter header).
+func (p *RoyalRoadProvider) FetchChapter(url string) (plugin.ChapterContent, error) {
+	resp, err := doGet(p.client, url)
+	if err != nil {
+		return plugin.ChapterContent{}, err
 	}
 	defer resp.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("parsing html: %w", err)
+		return plugin.ChapterContent{}, fmt.Errorf("parsing html: %w", err)
 	}
 
 	content := doc.Find(".chapter-content")
@@ -154,16 +166,33 @@ func (p *RoyalRoadProvider) FetchChapterContent(url string) (string, error) {
 		content = doc.Find(".portlet-body")
 	}
 	if content.Length() == 0 {
-		return "", fmt.Errorf("no chapter content found at %s", url)
+		return plugin.ChapterContent{}, fmt.Errorf("no chapter content found at %s", url)
 	}
 
 	html, err := content.First().Html()
 	if err != nil {
-		return "", err
+		return plugin.ChapterContent{}, err
 	}
 
-	logging.Info("[royalroad] fetched chapter content from %s (%d chars)", url, len(html))
-	return html, nil
+	// Title: prefer an explicit chapter-title element; fall back to the
+	// first h1 on the page; last resort the URL path tail.
+	title := plugin.TextOrEmpty(doc.Find("h1.font-white").First())
+	if title == "" {
+		title = plugin.TextOrEmpty(doc.Find("h1").First())
+	}
+
+	bodyText := plugin.HTMLToText(html)
+	logging.Info("[royalroad] fetched chapter content from %s (%d chars, %d words)",
+		url, len(html), plugin.CountWords(bodyText))
+
+	return plugin.ChapterContent{
+		Title:     title,
+		BodyHTML:  html,
+		BodyText:  bodyText,
+		WordCount: plugin.CountWords(bodyText),
+		Images:    plugin.ExtractImageURLs(content.First(), url),
+		SourceURL: url,
+	}, nil
 }
 
 func (p *RoyalRoadProvider) PollUpdates(series models.Series) ([]models.Chapter, error) {

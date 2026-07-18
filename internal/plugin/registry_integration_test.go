@@ -19,12 +19,12 @@ var expectedRegistered = map[string]struct {
 	Kind        plugin.Kind
 	Capabilities []interface{}
 }{
-	"royalroad":          {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.CommentFetcher)(nil)}},
-	"spacebattles":       {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.CommentFetcher)(nil)}},
-	"sufficientvelocity": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.CommentFetcher)(nil)}},
-	"questionablequesting": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.CommentFetcher)(nil), (*plugin.LoginAuth)(nil), (*plugin.CookieAuth)(nil), (*plugin.CredentialSource)(nil)}},
-	"fanfictionnet": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil)}},
-	"ao3":           {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil)}},
+	"royalroad":          {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.ContentFetcher)(nil), (*plugin.CommentFetcher)(nil)}},
+	"spacebattles":       {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.ContentFetcher)(nil), (*plugin.CommentFetcher)(nil)}},
+	"sufficientvelocity": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.ContentFetcher)(nil), (*plugin.CommentFetcher)(nil)}},
+	"questionablequesting": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.ContentFetcher)(nil), (*plugin.CommentFetcher)(nil), (*plugin.LoginAuth)(nil), (*plugin.CookieAuth)(nil), (*plugin.CredentialSource)(nil)}},
+	"fanfictionnet": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.ContentFetcher)(nil)}},
+	"ao3":           {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.ContentFetcher)(nil)}},
 	"mangadex":      {Kind: plugin.KindComic, Capabilities: []interface{}{(*plugin.Searcher)(nil), (*plugin.ComicDetailsFetcher)(nil), (*plugin.ChapterLister)(nil), (*plugin.PageLister)(nil)}},
 	"dreamytranslations": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.ContentFetcher)(nil), (*plugin.CommentFetcher)(nil)}},
 }

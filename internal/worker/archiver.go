@@ -12,6 +12,7 @@ import (
 
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 	"github.com/linuxnoodle/webfictionpoller/internal/providers"
 	"github.com/linuxnoodle/webfictionpoller/internal/safefetch"
 	"github.com/microcosm-cc/bluemonday"
@@ -25,6 +26,8 @@ type ArchiverStore interface {
 	GetChaptersNeedingContent(seriesID int64) ([]models.Chapter, error)
 	SaveChapterContent(id int64, content string) error
 	SaveChapterImage(chapterID int64, url string, data []byte, contentType string) error
+	MarkChapterPremium(id int64) error
+	SetChapterWordCount(id int64, n int) error
 	GetSetting(key string) string
 }
 
@@ -171,21 +174,51 @@ func (a *Archiver) runCycle(ctx context.Context) {
 
 			a.waitForSiteRateLimit(s.ProviderName)
 
-			content, err := p.FetchChapterContent(ch.URL)
+			// Prefer the new structured ContentFetcher when the provider implements
+			// it (every book provider now does). Falls back to legacy
+			// HTMLFetcher via the plugin.AsContentFetcher adapter for any
+			// holdout.
+			pp, ok := p.(plugin.Provider)
+			if !ok {
+				logging.Error("[archiver] provider %s does not implement plugin.Provider; skipping chapter %d", s.ProviderName, ch.ID)
+				continue
+			}
+			cf := plugin.AsContentFetcher(pp)
+			if cf == nil {
+				logging.Error("[archiver] provider %s implements neither ContentFetcher nor HTMLFetcher; skipping chapter %d", s.ProviderName, ch.ID)
+				continue
+			}
+			content, err := cf.FetchChapter(ch.URL)
 			if err != nil {
 				logging.Error("[archiver] error fetching chapter %d (%s): %v", ch.ID, ch.URL, err)
 				continue
 			}
 
-			a.downloadImages(ch.ID, content)
-
-			content = a.policy.Sanitize(content)
-
-			if err := a.store.SaveChapterContent(ch.ID, content); err != nil {
-				logging.Error("[archiver] error saving content for chapter %d: %v", ch.ID, err)
+			// Image list from ChapterContent drives the cache (replaces the
+			// old regex-over-HTML approach with a provider-supplied list).
+			if len(content.Images) > 0 {
+				a.downloadImageList(ch.ID, content.Images)
 			} else {
-				logging.Info("[archiver] saved content for chapter %d (%s)", ch.ID, ch.Title)
+				a.downloadImages(ch.ID, content.BodyHTML)
 			}
+
+			if content.Premium {
+				if err := a.store.MarkChapterPremium(ch.ID); err != nil {
+					logging.Error("[archiver] mark premium %d: %v", ch.ID, err)
+				}
+				continue
+			}
+
+			sanitized := a.policy.Sanitize(content.BodyHTML)
+			if err := a.store.SaveChapterContent(ch.ID, sanitized); err != nil {
+				logging.Error("[archiver] error saving content for chapter %d: %v", ch.ID, err)
+				continue
+			}
+			if content.WordCount > 0 {
+				_ = a.store.SetChapterWordCount(ch.ID, content.WordCount)
+			}
+			logging.Info("[archiver] saved content for chapter %d (%s, %d words)",
+				ch.ID, ch.Title, content.WordCount)
 		}
 
 		a.status.Done++
@@ -209,6 +242,25 @@ func (a *Archiver) downloadImages(chapterID int64, htmlContent string) {
 			continue
 		}
 
+		if err := a.store.SaveChapterImage(chapterID, imgURL, data, contentType); err != nil {
+			logging.Error("[archiver] error saving image for chapter %d: %v", chapterID, err)
+		}
+	}
+}
+
+// downloadImageList caches a provider-supplied image URL list. Used by
+// the new ContentFetcher path, where providers enumerate images directly
+// (more accurate than regex-scraping HTML).
+func (a *Archiver) downloadImageList(chapterID int64, urls []string) {
+	for _, imgURL := range urls {
+		if strings.HasPrefix(imgURL, "data:") {
+			continue
+		}
+		data, contentType, err := a.fetchImage(imgURL)
+		if err != nil {
+			logging.Error("[archiver] error fetching image %s: %v", imgURL, err)
+			continue
+		}
 		if err := a.store.SaveChapterImage(chapterID, imgURL, data, contentType); err != nil {
 			logging.Error("[archiver] error saving image for chapter %d: %v", chapterID, err)
 		}

@@ -94,6 +94,27 @@ func (s *Store) SaveChapterContent(id int64, content string) error {
 	return err
 }
 
+// MarkChapterPremium flags a chapter as paywalled so the UI can show a
+// "locked" badge and the scheduler stops retrying the fetch.
+func (s *Store) MarkChapterPremium(id int64) error {
+	_, err := s.db.Exec("UPDATE chapters SET premium = 1 WHERE id = ?", id)
+	return err
+}
+
+// SetChapterWordCount records the prose word count returned by the
+// provider's ContentFetcher.
+func (s *Store) SetChapterWordCount(id int64, n int) error {
+	_, err := s.db.Exec("UPDATE chapters SET word_count = ? WHERE id = ?", n, id)
+	return err
+}
+
+// GetChapterWordCount returns the stored word count (0 when unset).
+func (s *Store) GetChapterWordCount(id int64) (int, error) {
+	var n int
+	err := s.db.QueryRow("SELECT word_count FROM chapters WHERE id = ?", id).Scan(&n)
+	return n, err
+}
+
 func (s *Store) GetChaptersNeedingContent(seriesID int64) ([]models.Chapter, error) {
 	rows, err := s.db.Query(`
 		SELECT id, series_id, title, url, published_at, is_read, content_html, created_at

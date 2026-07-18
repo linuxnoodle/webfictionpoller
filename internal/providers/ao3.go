@@ -399,6 +399,17 @@ func (p *AO3Provider) pollMultiChapterWork(series models.Series, doc *goquery.Do
 }
 
 func (p *AO3Provider) FetchChapterContent(chapterURL string) (string, error) {
+	c, err := p.FetchChapter(chapterURL)
+	if err != nil {
+		return "", err
+	}
+	return c.BodyHTML, nil
+}
+
+// FetchChapter implements plugin.ContentFetcher. AO3 chapter pages expose
+// the title in .chapter-title (or .title if a one-shot) and the body under
+// div.userstuff. We pull both plus the image list into ChapterContent.
+func (p *AO3Provider) FetchChapter(chapterURL string) (plugin.ChapterContent, error) {
 	fetchURL := chapterURL
 	if !strings.Contains(fetchURL, "?") {
 		fetchURL += "?view_adult=true"
@@ -408,17 +419,16 @@ func (p *AO3Provider) FetchChapterContent(chapterURL string) (string, error) {
 
 	resp, err := p.ao3Get(fetchURL)
 	if err != nil {
-		return "", err
+		return plugin.ChapterContent{}, err
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status %d for %s", resp.StatusCode, fetchURL)
+		return plugin.ChapterContent{}, fmt.Errorf("status %d for %s", resp.StatusCode, fetchURL)
 	}
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("parsing html: %w", err)
+		return plugin.ChapterContent{}, fmt.Errorf("parsing html: %w", err)
 	}
 
 	content := doc.Find("div.userstuff")
@@ -426,16 +436,35 @@ func (p *AO3Provider) FetchChapterContent(chapterURL string) (string, error) {
 		content = doc.Find("#chapters div.userstuff")
 	}
 	if content.Length() == 0 {
-		return "", fmt.Errorf("no content found at %s", chapterURL)
+		return plugin.ChapterContent{}, fmt.Errorf("no content found at %s", chapterURL)
 	}
 
 	html, err := content.First().Html()
 	if err != nil {
-		return "", err
+		return plugin.ChapterContent{}, err
 	}
 
-	logging.Info("[ao3] fetched chapter content from %s (%d chars)", chapterURL, len(html))
-	return html, nil
+	// AO3 chapter title is in .chapter-title a; preface .title for one-shots.
+	title := plugin.TextOrEmpty(doc.Find(".chapter-title a").First())
+	if title == "" {
+		title = plugin.TextOrEmpty(doc.Find(".chapter-title").First())
+	}
+	if title == "" {
+		title = plugin.TextOrEmpty(doc.Find(".preface .title").First())
+	}
+
+	bodyText := plugin.HTMLToText(html)
+	logging.Info("[ao3] fetched chapter content from %s (%d chars, %d words)",
+		chapterURL, len(html), plugin.CountWords(bodyText))
+
+	return plugin.ChapterContent{
+		Title:     title,
+		BodyHTML:  html,
+		BodyText:  bodyText,
+		WordCount: plugin.CountWords(bodyText),
+		Images:    plugin.ExtractImageURLs(content.First(), chapterURL),
+		SourceURL: chapterURL,
+	}, nil
 }
 
 func (p *AO3Provider) cleanURL(rawURL string) string {

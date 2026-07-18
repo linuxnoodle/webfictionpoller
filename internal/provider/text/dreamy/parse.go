@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 )
 
 // parseURL wraps url.Parse to keep dreamy.go's import list small.
@@ -55,23 +57,9 @@ func cleanTitle(raw string) string {
 	return raw
 }
 
-// countWords is a simple whitespace-split word counter, ASCII-aware. Used
-// for the WordCount field on ChapterContent when the source doesn't
-// expose a per-chapter count.
-func countWords(s string) int {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0
-	}
-	return len(strings.Fields(s))
-}
+// countWords is a back-compat alias for plugin.CountWords. New code should
+// call plugin.CountWords directly.
+func countWords(s string) int { return plugin.CountWords(s) }
 
-// htmlToText strips all HTML tags from s, returning the visible text.
-// Used to derive BodyText from BodyHTML when the provider didn't populate it.
-func htmlToText(html string) string {
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
-	if err != nil {
-		return html
-	}
-	return strings.TrimSpace(doc.Text())
-}
+// htmlToText is a back-compat alias for plugin.HTMLToText.
+func htmlToText(html string) string { return plugin.HTMLToText(html) }

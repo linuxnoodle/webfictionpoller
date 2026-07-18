@@ -155,28 +155,62 @@ func (p *FlareSolverrProvider) FetchSeriesMetadata(url string) (models.Series, e
 }
 
 func (p *FlareSolverrProvider) FetchChapterContent(url string) (string, error) {
-	html, err := p.solve(url)
+	c, err := p.FetchChapter(url)
 	if err != nil {
 		return "", err
 	}
+	return c.BodyHTML, nil
+}
 
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+// FetchChapter implements plugin.ContentFetcher. Same FlareSolverr flow as
+// the legacy FetchChapterContent but parses the result into ChapterContent.
+// FFN chapter pages don't expose an obvious title element per chapter
+// (chapter title is in the chapter <select> dropdown's selected option),
+// so we read it from there when present.
+func (p *FlareSolverrProvider) FetchChapter(url string) (plugin.ChapterContent, error) {
+	rawHTML, err := p.solve(url)
 	if err != nil {
-		return "", err
+		return plugin.ChapterContent{}, err
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(rawHTML))
+	if err != nil {
+		return plugin.ChapterContent{}, err
 	}
 
 	content := doc.Find("#storytext")
 	if content.Length() == 0 {
-		return "", fmt.Errorf("no story content found at %s", url)
+		return plugin.ChapterContent{}, fmt.Errorf("no story content found at %s", url)
 	}
 
 	htmlContent, err := content.First().Html()
 	if err != nil {
-		return "", err
+		return plugin.ChapterContent{}, err
 	}
 
-	logging.Info("[fanfictionnet] fetched chapter content from %s (%d chars)", url, len(htmlContent))
-	return htmlContent, nil
+	// Chapter title: FFN renders a <select id="chap_select"> with one
+	// <option> per chapter; the selected one is the current chapter's title.
+	title := ""
+	if selected := doc.Find("#chap_select option[selected]").First(); selected.Length() > 0 {
+		title = strings.TrimSpace(selected.Text())
+		// FFN options are formatted as "N. Title"; strip the leading number.
+		if dot := strings.Index(title, ". "); dot >= 0 && dot < 6 {
+			title = title[dot+2:]
+		}
+	}
+
+	bodyText := plugin.HTMLToText(htmlContent)
+	logging.Info("[fanfictionnet] fetched chapter content from %s (%d chars, %d words)",
+		url, len(htmlContent), plugin.CountWords(bodyText))
+
+	return plugin.ChapterContent{
+		Title:     title,
+		BodyHTML:  htmlContent,
+		BodyText:  bodyText,
+		WordCount: plugin.CountWords(bodyText),
+		Images:    plugin.ExtractImageURLs(content.First(), url),
+		SourceURL: url,
+	}, nil
 }
 
 func (p *FlareSolverrProvider) PollUpdates(series models.Series) ([]models.Chapter, error) {
