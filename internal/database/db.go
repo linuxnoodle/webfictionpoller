@@ -229,11 +229,17 @@ func applySQLiteSchema(d *db.DB) error {
 	for _, m := range migrations {
 		var count int
 		if err := d.QueryRow("SELECT COUNT(*) FROM _migrations WHERE name = ?", m.name).Scan(&count); err != nil {
+			fmt.Printf("[database] WARNING: migration ledger check failed for %q: %v\n", m.name, err)
 			continue
 		}
 		if count == 0 {
-			_, _ = d.Exec(m.sql)
-			_, _ = d.Exec("INSERT INTO _migrations (name) VALUES (?)", m.name)
+			if _, err := d.Exec(m.sql); err != nil {
+				fmt.Printf("[database] WARNING: migration %q failed: %v\n", m.name, err)
+				continue // don't mark as applied if it errored
+			}
+			if _, err := d.Exec("INSERT INTO _migrations (name) VALUES (?)", m.name); err != nil {
+				fmt.Printf("[database] WARNING: failed to record migration %q: %v\n", m.name, err)
+			}
 		}
 	}
 	return nil

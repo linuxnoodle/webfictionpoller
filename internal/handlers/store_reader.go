@@ -8,10 +8,58 @@ import (
 )
 
 func (s *Store) GetReaderChapters(seriesID int64) ([]models.Chapter, error) {
+	// Try with word_count + premium columns (post-migration). Fall back to
+	// the legacy query if the columns don't exist yet.
 	rows, err := s.db.Query(`
 		SELECT id, series_id, title, url, published_at, is_read,
 		       CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 ELSE 0 END as has_content,
 		       COALESCE(word_count, 0), COALESCE(premium, 0)
+		FROM chapters WHERE series_id = ?
+		ORDER BY published_at ASC
+	`, seriesID)
+	if err != nil {
+		rows, err = s.db.Query(`
+			SELECT id, series_id, title, url, published_at, is_read,
+			       CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 ELSE 0 END as has_content
+			FROM chapters WHERE series_id = ?
+			ORDER BY published_at ASC
+		`, seriesID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defer rows.Close()
+
+	var chapters []models.Chapter
+	for rows.Next() {
+		var ch models.Chapter
+		var hasContent bool
+		// Try scanning with word_count + premium; fall back to without.
+		var wc int
+		var prem bool
+		if err := rows.Scan(&ch.ID, &ch.SeriesID, &ch.Title, &ch.URL, &ch.PublishedAt, &ch.IsRead, &hasContent, &wc, &prem); err != nil {
+			// Re-seek this row isn't possible; if scan fails it's likely
+		// because the SELECT had fewer columns (fallback query). Re-query.
+			break
+		}
+		if hasContent {
+			ch.ContentHTML = "archived"
+		}
+		chapters = append(chapters, ch)
+	}
+	// If we broke out of the scan loop (column count mismatch from
+	// fallback query), re-run with the simpler SELECT + Scan.
+	if chapters == nil {
+		return s.getReaderChaptersLegacy(seriesID)
+	}
+	return chapters, nil
+}
+
+// getReaderChaptersLegacy queries without word_count/premium columns.
+func (s *Store) getReaderChaptersLegacy(seriesID int64) ([]models.Chapter, error) {
+	rows, err := s.db.Query(`
+		SELECT id, series_id, title, url, published_at, is_read,
+		       CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 ELSE 0 END as has_content
 		FROM chapters WHERE series_id = ?
 		ORDER BY published_at ASC
 	`, seriesID)
@@ -24,17 +72,12 @@ func (s *Store) GetReaderChapters(seriesID int64) ([]models.Chapter, error) {
 	for rows.Next() {
 		var ch models.Chapter
 		var hasContent bool
-		var wordCount int
-		var premium bool
-		if err := rows.Scan(&ch.ID, &ch.SeriesID, &ch.Title, &ch.URL, &ch.PublishedAt, &ch.IsRead, &hasContent, &wordCount, &premium); err != nil {
+		if err := rows.Scan(&ch.ID, &ch.SeriesID, &ch.Title, &ch.URL, &ch.PublishedAt, &ch.IsRead, &hasContent); err != nil {
 			return nil, err
 		}
 		if hasContent {
 			ch.ContentHTML = "archived"
 		}
-		// Stash word count in PreviewHTML field for now (avoids schema-level
-		// changes to models.Chapter just to surface word_count; the reader
-		// template can read it from the JSON payload directly).
 		chapters = append(chapters, ch)
 	}
 	return chapters, nil
@@ -81,12 +124,25 @@ func (s *Store) GetChapterForReader(id int64) (*ChapterContentMeta, error) {
 	var m ChapterContentMeta
 	var contentBytes []byte
 	var compressed bool
+	// Try the full query (includes word_count + premium from the new
+	// migrations). If those columns don't exist yet (migration hasn't run
+	// on an upgraded DB), fall back to the legacy query without them.
 	err := s.db.QueryRow(`
 		SELECT content_html, COALESCE(content_compressed, 0),
 		       COALESCE(word_count, 0), COALESCE(premium, 0),
 		       title, series_id
 		FROM chapters WHERE id = ?
 	`, id).Scan(&contentBytes, &compressed, &m.WordCount, &m.Premium, &m.Title, &m.SeriesID)
+	if err != nil {
+		// Fallback: query without word_count/premium (for pre-migration DBs).
+		m.WordCount = 0
+		m.Premium = false
+		err = s.db.QueryRow(`
+			SELECT content_html, COALESCE(content_compressed, 0),
+			       title, series_id
+			FROM chapters WHERE id = ?
+		`, id).Scan(&contentBytes, &compressed, &m.Title, &m.SeriesID)
+	}
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
