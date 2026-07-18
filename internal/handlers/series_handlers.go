@@ -169,8 +169,25 @@ func (h *Handler) ChapterPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AddSeriesPage(w http.ResponseWriter, r *http.Request) {
+	// Show every registered text provider from the plugin registry, not
+	// just the legacy pool — dreamy and future providers that don't
+	// implement the full legacy interface would be invisible otherwise.
+	type providerDisplay struct {
+		Name        string
+		DisplayName string
+		Homepage    string
+	}
+	var providers []providerDisplay
+	for _, p := range plugin.Default.ByKind(plugin.KindText) {
+		m := p.Meta()
+		providers = append(providers, providerDisplay{
+			Name:        m.Name,
+			DisplayName: m.DisplayName,
+			Homepage:    m.Homepage,
+		})
+	}
 	renderTemplate(w, r, "add_series", map[string]interface{}{
-		"Providers": h.pool.AllProviders(),
+		"Providers": providers,
 	})
 }
 
@@ -181,53 +198,67 @@ func (h *Handler) AddSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, p := range h.pool.AllProviders() {
-		if p.MatchURL(rawURL) {
-			meta, err := p.FetchSeriesMetadata(rawURL)
-			if err != nil {
-				logging.Error("[handler] fetching metadata for %s: %v", rawURL, err)
-				writeJSON(w, http.StatusUnprocessableEntity, map[string]interface{}{"success": false, "error": "Failed to fetch series metadata. Check the URL and try again."})
-				return
-			}
-			meta.Rating = models.UnratedRating
-			meta.Status = "active"
-			id, err := h.store.AddSeries(meta)
-			if err != nil {
-				logging.Error("[handler] saving series: %v", err)
-				writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": "Failed to save series"})
-				return
-			}
-			if id == 0 {
-				writeJSON(w, http.StatusConflict, map[string]interface{}{"success": false, "error": "This series is already tracked"})
-				return
-			}
-			meta.ID = id
-
-			var chapterCount int
-			chapters, err := p.PollUpdates(meta)
-			if err != nil {
-				logging.Error("[handler] initial poll for %q (id=%d): %v", meta.Title, id, err)
-			} else if len(chapters) > 0 {
-				inserted, insertErr := h.store.InsertChapters(id, chapters)
-				if insertErr != nil {
-					logging.Error("[handler] inserting chapters for %q (id=%d): %v", meta.Title, id, insertErr)
-				}
-				chapterCount = inserted
-				logging.Info("[handler] added series %q (id=%d) with %d chapters", meta.Title, id, inserted)
-			} else {
-				logging.Info("[handler] added series %q (id=%d) with 0 chapters", meta.Title, id)
-			}
-
-			writeJSON(w, http.StatusOK, map[string]interface{}{
-				"success":  true,
-				"title":    meta.Title,
-				"chapters": chapterCount,
-			})
-			return
-		}
+	// Use the plugin registry to find a matching provider — this covers
+	// ALL registered text providers including dreamy and future providers
+	// that don't implement the legacy providers.Provider interface.
+	p, ok := plugin.Default.ByURL(rawURL)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "No provider matched the given URL. Check the URL and try again."})
+		return
 	}
 
-	writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "No provider matched the given URL. Check the URL and try again."})
+	// SeriesLister capability — required for adding a series.
+	sl, ok := p.(plugin.SeriesLister)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Provider does not support series metadata fetching"})
+		return
+	}
+
+	meta, err := sl.FetchSeriesMetadata(rawURL)
+	if err != nil {
+		logging.Error("[handler] fetching metadata for %s: %v", rawURL, err)
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]interface{}{"success": false, "error": "Failed to fetch series metadata. Check the URL and try again."})
+		return
+	}
+	meta.Rating = models.UnratedRating
+	meta.Status = "active"
+	id, err := h.store.AddSeries(meta)
+	if err != nil {
+		logging.Error("[handler] saving series: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": "Failed to save series"})
+		return
+	}
+	if id == 0 {
+		writeJSON(w, http.StatusConflict, map[string]interface{}{"success": false, "error": "This series is already tracked"})
+		return
+	}
+	meta.ID = id
+
+	var chapterCount int
+	// Poller capability — optional but lets us pre-populate chapters.
+	if poller, ok := p.(plugin.Poller); ok {
+		chapters, err := poller.PollUpdates(meta)
+		if err != nil {
+			logging.Error("[handler] initial poll for %q (id=%d): %v", meta.Title, id, err)
+		} else if len(chapters) > 0 {
+			inserted, insertErr := h.store.InsertChapters(id, chapters)
+			if insertErr != nil {
+				logging.Error("[handler] inserting chapters for %q (id=%d): %v", meta.Title, id, insertErr)
+			}
+			chapterCount = inserted
+			logging.Info("[handler] added series %q (id=%d) with %d chapters", meta.Title, id, inserted)
+		} else {
+			logging.Info("[handler] added series %q (id=%d) with 0 chapters", meta.Title, id)
+		}
+	} else {
+		logging.Info("[handler] added series %q (id=%d); provider has no Poller capability, skipping initial poll", meta.Title, id)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"title":    meta.Title,
+		"chapters": chapterCount,
+	})
 }
 
 func (h *Handler) UpdateSeriesStatus(w http.ResponseWriter, r *http.Request) {
