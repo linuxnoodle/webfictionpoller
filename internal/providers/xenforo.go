@@ -356,7 +356,7 @@ func (p *XenForoProvider) FetchChapter(chapterURL string) (plugin.ChapterContent
 	var rawHTML string
 	err := p.withRelogin(func() error {
 		var innerErr error
-		rawHTML, innerErr = p.fetchContentFromReader(chapterURL)
+		rawHTML, innerErr = p.fetchContentDirect(chapterURL)
 		return innerErr
 	})
 	if err != nil {
@@ -371,10 +371,6 @@ func (p *XenForoProvider) FetchChapter(chapterURL string) (plugin.ChapterContent
 		WordCount: plugin.CountWords(bodyText),
 		Images:    p.extractContentImages(rawHTML, chapterURL),
 		SourceURL: chapterURL,
-		// Title: left empty — the reader-mode / direct-fetch paths return
-		// body-only HTML without the threadmark label. Making a separate
-		// request for the title caused rate-limit issues on SB/SV/QQ, so
-		// we skip it. The stored chapter title from PollUpdates is used.
 	}, nil
 }
 
@@ -590,39 +586,41 @@ func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) 
 	}
 
 	postID := p.extractPostID(chapterURL)
+
+	// Find the exact post by data-content (XF2) or id (XF1).
+	// Based on fiction-dl's approach: no reader-mode, just a direct fetch
+	// and a targeted selector. The old reader-mode pagination was fragile
+	// on modern XenForo and caused 'No content available' on SB/SV/QQ.
 	var target *goquery.Selection
-
 	if postID != "" {
-		doc.Find("article.message").EachWithBreak(func(i int, s *goquery.Selection) bool {
-			dataContent, _ := s.Attr("data-content")
-			messageID, _ := s.Attr("id")
-			if dataContent == "post-"+postID || messageID == "js-post-"+postID || messageID == "post-"+postID {
-				bb := s.Find(".message-body .bbWrapper")
-				if bb.Length() > 0 {
-					target = bb
-					return false
-				}
-			}
-			return true
-		})
+		target = doc.Find(fmt.Sprintf(`article[data-content="post-%s"]`, postID)).First()
+		if target.Length() == 0 {
+			target = doc.Find(fmt.Sprintf("#post-%s", postID)).First()
+		}
+		if target.Length() == 0 {
+			target = doc.Find(fmt.Sprintf("#js-post-%s", postID)).First()
+		}
 	}
 
-	if target == nil || target.Length() == 0 {
-		target = doc.Find(".message-body .bbWrapper")
-	}
 	if target.Length() == 0 {
-		target = doc.Find(".message-body")
-	}
-	if target.Length() == 0 {
-		return "", fmt.Errorf("no chapter content found at %s", chapterURL)
+		return "", fmt.Errorf("post %s not found on page %s", postID, chapterURL)
 	}
 
-	html, err := target.First().Html()
+	// Extract body: div.bbWrapper (XF2) or div.messageContent (XF1).
+	body := target.Find("div.bbWrapper")
+	if body.Length() == 0 {
+		body = target.Find("div.messageContent")
+	}
+	if body.Length() == 0 {
+		return "", fmt.Errorf("post body not found for post %s at %s", postID, chapterURL)
+	}
+
+	html, err := body.First().Html()
 	if err != nil {
 		return "", err
 	}
 
-	logging.Info("[%s] fetched chapter content from direct HTML %s (%d chars)", p.name, chapterURL, len(html))
+	logging.Info("[%s] fetched chapter content from %s (post-%s, %d chars)", p.name, chapterURL, postID, len(html))
 	return html, nil
 }
 
