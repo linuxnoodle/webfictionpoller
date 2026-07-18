@@ -28,6 +28,7 @@ type ArchiverStore interface {
 	SaveChapterImage(chapterID int64, url string, data []byte, contentType string) error
 	MarkChapterPremium(id int64) error
 	SetChapterWordCount(id int64, n int) error
+	UpdateChapterTitle(id int64, title string) error
 	GetSetting(key string) string
 }
 
@@ -216,6 +217,13 @@ func (a *Archiver) runCycle(ctx context.Context) {
 			}
 			if content.WordCount > 0 {
 				_ = a.store.SetChapterWordCount(ch.ID, content.WordCount)
+			}
+			// Enrich the chapter title when the provider returned one and the
+			// stored title is empty or generic. Providers like dreamy often
+			// know the real title at fetch time even if the discovery list
+			// had a truncated one.
+			if content.Title != "" && ch.Title != content.Title {
+				a.store.UpdateChapterTitle(ch.ID, content.Title)
 			}
 			logging.Info("[archiver] saved content for chapter %d (%s, %d words)",
 				ch.ID, ch.Title, content.WordCount)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
+	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
 )
 
 func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
@@ -149,40 +150,111 @@ func (h *Handler) ReaderChapterContentAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	content, seriesID, err := h.store.GetReaderChapterContent(id)
+	// Single query gets cached HTML + metadata (word_count, premium, title, series_id).
+	meta, err := h.store.GetChapterForReader(id)
 	if err != nil {
 		internalError(w, r, err)
+		return
+	}
+	if meta == nil {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "not found"})
 		return
 	}
 
 	prevID, nextID, _ := h.store.GetAdjacentChapterIDs(id)
 
-	if content == "" {
-		ch, err := h.store.GetChapterWithProvider(id)
-		if err != nil || ch == nil {
-			writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "not found"})
-			return
-		}
-		p, ok := h.pool.GetProvider(ch.ProviderName)
-		if !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "provider not found"})
-			return
-		}
+	// Premium chapters: return the locked flag without attempting a fetch.
+	if meta.Premium {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"content":    "",
+			"premium":    true,
+			"word_count": meta.WordCount,
+			"series_id":  meta.SeriesID,
+			"prev_id":    prevID,
+			"next_id":    nextID,
+		})
+		return
+	}
+
+	// Cached locally: return immediately (already sanitized by the archiver).
+	if meta.HasContent {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"content":    meta.HTML,
+			"premium":    false,
+			"word_count": meta.WordCount,
+			"series_id":  meta.SeriesID,
+			"prev_id":    prevID,
+			"next_id":    nextID,
+		})
+		return
+	}
+
+	// Not cached: live-fetch via the provider's ContentFetcher (structured path).
+	// Falls back to legacy FetchChapterContent via the adapter when the
+	// provider hasn't migrated yet (none currently, but defensive).
+	ch, err := h.store.GetChapterWithProvider(id)
+	if err != nil || ch == nil {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "not found"})
+		return
+	}
+	p, ok := h.pool.GetProvider(ch.ProviderName)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "provider not found"})
+		return
+	}
+
+	pp, ok := p.(plugin.Provider)
+	if !ok {
+		// Legacy provider: use raw FetchChapterContent path.
 		fetched, fetchErr := p.FetchChapterContent(ch.URL)
 		if fetchErr != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "failed to fetch"})
 			return
 		}
-		content = contentPolicy.Sanitize(fetched)
-	} else {
-		content = contentPolicy.Sanitize(content)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"content":    contentPolicy.Sanitize(fetched),
+			"premium":    false,
+			"word_count": 0,
+			"series_id":  meta.SeriesID,
+			"prev_id":    prevID,
+			"next_id":    nextID,
+		})
+		return
 	}
 
+	cf := plugin.AsContentFetcher(pp)
+	if cf == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "provider has no content capability"})
+		return
+	}
+	content, fetchErr := cf.FetchChapter(ch.URL)
+	if fetchErr != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "failed to fetch"})
+		return
+	}
+
+	// Persist the fetched content so subsequent reads are local. This is a
+	// best-effort async save — we don't block the response on it.
+	go func() {
+		sanitized := contentPolicy.Sanitize(content.BodyHTML)
+		if err := h.store.SaveChapterContent(id, sanitized); err != nil {
+			logging.Error("[reader] failed to cache fetched chapter %d: %v", id, err)
+		}
+		if content.WordCount > 0 {
+			_ = h.store.SetChapterWordCount(id, content.WordCount)
+		}
+		if content.Premium {
+			_ = h.store.MarkChapterPremium(id)
+		}
+	}()
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"content":   content,
-		"series_id": seriesID,
-		"prev_id":   prevID,
-		"next_id":   nextID,
+		"content":    contentPolicy.Sanitize(content.BodyHTML),
+		"premium":    content.Premium,
+		"word_count": content.WordCount,
+		"series_id":  meta.SeriesID,
+		"prev_id":    prevID,
+		"next_id":    nextID,
 	})
 }
 

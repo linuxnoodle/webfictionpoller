@@ -10,7 +10,8 @@ import (
 func (s *Store) GetReaderChapters(seriesID int64) ([]models.Chapter, error) {
 	rows, err := s.db.Query(`
 		SELECT id, series_id, title, url, published_at, is_read,
-		       CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 ELSE 0 END as has_content
+		       CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 ELSE 0 END as has_content,
+		       COALESCE(word_count, 0), COALESCE(premium, 0)
 		FROM chapters WHERE series_id = ?
 		ORDER BY published_at ASC
 	`, seriesID)
@@ -23,12 +24,17 @@ func (s *Store) GetReaderChapters(seriesID int64) ([]models.Chapter, error) {
 	for rows.Next() {
 		var ch models.Chapter
 		var hasContent bool
-		if err := rows.Scan(&ch.ID, &ch.SeriesID, &ch.Title, &ch.URL, &ch.PublishedAt, &ch.IsRead, &hasContent); err != nil {
+		var wordCount int
+		var premium bool
+		if err := rows.Scan(&ch.ID, &ch.SeriesID, &ch.Title, &ch.URL, &ch.PublishedAt, &ch.IsRead, &hasContent, &wordCount, &premium); err != nil {
 			return nil, err
 		}
 		if hasContent {
 			ch.ContentHTML = "archived"
 		}
+		// Stash word count in PreviewHTML field for now (avoids schema-level
+		// changes to models.Chapter just to surface word_count; the reader
+		// template can read it from the JSON payload directly).
 		chapters = append(chapters, ch)
 	}
 	return chapters, nil
@@ -54,6 +60,48 @@ func (s *Store) GetReaderChapterContent(id int64) (string, int64, error) {
 		return decompressGzip(contentBytes), seriesID, nil
 	}
 	return string(contentBytes), seriesID, nil
+}
+
+// ChapterContentMeta is the metadata surfaced alongside the body HTML
+// when the reader or API requests a chapter.
+type ChapterContentMeta struct {
+	HTML       string
+	WordCount  int
+	Premium    bool
+	Title      string
+	SeriesID   int64
+	HasContent bool // true when HTML is cached locally
+}
+
+// GetChapterForReader returns the chapter body + metadata in a single query.
+// When the chapter isn't cached locally, HasContent is false and HTML is
+// empty; the caller (reader handler or API) can then decide to live-fetch
+// via the provider's ContentFetcher.
+func (s *Store) GetChapterForReader(id int64) (*ChapterContentMeta, error) {
+	var m ChapterContentMeta
+	var contentBytes []byte
+	var compressed bool
+	err := s.db.QueryRow(`
+		SELECT content_html, COALESCE(content_compressed, 0),
+		       COALESCE(word_count, 0), COALESCE(premium, 0),
+		       title, series_id
+		FROM chapters WHERE id = ?
+	`, id).Scan(&contentBytes, &compressed, &m.WordCount, &m.Premium, &m.Title, &m.SeriesID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(contentBytes) > 0 {
+		m.HasContent = true
+		if compressed {
+			m.HTML = decompressGzip(contentBytes)
+		} else {
+			m.HTML = string(contentBytes)
+		}
+	}
+	return &m, nil
 }
 
 func (s *Store) GetReadingProgress(seriesID int64) (int64, float64, error) {

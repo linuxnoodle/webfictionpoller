@@ -93,6 +93,9 @@ func (s *Server) Routes(authz func(http.Handler) http.Handler, hasUsersGate func
 		r.Get("/downloads/comics/{chapterID}/status", s.downloadComicChapterStatus)
 		r.Get("/downloads/comics/{chapterID}/cbz", s.downloadComicChapterCBZ)
 
+		// Text chapter downloads (for iOS offline reading).
+		r.Get("/downloads/chapters/{chapterID}", s.downloadTextChapter)
+
 		// Provider introspection.
 		r.Get("/providers", s.providersList)
 	})
@@ -516,17 +519,42 @@ func (s *Server) chapterContent(w http.ResponseWriter, r *http.Request) {
 		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
 		return
 	}
-	// Try archived content first; fall back to live fetch via provider.
-	content, err := s.store.GetChapterArchivedContent(id)
-	if err != nil {
-		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+	// Use the reader store method for a single-query content + metadata fetch.
+	meta := s.chapterMeta(r, id)
+	if meta == nil {
+		api.WriteError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"chapter_id": id,
-		"html":       content,
-		"cached":     content != "",
-	})
+		"html":       meta.HTML,
+		"cached":     meta.HasContent,
+		"premium":    meta.Premium,
+		"word_count": meta.WordCount,
+	}
+	if meta.Title != "" {
+		resp["title"] = meta.Title
+	}
+	api.WriteJSON(w, http.StatusOK, resp)
+}
+
+// chapterMeta is a small helper that calls GetChapterForReader and handles
+// the nil case. Returns nil when the chapter doesn't exist.
+func (s *Server) chapterMeta(r *http.Request, id int64) *handlers.ChapterContentMeta {
+	// We need the store's concrete method; v1.Store interface doesn't expose
+	// GetChapterForReader, so we type-assert to *handlers.Store for now.
+	// This will be cleaned up when the Store interface is extended.
+	type chapterMetaFetcher interface {
+		GetChapterForReader(id int64) (*handlers.ChapterContentMeta, error)
+	}
+	if f, ok := s.store.(chapterMetaFetcher); ok {
+		meta, err := f.GetChapterForReader(id)
+		if err != nil || meta == nil {
+			return nil
+		}
+		return meta
+	}
+	return nil
 }
 
 func (s *Server) chapterMarkRead(w http.ResponseWriter, r *http.Request) {
@@ -745,6 +773,87 @@ func (s *Server) downloadComicChapterCBZ(w http.ResponseWriter, r *http.Request)
 	if err := zw.Close(); err != nil {
 		logging.Error("[api/v1] cbz close: %v", err)
 	}
+}
+
+// downloadTextChapter fetches a text chapter for offline reading. Returns
+// the cached HTML when available; live-fetches + caches on demand when not.
+// Premium chapters return 402.
+//
+//	GET /api/v1/downloads/chapters/{chapterID}
+func (s *Server) downloadTextChapter(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(chi.URLParam(r, "chapterID"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	meta := s.chapterMeta(r, id)
+	if meta == nil {
+		api.WriteError(w, http.StatusNotFound, "chapter_not_found", "")
+		return
+	}
+	if meta.Premium {
+		api.WriteJSON(w, http.StatusPaymentRequired, map[string]interface{}{
+			"premium":   true,
+			"cached":    false,
+			"chapter_id": id,
+			"title":     meta.Title,
+		})
+		return
+	}
+	if meta.HasContent {
+		api.WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"chapter_id": id,
+			"html":       meta.HTML,
+			"word_count": meta.WordCount,
+			"premium":    false,
+			"cached":     true,
+			"title":      meta.Title,
+		})
+		return
+	}
+	// Not cached. Live-fetch via the provider's ContentFetcher.
+	// chapterMeta already validated the chapter exists; we need the provider.
+	ch, _ := s.store.GetChapterWithProvider(id)
+	if ch == nil {
+		api.WriteError(w, http.StatusNotFound, "chapter_not_found", "")
+		return
+	}
+	p, ok := plugin.Default.Get(ch.ProviderName)
+	if !ok {
+		api.WriteError(w, http.StatusServiceUnavailable, "provider_unavailable", "")
+		return
+	}
+	cf := plugin.AsContentFetcher(p)
+	if cf == nil {
+		api.WriteError(w, http.StatusServiceUnavailable, "no_content_capability", "")
+		return
+	}
+	content, err := cf.FetchChapter(ch.URL)
+	if err != nil {
+		api.WriteError(w, http.StatusBadGateway, "fetch_failed", err.Error())
+		return
+	}
+	// Best-effort cache for next request.
+	go func() {
+		type contentSaver interface {
+			SaveChapterContent(id int64, content string) error
+			SetChapterWordCount(id int64, n int) error
+		}
+		if sv, ok := s.store.(contentSaver); ok {
+			_ = sv.SaveChapterContent(id, content.BodyHTML)
+			if content.WordCount > 0 {
+				_ = sv.SetChapterWordCount(id, content.WordCount)
+			}
+		}
+	}()
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"chapter_id": id,
+		"html":       content.BodyHTML,
+		"word_count": content.WordCount,
+		"premium":    content.Premium,
+		"cached":     false,
+		"title":      meta.Title,
+	})
 }
 
 // lookupComicProvider resolves a comic provider by name via plugin.Default.

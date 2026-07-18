@@ -115,10 +115,18 @@ func (s *Store) GetChapterWordCount(id int64) (int, error) {
 	return n, err
 }
 
+// UpdateChapterTitle overrides the chapter title. Called by the archiver
+// when the provider's ContentFetcher returns a richer title than what the
+// discovery poll stored.
+func (s *Store) UpdateChapterTitle(id int64, title string) error {
+	_, err := s.db.Exec("UPDATE chapters SET title = ? WHERE id = ?", title, id)
+	return err
+}
+
 func (s *Store) GetChaptersNeedingContent(seriesID int64) ([]models.Chapter, error) {
 	rows, err := s.db.Query(`
 		SELECT id, series_id, title, url, published_at, is_read, content_html, created_at
-		FROM chapters WHERE series_id = ? AND (content_html IS NULL OR content_html = '')
+		FROM chapters WHERE series_id = ? AND (content_html IS NULL OR content_html = '') AND COALESCE(premium, 0) = 0
 		ORDER BY published_at ASC
 	`, seriesID)
 	if err != nil {
