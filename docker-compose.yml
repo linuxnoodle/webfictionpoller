@@ -12,10 +12,12 @@ services:
       - LOG_DIR=/data/logs
       - PROVIDERS_DIR=/data/providers
       - STORAGE_BACKEND=fs
-      - STORAGE_FS_ROOT=/data/blobs
+      - STORAGE_FS_ROOT=/mnt/stories/blobs
+      - AUTO_PROMOTE_THRESHOLD=10
       - COMPOSE_PROJECT_DIR=/opt/webfictionpoller
     volumes:
       - ./data:/data
+      - /mnt/shared_pool/stories:/mnt/stories
       - /var/run/docker.sock:/var/run/docker.sock
       - ./docker-compose.yml:/opt/webfictionpoller/docker-compose.yml:ro
     depends_on:
