@@ -195,6 +195,9 @@ func main() {
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(securityHeaders)
 
+		r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/static/favicons/royalroad.ico", http.StatusFound)
+		})
 		r.Get("/login", loginPage)
 		r.Post("/login", loginBanMiddleware(loginHandler(db.SQL(), sessionManager)))
 		r.Get("/setup", setupPage(db.SQL()))
@@ -409,9 +412,10 @@ func registryTextProviders() []providers.Provider {
 
 func securityHeaders(next http.Handler) http.Handler {
 	csp := "default-src 'self'; " +
-		"script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-		"style-src 'self' 'unsafe-inline'; " +
+		"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com; " +
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
 		"img-src 'self' data: https:; " +
+		"font-src 'self' https://fonts.gstatic.com data:; " +
 		"connect-src 'self' https://api.mangadex.org https://*.mangadex.network; " +
 		"frame-ancestors 'none'"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
