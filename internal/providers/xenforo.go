@@ -566,7 +566,17 @@ func (p *XenForoProvider) scanReaderPage(pageURL, postID string, currentPage int
 }
 
 func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) {
-	resp, err := doGet(p.client, chapterURL)
+	// Use the post-redirect URL (/posts/POSTID/) which always serves the
+	// correct page. The stored chapter URL may have a stale page number
+	// (e.g. /page-11) if the thread grew and posts shifted pages. The
+	// /posts/POSTID/ endpoint redirects to the right page automatically.
+	postID := p.extractPostID(chapterURL)
+	fetchURL := chapterURL
+	if postID != "" {
+		fetchURL = p.baseURL + "/posts/" + postID + "/"
+	}
+
+	resp, err := doGet(p.client, fetchURL)
 	if err != nil {
 		return "", err
 	}
@@ -579,7 +589,7 @@ func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) 
 		resp.Body.Close()
 		if isCloudflareChallenge(string(body)) {
 			logging.Info("[xenforo:%s] Cloudflare challenge detected, using FlareSolverr", p.name)
-			html, fsErr := p.solveViaFlareSolverr(chapterURL)
+			html, fsErr := p.solveViaFlareSolverr(fetchURL)
 			if fsErr != nil {
 				return "", fmt.Errorf("cloudflare blocked and FlareSolverr failed: %w", fsErr)
 			}
@@ -605,7 +615,7 @@ func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) 
 	}
 	if isCloudflareChallenge(string(rawHTML)) {
 		logging.Info("[xenforo:%s] Cloudflare challenge on 200, using FlareSolverr", p.name)
-		html, fsErr := p.solveViaFlareSolverr(chapterURL)
+		html, fsErr := p.solveViaFlareSolverr(fetchURL)
 		if fsErr != nil {
 			return "", fmt.Errorf("cloudflare blocked and FlareSolverr failed: %w", fsErr)
 		}
@@ -624,8 +634,6 @@ func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) 
 			}
 		}
 	}
-
-	postID := p.extractPostID(chapterURL)
 
 	// Find the exact post by data-content (XF2) or id (XF1).
 	// Based on fiction-dl's approach: no reader-mode, just a direct fetch
