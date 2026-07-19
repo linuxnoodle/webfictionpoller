@@ -197,28 +197,12 @@ func (h *Handler) ReaderChapterContentAPI(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "not found"})
 		return
 	}
-	p, ok := h.pool.GetProvider(ch.ProviderName)
+	// Use plugin.Default (registry) instead of the legacy pool — the
+	// registry has ALL providers including dreamy and other new plugins
+	// that don't implement the legacy providers.Provider interface.
+	pp, ok := plugin.Default.Get(ch.ProviderName)
 	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "provider not found"})
-		return
-	}
-
-	pp, ok := p.(plugin.Provider)
-	if !ok {
-		// Legacy provider: use raw FetchChapterContent path.
-		fetched, fetchErr := p.FetchChapterContent(ch.URL)
-		if fetchErr != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "failed to fetch"})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"content":    contentPolicy.Sanitize(fetched),
-			"premium":    false,
-			"word_count": 0,
-			"series_id":  meta.SeriesID,
-			"prev_id":    prevID,
-			"next_id":    nextID,
-		})
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "provider " + ch.ProviderName + " not registered"})
 		return
 	}
 

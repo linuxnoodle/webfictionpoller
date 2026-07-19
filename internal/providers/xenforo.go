@@ -1,11 +1,15 @@
 package providers
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -566,13 +570,49 @@ func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) 
 	if err != nil {
 		return "", err
 	}
+
+	// Cloudflare challenge detection — SpaceBattles/SV/QQ are behind CF
+	// managed challenges. When we get a 403 or the body contains the CF
+	// interstitial, fall back to FlareSolverr to solve the JS challenge.
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusServiceUnavailable {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		resp.Body.Close()
+		if isCloudflareChallenge(string(body)) {
+			logging.Info("[xenforo:%s] Cloudflare challenge detected, using FlareSolverr", p.name)
+			html, fsErr := p.solveViaFlareSolverr(chapterURL)
+			if fsErr != nil {
+				return "", fmt.Errorf("cloudflare blocked and FlareSolverr failed: %w", fsErr)
+			}
+			return p.parseChapterHTML(html, chapterURL)
+		}
+		// Non-CF 403: auth issue for QQ.
+		if p.RequiresAuth() {
+			return "", errAuthRequired
+		}
+		return "", fmt.Errorf("HTTP %d from %s", resp.StatusCode, chapterURL)
+	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusForbidden && p.RequiresAuth() {
 		return "", errAuthRequired
 	}
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	// Also detect CF challenge on 200 responses (some CF configs return 200)
+	rawHTML, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if isCloudflareChallenge(string(rawHTML)) {
+		logging.Info("[xenforo:%s] Cloudflare challenge on 200, using FlareSolverr", p.name)
+		html, fsErr := p.solveViaFlareSolverr(chapterURL)
+		if fsErr != nil {
+			return "", fmt.Errorf("cloudflare blocked and FlareSolverr failed: %w", fsErr)
+		}
+		rawHTML = []byte(html)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(rawHTML)))
 	if err != nil {
 		return "", fmt.Errorf("parsing html: %w", err)
 	}
@@ -622,6 +662,90 @@ func (p *XenForoProvider) fetchContentDirect(chapterURL string) (string, error) 
 
 	logging.Info("[%s] fetched chapter content from %s (post-%s, %d chars)", p.name, chapterURL, postID, len(html))
 	return html, nil
+}
+
+// solveViaFlareSolverr uses the FlareSolverr sidecar to bypass Cloudflare
+// challenges. Returns the raw HTML body of the target URL.
+func (p *XenForoProvider) solveViaFlareSolverr(targetURL string) (string, error) {
+	fsURL := os.Getenv("FLARESOLVERR_URL")
+	if fsURL == "" {
+		fsURL = "http://flaresolverr:8191"
+	}
+	client := &http.Client{Timeout: 90 * time.Second}
+	payload := map[string]interface{}{
+		"cmd":        "request.get",
+		"url":        targetURL,
+		"maxTimeout": 60000,
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := client.Post(fsURL+"/v1", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("flaresolverr request: %w", err)
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Status   string 
+		Solution struct {
+			Response string 
+		} 
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decoding flaresolverr response: %w", err)
+	}
+	if result.Status != "ok" {
+		return "", fmt.Errorf("flaresolverr status: %s", result.Status)
+	}
+	return result.Solution.Response, nil
+}
+
+// parseChapterHTML parses raw HTML into chapter content using the same
+// post-targeting logic as fetchContentDirect. Extracted so the
+// FlareSolverr path can reuse it.
+func (p *XenForoProvider) parseChapterHTML(rawHTML, chapterURL string) (string, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(rawHTML))
+	if err != nil {
+		return "", fmt.Errorf("parsing html: %w", err)
+	}
+	if p.RequiresAuth() {
+		if doc.Find("input[name='login']").Length() > 0 || doc.Find("a[href*='/login/']").Length() > 0 {
+			if strings.Contains(doc.Find("title").Text(), "Log in") {
+				return "", errAuthRequired
+			}
+		}
+	}
+	postID := p.extractPostID(chapterURL)
+	var target *goquery.Selection
+	if postID != "" {
+		target = doc.Find(fmt.Sprintf(`article[data-content="post-%s"]`, postID)).First()
+		if target.Length() == 0 {
+			target = doc.Find(fmt.Sprintf("#post-%s", postID)).First()
+		}
+		if target.Length() == 0 {
+			target = doc.Find(fmt.Sprintf("#js-post-%s", postID)).First()
+		}
+	}
+	if target.Length() == 0 {
+		return "", fmt.Errorf("post %s not found on page %s", postID, chapterURL)
+	}
+	body := target.Find("div.bbWrapper")
+	if body.Length() == 0 {
+		body = target.Find("div.messageContent")
+	}
+	if body.Length() == 0 {
+		return "", fmt.Errorf("post body not found for post %s at %s", postID, chapterURL)
+	}
+	html, err := body.First().Html()
+	if err != nil {
+		return "", err
+	}
+	logging.Info("[%s] fetched chapter content from %s (post-%s, %d chars)", p.name, chapterURL, postID, len(html))
+	return html, nil
+}
+
+func isCloudflareChallenge(body string) bool {
+	return strings.Contains(body, "Just a moment...") ||
+		strings.Contains(body, "cf-challenge") ||
+		strings.Contains(body, "cdn-cgi/challenge")
 }
 
 func (p *XenForoProvider) extractPostID(rawURL string) string {
