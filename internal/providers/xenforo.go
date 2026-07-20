@@ -939,12 +939,20 @@ func (p *XenForoProvider) pollThreadmarksFull(series models.Series) ([]models.Ch
 		}
 
 		timeStr, _ := s.Find("time").Attr("datetime")
-		pubAt := time.Now()
-		if t, err := time.Parse(time.RFC3339, timeStr); err == nil {
-			pubAt = t
-		} else if timeData, _ := s.Find("time").Attr("data-time"); timeData != "" {
-			if unix, err := strconv.ParseInt(timeData, 10, 64); err == nil {
-				pubAt = time.Unix(unix, 0)
+		pubAt := time.Time{}
+		if timeStr != "" {
+			for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05-0700", "2006-01-02T15:04:05Z"} {
+				if t, err := time.Parse(layout, timeStr); err == nil {
+					pubAt = t
+					break
+				}
+			}
+		}
+		if pubAt.IsZero() {
+			if timeData, _ := s.Find("time").Attr("data-time"); timeData != "" {
+				if unix, err := strconv.ParseInt(timeData, 10, 64); err == nil {
+					pubAt = time.Unix(unix, 0)
+				}
 			}
 		}
 
@@ -1075,12 +1083,20 @@ func (p *XenForoProvider) pollUpdatesHTML(series models.Series) ([]models.Chapte
 		}
 
 		timeStr, _ := s.Find("time").Attr("datetime")
-		pubAt := time.Now()
-		if t, err := time.Parse(time.RFC3339, timeStr); err == nil {
-			pubAt = t
-		} else if timeData, _ := s.Find("time").Attr("data-time"); timeData != "" {
-			if unix, err := strconv.ParseInt(timeData, 10, 64); err == nil {
-				pubAt = time.Unix(unix, 0)
+		pubAt := time.Time{}
+		if timeStr != "" {
+			for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05-0700", "2006-01-02T15:04:05Z"} {
+				if t, err := time.Parse(layout, timeStr); err == nil {
+					pubAt = t
+					break
+				}
+			}
+		}
+		if pubAt.IsZero() {
+			if timeData, _ := s.Find("time").Attr("data-time"); timeData != "" {
+				if unix, err := strconv.ParseInt(timeData, 10, 64); err == nil {
+					pubAt = time.Unix(unix, 0)
+				}
 			}
 		}
 
