@@ -519,23 +519,91 @@ func (s *Server) chapterContent(w http.ResponseWriter, r *http.Request) {
 		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
 		return
 	}
-	// Use the reader store method for a single-query content + metadata fetch.
 	meta := s.chapterMeta(r, id)
 	if meta == nil {
 		api.WriteError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
-	resp := map[string]interface{}{
+
+	// Premium chapters: return locked status without attempting fetch.
+	if meta.Premium {
+		api.WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"chapter_id": id,
+			"html":       "",
+			"cached":     false,
+			"premium":    true,
+			"word_count": meta.WordCount,
+			"title":      meta.Title,
+		})
+		return
+	}
+
+	// Cached: return immediately.
+	if meta.HasContent && meta.HTML != "" {
+		api.WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"chapter_id": id,
+			"html":       meta.HTML,
+			"cached":     true,
+			"premium":    false,
+			"word_count": meta.WordCount,
+			"title":      meta.Title,
+		})
+		return
+	}
+
+	// Not cached: live-fetch via the provider's ContentFetcher.
+	ch, _ := s.store.GetChapterWithProvider(id)
+	if ch == nil {
+		api.WriteError(w, http.StatusNotFound, "chapter_not_found", "")
+		return
+	}
+	p, ok := plugin.Default.Get(ch.ProviderName)
+	if !ok {
+		api.WriteError(w, http.StatusServiceUnavailable, "provider_unavailable", "")
+		return
+	}
+	cf := plugin.AsContentFetcher(p)
+	if cf == nil {
+		api.WriteError(w, http.StatusServiceUnavailable, "no_content_capability", "")
+		return
+	}
+
+	content, fetchErr := cf.FetchChapter(ch.URL)
+	if fetchErr != nil {
+		logging.Error("[api/v1] live-fetch chapter %d: %v", id, fetchErr)
+		api.WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"chapter_id": id,
+			"html":       "",
+			"cached":     false,
+			"premium":    false,
+			"error":      fetchErr.Error(),
+			"title":      meta.Title,
+		})
+		return
+	}
+
+	// Best-effort async cache for subsequent reads.
+	go func() {
+		type saver interface {
+			SaveChapterContent(id int64, content string) error
+			SetChapterWordCount(id int64, n int) error
+		}
+		if sv, ok := s.store.(saver); ok {
+			_ = sv.SaveChapterContent(id, content.BodyHTML)
+			if content.WordCount > 0 {
+				_ = sv.SetChapterWordCount(id, content.WordCount)
+			}
+		}
+	}()
+
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"chapter_id": id,
-		"html":       meta.HTML,
-		"cached":     meta.HasContent,
-		"premium":    meta.Premium,
-		"word_count": meta.WordCount,
-	}
-	if meta.Title != "" {
-		resp["title"] = meta.Title
-	}
-	api.WriteJSON(w, http.StatusOK, resp)
+		"html":       content.BodyHTML,
+		"cached":     false,
+		"premium":    content.Premium,
+		"word_count": content.WordCount,
+		"title":      meta.Title,
+	})
 }
 
 // chapterMeta is a small helper that calls GetChapterForReader and handles
