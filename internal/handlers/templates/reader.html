@@ -233,6 +233,14 @@
                   }
               }
               fetch('/api/reader/chapter/' + id).then(function(r){return r.json()}).then(function(d){
+                  if (d.fetching) {
+                      self.content = mkHTML('reader-nocontent', 'Fetching from source site. This page will auto-reload in 10 seconds...');
+                      self.prevId = d.prev_id || null;
+                      self.nextId = d.next_id || null;
+                      self.loading = false;
+                      setTimeout(function() { self.loadChapter(id, scrollTo); }, 10000);
+                      return;
+                  }
                   if (d.error) {
                       self.content = mkHTML('reader-error', 'Error: ' + d.error);
                   } else if (d.premium) {

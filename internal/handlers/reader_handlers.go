@@ -189,62 +189,43 @@ func (h *Handler) ReaderChapterContentAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Not cached: live-fetch via the provider's ContentFetcher (structured path).
-	// Falls back to legacy FetchChapterContent via the adapter when the
-	// provider hasn't migrated yet (none currently, but defensive).
-	ch, err := h.store.GetChapterWithProvider(id)
-	if err != nil || ch == nil {
-		writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "not found"})
-		return
-	}
-	// Use plugin.Default (registry) instead of the legacy pool — the
-	// registry has ALL providers including dreamy and other new plugins
-	// that don't implement the legacy providers.Provider interface.
-	pp, ok := plugin.Default.Get(ch.ProviderName)
-	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "provider " + ch.ProviderName + " not registered"})
-		return
-	}
-
-	cf := plugin.AsContentFetcher(pp)
-	if cf == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "provider has no content capability"})
-		return
-	}
-	content, fetchErr := cf.FetchChapter(ch.URL)
-	if fetchErr != nil {
-		logging.Error("[reader] live-fetch chapter %d from %s: %v", id, ch.URL, fetchErr)
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"content":    "",
-			"error":      fetchErr.Error(),
-			"premium":    false,
-			"word_count": 0,
-			"series_id":  meta.SeriesID,
-			"prev_id":    prevID,
-			"next_id":    nextID,
-		})
-		return
-	}
-
-	// Persist the fetched content so subsequent reads are local. This is a
-	// best-effort async save — we don't block the response on it.
+	// Not cached: kick off async background fetch, return immediately with
+	// a placeholder. The archiver will fill the cache; subsequent reads hit
+	// the cached copy. This avoids blocking on FlareSolverr (10-30s per
+	// Cloudflare challenge) during page load.
 	go func() {
+		ch, err := h.store.GetChapterWithProvider(id)
+		if err != nil || ch == nil {
+			return
+		}
+		pp, ok := plugin.Default.Get(ch.ProviderName)
+		if !ok {
+			return
+		}
+		cf := plugin.AsContentFetcher(pp)
+		if cf == nil {
+			return
+		}
+		content, fetchErr := cf.FetchChapter(ch.URL)
+		if fetchErr != nil {
+			logging.Error("[reader] async-fetch chapter %d from %s: %v", id, ch.URL, fetchErr)
+			return
+		}
 		sanitized := contentPolicy.Sanitize(content.BodyHTML)
 		if err := h.store.SaveChapterContent(id, sanitized); err != nil {
-			logging.Error("[reader] failed to cache fetched chapter %d: %v", id, err)
+			logging.Error("[reader] async-cache chapter %d: %v", id, err)
 		}
 		if content.WordCount > 0 {
 			_ = h.store.SetChapterWordCount(id, content.WordCount)
 		}
-		if content.Premium {
-			_ = h.store.MarkChapterPremium(id)
-		}
+		logging.Info("[reader] async-fetched + cached chapter %d (%d words)", id, content.WordCount)
 	}()
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"content":    contentPolicy.Sanitize(content.BodyHTML),
-		"premium":    content.Premium,
-		"word_count": content.WordCount,
+		"content":    "",
+		"fetching":   true,
+		"premium":    false,
+		"word_count": meta.WordCount,
 		"series_id":  meta.SeriesID,
 		"prev_id":    prevID,
 		"next_id":    nextID,
