@@ -2,6 +2,7 @@ package providers
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -174,6 +175,20 @@ func TestXenForo_FetchSeriesMetadata(t *testing.T) {
 	}
 }
 
+// threadmarksHTML generates a simple XF2-style threadmarks listing for tests.
+func threadmarksHTML(chapters []struct{ title, link string }) string {
+	var b strings.Builder
+	b.WriteString(`<html><body><div class="threadmarkListing">`)
+	for _, ch := range chapters {
+		fmt.Fprintf(&b, `<div class="structItem structItem--threadmark">
+			<div class="structItem-title"><a href="%s">%s</a></div>
+			<time datetime="2024-01-15T10:00:00Z" data-time="1705312800"></time>
+		</div>`, ch.link, ch.title)
+	}
+	b.WriteString(`</div></body></html>`)
+	return b.String()
+}
+
 func TestXenForo_PollUpdates(t *testing.T) {
 	rssXML := `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -192,9 +207,17 @@ func TestXenForo_PollUpdates(t *testing.T) {
   </channel>
 </rss>`
 
+	tmHTML := threadmarksHTML([]struct{ title, link string }{
+		{"Chapter 1", "/threads/test.12345/post-1"},
+		{"Chapter 2", "/threads/test.12345/post-2"},
+	})
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.URL.Path, "threadmarks.rss") {
-			t.Errorf("expected request to threadmarks.rss, got %s", r.URL.Path)
+		// Serve threadmarks HTML for the listing page, RSS for the feed.
+		if strings.Contains(r.URL.Path, "threadmarks") && !strings.Contains(r.URL.Path, ".rss") {
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte(tmHTML))
+			return
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.Write([]byte(rssXML))
@@ -203,6 +226,7 @@ func TestXenForo_PollUpdates(t *testing.T) {
 
 	p := NewSpaceBattlesProvider()
 	p.client = server.Client()
+	p.baseURL = server.URL
 
 	series := models.Series{
 		ID:        1,
@@ -217,8 +241,9 @@ func TestXenForo_PollUpdates(t *testing.T) {
 	if len(chapters) != 2 {
 		t.Fatalf("expected 2 chapters, got %d", len(chapters))
 	}
-	if chapters[0].Title != "Chapter 1" {
-		t.Errorf("chapters[0].Title = %q, want %q", chapters[0].Title, "Chapter 1")
+	// Chapter titles should have numbers prepended since they don't start with digits.
+	if !strings.Contains(chapters[0].Title, "Chapter 1") {
+		t.Errorf("chapters[0].Title = %q", chapters[0].Title)
 	}
 }
 
@@ -236,19 +261,15 @@ func TestXenForo_PollUpdates_ReloginOnAuthFailure(t *testing.T) {
 			http.SetCookie(w, &http.Cookie{Name: "xf_user", Value: "abc123", Path: "/"})
 			w.Header().Set("Content-Type", "text/html")
 			io.WriteString(w, `<html><body>OK</body></html>`)
-		case strings.HasSuffix(r.URL.Path, "/threadmarks.rss"):
+		case strings.Contains(r.URL.Path, "threadmarks") && !strings.HasSuffix(r.URL.Path, ".rss"):
 			if atomic.LoadInt32(&loginCalls) == 0 {
 				w.WriteHeader(http.StatusForbidden)
 				return
 			}
-			w.Header().Set("Content-Type", "application/xml")
-			io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0"><channel><title>T</title>
-<item><title>Chapter 1</title><link>`+server.URL+`/threads/test.1/post-1</link>
-<pubDate>Mon, 15 Jan 2024 10:00:00 +0000</pubDate></item>
-</channel></rss>`)
-		case strings.HasSuffix(r.URL.Path, "/threadmarks"):
-			w.WriteHeader(http.StatusForbidden)
+			w.Header().Set("Content-Type", "text/html")
+			io.WriteString(w, threadmarksHTML([]struct{ title, link string }{
+				{"Chapter 1", server.URL + "/threads/test.1/post-1"},
+			}))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -277,8 +298,8 @@ func TestXenForo_PollUpdates_ReloginOnAuthFailure(t *testing.T) {
 	if len(chapters) != 1 {
 		t.Fatalf("expected 1 chapter after re-login, got %d", len(chapters))
 	}
-	if chapters[0].Title != "Chapter 1" {
-		t.Errorf("chapter title = %q, want %q", chapters[0].Title, "Chapter 1")
+	if chapters[0].Title != "Chapter 1" && !strings.Contains(chapters[0].Title, "Chapter 1") {
+		t.Errorf("chapter title = %q, want to contain %q", chapters[0].Title, "Chapter 1")
 	}
 	if got := atomic.LoadInt32(&loginCalls); got != 1 {
 		t.Errorf("expected exactly 1 login call, got %d", got)

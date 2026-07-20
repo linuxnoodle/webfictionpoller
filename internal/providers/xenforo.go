@@ -837,36 +837,39 @@ func (p *XenForoProvider) PollUpdates(series models.Series) ([]models.Chapter, e
 }
 
 func (p *XenForoProvider) pollUpdates(series models.Series) ([]models.Chapter, error) {
-	rssURL := p.buildThreadmarksRSSURL(series.SourceURL)
+	// PRIMARY: Parse the full threadmarks listing page. RSS only shows
+	// recent threadmark changes (20-50 items), not the full chapter list.
+	// The threadmarks page with min=-1&max=5000 returns ALL threadmarks
+	// in a single request, giving us the complete chapter list.
+	htmlChapters, htmlErr := p.pollThreadmarksFull(series)
+	if htmlErr == nil && len(htmlChapters) > 0 {
+		logging.Info("[%s] threadmarks page yielded %d chapters", p.name, len(htmlChapters))
+		return htmlChapters, nil
+	}
+	if htmlErr != nil {
+		logging.Info("[%s] threadmarks page failed (%v), falling back to RSS", p.name, htmlErr)
+		// If the threadmarks page returned errAuthRequired, don't try RSS —
+		// it would also require auth. Propagate immediately.
+		if errors.Is(htmlErr, errAuthRequired) {
+			return nil, htmlErr
+		}
+	}
 
+	// FALLBACK: RSS feed (only shows recent items, but better than nothing).
+	rssURL := p.buildThreadmarksRSSURL(series.SourceURL)
 	fp := gofeed.NewParser()
 	resp, err := doGet(p.client, rssURL)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotModified {
-		return nil, nil
-	}
-
 	if resp.StatusCode != http.StatusOK {
-		if p.RequiresAuth() {
-			logging.Info("[%s] RSS feed status %d for %s, falling back to HTML", p.name, resp.StatusCode, rssURL)
-			return p.pollUpdatesHTML(series)
-		}
 		return nil, fmt.Errorf("rss feed status %d for %s", resp.StatusCode, rssURL)
 	}
-
 	feed, err := fp.Parse(resp.Body)
 	if err != nil {
-		if p.RequiresAuth() {
-			logging.Info("[%s] RSS parsing failed (%v), falling back to HTML", p.name, err)
-			return p.pollUpdatesHTML(series)
-		}
 		return nil, fmt.Errorf("parsing rss: %w", err)
 	}
-
 	var chapters []models.Chapter
 	for _, item := range feed.Items {
 		pubAt := time.Now()
@@ -881,6 +884,154 @@ func (p *XenForoProvider) pollUpdates(series models.Series) ([]models.Chapter, e
 		})
 	}
 	return chapters, nil
+}
+
+// pollThreadmarksFull fetches the threadmarks listing page with parameters
+// that request ALL threadmarks on a single page (min=-1&max=5000). This
+// gives the complete chapter list, not just recent RSS changes.
+// Based on fiction-dl's _GetThreadmarksURL approach.
+func (p *XenForoProvider) pollThreadmarksFull(series models.Series) ([]models.Chapter, error) {
+	threadURL := p.normalizeThreadURL(series.SourceURL)
+	// The load-range endpoint with min=-1&max=5000 returns all threadmarks
+	// in one page. Try this first; some XenForo versions use /threadmarks
+	// without the query params.
+	urls := []string{
+		strings.TrimSuffix(threadURL, "/") + "/threadmarks-load-range?category_id=1&min=-1&max=5000",
+		strings.TrimSuffix(threadURL, "/") + "/threadmarks?category_id=1&min=-1&max=5000",
+		strings.TrimSuffix(threadURL, "/") + "/threadmarks",
+	}
+
+	var doc *goquery.Document
+	var lastErr error
+	for _, tmURL := range urls {
+		d, err := p.fetchDocWithFlareSolverr(tmURL)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		doc = d
+		break
+	}
+	if doc == nil {
+		return nil, fmt.Errorf("all threadmarks URL attempts failed: %w", lastErr)
+	}
+
+	// Auth check for QQ.
+	if doc.Find("input[name='login']").Length() > 0 || doc.Find("a[href*='/login/']").Length() > 0 {
+		if strings.Contains(doc.Find("title").Text(), "Log in") {
+			return nil, errAuthRequired
+		}
+	}
+
+	var chapters []models.Chapter
+	chapNum := 0
+
+	// XF2: .structItem--threadmark .structItem-title a
+	doc.Find(".structItem--threadmark").Each(func(_ int, s *goquery.Selection) {
+		a := s.Find(".structItem-title a").First()
+		title := strings.TrimSpace(a.Text())
+		link, _ := a.Attr("href")
+		if title == "" || link == "" {
+			return
+		}
+		if !strings.HasPrefix(link, "http") {
+			link = p.baseURL + "/" + strings.TrimPrefix(link, "/")
+		}
+
+		timeStr, _ := s.Find("time").Attr("datetime")
+		pubAt := time.Now()
+		if t, err := time.Parse(time.RFC3339, timeStr); err == nil {
+			pubAt = t
+		} else if timeData, _ := s.Find("time").Attr("data-time"); timeData != "" {
+			if unix, err := strconv.ParseInt(timeData, 10, 64); err == nil {
+				pubAt = time.Unix(unix, 0)
+			}
+		}
+
+		chapNum++
+		// Prepend chapter number if the title doesn't already start with one.
+		displayTitle := title
+		if len(title) == 0 || (title[0] < '0' || title[0] > '9') {
+			displayTitle = fmt.Sprintf("%d. %s", chapNum, title)
+		}
+
+		chapters = append(chapters, models.Chapter{
+			SeriesID:    series.ID,
+			Title:       displayTitle,
+			URL:         link,
+			PublishedAt: pubAt,
+		})
+	})
+
+	// XF1 fallback: .threadmarkList > ol > li > a
+	if len(chapters) == 0 {
+		doc.Find(".threadmarkList li a, .threadmarkListing li a").Each(func(_ int, s *goquery.Selection) {
+			title := strings.TrimSpace(s.Text())
+			link, _ := s.Attr("href")
+			if title == "" || link == "" {
+				return
+			}
+			if !strings.HasPrefix(link, "http") {
+				link = p.baseURL + "/" + strings.TrimPrefix(link, "/")
+			}
+			chapNum++
+			displayTitle := title
+			if len(title) == 0 || (title[0] < '0' || title[0] > '9') {
+				displayTitle = fmt.Sprintf("%d. %s", chapNum, title)
+			}
+			chapters = append(chapters, models.Chapter{
+				SeriesID: series.ID,
+				Title:    displayTitle,
+				URL:      link,
+			})
+		})
+	}
+
+	if len(chapters) == 0 {
+		return nil, fmt.Errorf("no chapters found on threadmarks page")
+	}
+	return chapters, nil
+}
+
+// fetchDocWithFlareSolverr fetches a URL and returns a goquery document.
+// If Cloudflare challenges the request, it falls back to FlareSolverr.
+func (p *XenForoProvider) fetchDocWithFlareSolverr(targetURL string) (*goquery.Document, error) {
+	resp, err := doGet(p.client, targetURL)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusServiceUnavailable {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		resp.Body.Close()
+		if isCloudflareChallenge(string(body)) {
+			logging.Info("[%s] Cloudflare challenge on threadmarks, using FlareSolverr", p.name)
+			html, fsErr := p.solveViaFlareSolverr(targetURL)
+			if fsErr != nil {
+				return nil, fmt.Errorf("flaresolverr: %w", fsErr)
+			}
+			return goquery.NewDocumentFromReader(strings.NewReader(html))
+		}
+		if p.RequiresAuth() {
+			return nil, errAuthRequired
+		}
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	rawHTML, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	if isCloudflareChallenge(string(rawHTML)) {
+		logging.Info("[%s] Cloudflare challenge (200), using FlareSolverr", p.name)
+		html, fsErr := p.solveViaFlareSolverr(targetURL)
+		if fsErr != nil {
+			return nil, fmt.Errorf("flaresolverr: %w", fsErr)
+		}
+		return goquery.NewDocumentFromReader(strings.NewReader(html))
+	}
+	return goquery.NewDocumentFromReader(strings.NewReader(string(rawHTML)))
 }
 
 func (p *XenForoProvider) pollUpdatesHTML(series models.Series) ([]models.Chapter, error) {
