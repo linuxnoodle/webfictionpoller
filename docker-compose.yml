@@ -4,7 +4,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DB_PATH=/data/data.db
+      - DATABASE_URL=postgres://wfp:wfp@postgres:5432/webfictionpoller?sslmode=disable
       - ADDR=:8080
       - POLL_INTERVAL=15m
       - COMIC_POLL_INTERVAL=1h
@@ -21,7 +21,27 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./docker-compose.yml:/opt/webfictionpoller/docker-compose.yml:ro
     depends_on:
-      - flaresolverr
+      postgres:
+        condition: service_healthy
+      flaresolverr:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - default
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: webfictionpoller
+      POSTGRES_USER: wfp
+      POSTGRES_PASSWORD: wfp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wfp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
     networks:
       - default
@@ -33,3 +53,6 @@ services:
     restart: unless-stopped
     networks:
       - default
+
+volumes:
+  pgdata:

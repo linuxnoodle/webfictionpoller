@@ -28,6 +28,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
     -ldflags "-X github.com/linuxnoodle/webfictionpoller/internal/version.BuildCommit=${VERSION_COMMIT}" \
     -o /webfiction_poller ./cmd/main.go
 
+RUN CGO_ENABLED=0 GOOS=linux go build -o /wfp-migrate ./cmd/migrate/
+
 FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates tzdata docker-cli docker-cli-compose
@@ -35,6 +37,7 @@ RUN apk add --no-cache ca-certificates tzdata docker-cli docker-cli-compose
 WORKDIR /app
 
 COPY --from=builder /webfiction_poller /app/webfiction_poller
+COPY --from=builder /wfp-migrate /app/wfp-migrate
 
 EXPOSE 8080
 
