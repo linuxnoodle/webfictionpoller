@@ -223,11 +223,11 @@
               }
               fetch('/api/reader/chapter/' + id).then(function(r){return r.json()}).then(function(d){
                   if (d.error) {
-                      self.content = '<p style="color:#f87171">Error: ' + d.error + '</p>';
+                      self.content = "<p style='color:#f87171'>Error: " + d.error + "</p>";
                   } else if (d.premium) {
-                      self.content = '<p style="color:#fbbf24">This chapter is premium (paywalled). Content unavailable.</p>';
+                      self.content = "<p style='color:#fbbf24'>This chapter is premium (paywalled). Content unavailable.</p>";
                   } else {
-                      self.content = d.content || '<p style="color:#71717a">No content available. The chapter may not be archived yet — try opening it directly on the source site.</p>';
+                      self.content = d.content || "<p style='color:#71717a'>No content available. The chapter may not be archived yet.</p>";
                   }
                   self.prevId = d.prev_id || null;
                   self.nextId = d.next_id || null;
@@ -240,7 +240,7 @@
                       self.saveProgress();
                   });
               }).catch(function(err) {
-                  self.content = '<p style="color:#f87171">Failed to load chapter: ' + (err && err.message ? err.message : 'network error') + '</p>';
+                  self.content = "<p style='color:#f87171'>Failed to load chapter: " + (err && err.message ? err.message : "network error") + "</p>";
                   self.loading = false;
               });
           },
