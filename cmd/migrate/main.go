@@ -70,7 +70,9 @@ func main() {
 		{Name: "comic_chapters", Columns: "id, series_id, source_id, title, chapter_num, volume_num, source_url, pages, is_read, downloaded, published_at, created_at"},
 		{Name: "comic_pages", Columns: "id, chapter_id, page_index, image_url, data, content_type"},
 		{Name: "comic_reading_progress", Columns: "series_id, chapter_id, page_index, updated_at"},
-		{Name: "sessions", Columns: "token, data, expiry"},
+		// sessions table is skipped — session data is ephemeral (cookies/tokens
+		// stored as BLOB + float timestamps that Postgres rejects). Users
+		// just re-login after migration.
 	}
 
 	var totalRows int64
