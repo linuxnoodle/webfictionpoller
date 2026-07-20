@@ -7,6 +7,14 @@
     <title>{{.Series.Title}} - Reader</title>
     <meta name="csrf-token" content="{{.CSRFToken}}">
     <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
+    <script>
+    // Build an HTML element string without using < or > in source (Go template safe).
+    var LT = String.fromCharCode(60);  // <
+    var GT = String.fromCharCode(62);  // >
+    function mkHTML(cls, text) {
+        return LT + 'p class=' + String.fromCharCode(39) + cls + String.fromCharCode(39) + GT + text + LT + '/p' + GT;
+    }
+    </script>
     <script src="/static/alpine.min.js" defer></script>
     <link rel="stylesheet" href="/static/app.css">
     <style>
@@ -46,6 +54,9 @@
         .reader-content img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.5em 0; }
         .reader-content h1,.reader-content h2,.reader-content h3 { color: var(--reader-fg); margin: 1em 0 0.5em; }
         .reader-content blockquote { border-left: 3px solid var(--reader-border); padding-left: 1em; margin: 0.75em 0; color: var(--reader-muted); }
+        .reader-error { color: #f87171; padding: 1em 0; }
+        .reader-premium { color: #fbbf24; padding: 1em 0; }
+        .reader-nocontent { color: var(--reader-muted); padding: 1em 0; }
         .reader-content a { color: var(--reader-link); }
         .reader-content hr { border-color: var(--reader-border); margin: 1.5em 0; }
         .reader-content table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
@@ -223,11 +234,11 @@
               }
               fetch('/api/reader/chapter/' + id).then(function(r){return r.json()}).then(function(d){
                   if (d.error) {
-                      self.content = "<p style='color:#f87171'>Error: " + d.error + "</p>";
+                      self.content = mkHTML('reader-error', 'Error: ' + d.error);
                   } else if (d.premium) {
-                      self.content = "<p style='color:#fbbf24'>This chapter is premium (paywalled). Content unavailable.</p>";
+                      self.content = mkHTML('reader-premium', 'This chapter is premium (paywalled). Content unavailable.');
                   } else {
-                      self.content = d.content || "<p style='color:#71717a'>No content available. The chapter may not be archived yet.</p>";
+                      self.content = d.content || mkHTML('reader-nocontent', 'No content available.');
                   }
                   self.prevId = d.prev_id || null;
                   self.nextId = d.next_id || null;
@@ -240,7 +251,7 @@
                       self.saveProgress();
                   });
               }).catch(function(err) {
-                  self.content = "<p style='color:#f87171'>Failed to load chapter: " + (err && err.message ? err.message : "network error") + "</p>";
+                      self.content = mkHTML('reader-error', 'Error: ' + d.error);
                   self.loading = false;
               });
           },
