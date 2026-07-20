@@ -756,6 +756,36 @@ func isCloudflareChallenge(body string) bool {
 		strings.Contains(body, "cdn-cgi/challenge")
 }
 
+// hasChapterNumber reports whether the title already contains a chapter number,
+// either at the start ("Chapter 5", "5. Title", "Ch. 5") or embedded
+// ("Part 5: Something"). Used to avoid prepending a redundant number.
+func hasChapterNumber(title string) bool {
+	title = strings.ToLower(strings.TrimSpace(title))
+	if title == "" {
+		return false
+	}
+	// Starts with a digit.
+	if title[0] >= '0' && title[0] <= '9' {
+		return true
+	}
+	// Contains 'chapter N', 'ch. N', 'part N', 'epilogue', 'prologue'.
+	numberWords := []string{"chapter ", "ch. ", "ch ", "part ", "epilogue", "prologue", "interlude"}
+	for _, w := range numberWords {
+		if strings.Contains(title, w) {
+			return true
+		}
+	}
+	// Contains a number followed by ':' or '.'.
+	for i := 0; i < len(title); i++ {
+		if title[i] >= '0' && title[i] <= '9' {
+			if i+1 < len(title) && (title[i+1] == ':' || title[i+1] == '.') {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (p *XenForoProvider) extractPostID(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -957,9 +987,10 @@ func (p *XenForoProvider) pollThreadmarksFull(series models.Series) ([]models.Ch
 		}
 
 		chapNum++
-		// Prepend chapter number if the title doesn't already start with one.
+		// Prepend chapter number only if the title doesn't already contain one.
+		// Avoids '46. Chapter 46:' doubling.
 		displayTitle := title
-		if len(title) == 0 || (title[0] < '0' || title[0] > '9') {
+		if !hasChapterNumber(title) {
 			displayTitle = fmt.Sprintf("%d. %s", chapNum, title)
 		}
 
@@ -984,7 +1015,7 @@ func (p *XenForoProvider) pollThreadmarksFull(series models.Series) ([]models.Ch
 			}
 			chapNum++
 			displayTitle := title
-			if len(title) == 0 || (title[0] < '0' || title[0] > '9') {
+			if !hasChapterNumber(title) {
 				displayTitle = fmt.Sprintf("%d. %s", chapNum, title)
 			}
 			chapters = append(chapters, models.Chapter{
