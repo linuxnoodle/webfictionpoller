@@ -34,7 +34,7 @@ func main() {
 	}
 
 	start := time.Now()
-	src, err := database.Open(*from + "?_foreign_keys=1&_journal_mode=ro")
+	src, err := database.Open(*from + "?_foreign_keys=1&_busy_timeout=5000")
 	if err != nil {
 		log.Fatalf("open source: %v", err)
 	}
