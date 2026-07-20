@@ -791,11 +791,56 @@ func (p *XenForoProvider) extractPostID(rawURL string) string {
 	if err != nil {
 		return ""
 	}
+	// Fragment-based: #post-12345
 	fragment := strings.TrimPrefix(u.Fragment, "post-")
 	if fragment != "" {
 		return fragment
 	}
+	// Canonical: /posts/12345/
+	parts := strings.Split(strings.TrimSuffix(u.Path, "/"), "/")
+	if len(parts) >= 2 && parts[len(parts)-2] == "posts" {
+		return parts[len(parts)-1]
+	}
+	// Path-based: /post-12345
+	for _, part := range parts {
+		if strings.HasPrefix(part, "post-") {
+			return strings.TrimPrefix(part, "post-")
+		}
+	}
 	return ""
+}
+
+// normalizeChapterURL canonicalizes a XenForo chapter URL to
+// {baseURL}/posts/{postID}/ so that RSS-discovered and threadmarks-discovered
+// chapters for the same post share the same URL. This prevents duplicates
+// in the chapters table (UNIQUE(series_id, url)).
+//
+// Input examples that all map to the same canonical URL:
+//   .../threads/title.123/page-5#post-67890  (threadmarks)
+//   .../threads/title.123/post-67890         (RSS)
+//   .../posts/67890/                          (canonical redirect)
+// → https://forums.spacebattles.com/posts/67890/
+func (p *XenForoProvider) normalizeChapterURL(rawURL string) string {
+	postID := p.extractPostID(rawURL)
+	if postID != "" {
+		return p.baseURL + "/posts/" + postID + "/"
+	}
+	// No fragment — try path-based /post-N pattern (RSS uses this).
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	parts := strings.Split(strings.TrimSuffix(u.Path, "/"), "/")
+	for _, part := range parts {
+		if strings.HasPrefix(part, "post-") {
+			pid := strings.TrimPrefix(part, "post-")
+			if pid != "" {
+				return p.baseURL + "/posts/" + pid + "/"
+			}
+		}
+	}
+	// Can't extract post ID — return the URL with page/fragment stripped.
+	return p.normalizeThreadURL(rawURL)
 }
 
 func (p *XenForoProvider) normalizeThreadURL(rawURL string) string {
@@ -909,7 +954,7 @@ func (p *XenForoProvider) pollUpdates(series models.Series) ([]models.Chapter, e
 		chapters = append(chapters, models.Chapter{
 			SeriesID:    series.ID,
 			Title:       item.Title,
-			URL:         item.Link,
+			URL:         p.normalizeChapterURL(item.Link),
 			PublishedAt: pubAt,
 		})
 	}
@@ -967,6 +1012,8 @@ func (p *XenForoProvider) pollThreadmarksFull(series models.Series) ([]models.Ch
 		if !strings.HasPrefix(link, "http") {
 			link = p.baseURL + "/" + strings.TrimPrefix(link, "/")
 		}
+		link = p.normalizeChapterURL(link)
+		link = p.normalizeChapterURL(link)
 
 		timeStr, _ := s.Find("time").Attr("datetime")
 		pubAt := time.Time{}
@@ -1013,6 +1060,7 @@ func (p *XenForoProvider) pollThreadmarksFull(series models.Series) ([]models.Ch
 			if !strings.HasPrefix(link, "http") {
 				link = p.baseURL + "/" + strings.TrimPrefix(link, "/")
 			}
+			link = p.normalizeChapterURL(link)
 			chapNum++
 			displayTitle := title
 			if !hasChapterNumber(title) {
@@ -1112,6 +1160,8 @@ func (p *XenForoProvider) pollUpdatesHTML(series models.Series) ([]models.Chapte
 		if !strings.HasPrefix(link, "http") {
 			link = p.baseURL + "/" + strings.TrimPrefix(link, "/")
 		}
+		link = p.normalizeChapterURL(link)
+		link = p.normalizeChapterURL(link)
 
 		timeStr, _ := s.Find("time").Attr("datetime")
 		pubAt := time.Time{}

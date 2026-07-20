@@ -235,23 +235,24 @@ func (h *Handler) AddSeries(w http.ResponseWriter, r *http.Request) {
 	meta.ID = id
 
 	var chapterCount int
-	// Poller capability — optional but lets us pre-populate chapters.
+	// Kick off the initial poll ASYNCHRONOUSLY — PollUpdates for XenForo can
+	// take 10-30s (FlareSolverr Cloudflare solve). Don't block the HTTP
+	// request on it; the scheduler will also pick it up on the next cycle.
 	if poller, ok := p.(plugin.Poller); ok {
-		chapters, err := poller.PollUpdates(meta)
-		if err != nil {
-			logging.Error("[handler] initial poll for %q (id=%d): %v", meta.Title, id, err)
-		} else if len(chapters) > 0 {
-			inserted, insertErr := h.store.InsertChapters(id, chapters)
-			if insertErr != nil {
-				logging.Error("[handler] inserting chapters for %q (id=%d): %v", meta.Title, id, insertErr)
+		go func() {
+			chapters, err := poller.PollUpdates(meta)
+			if err != nil {
+				logging.Error("[handler] async initial poll for %q (id=%d): %v", meta.Title, id, err)
+				return
 			}
-			chapterCount = inserted
-			logging.Info("[handler] added series %q (id=%d) with %d chapters", meta.Title, id, inserted)
-		} else {
-			logging.Info("[handler] added series %q (id=%d) with 0 chapters", meta.Title, id)
-		}
-	} else {
-		logging.Info("[handler] added series %q (id=%d); provider has no Poller capability, skipping initial poll", meta.Title, id)
+			if len(chapters) > 0 {
+				inserted, insertErr := h.store.InsertChapters(id, chapters)
+				if insertErr != nil {
+					logging.Error("[handler] inserting chapters for %q (id=%d): %v", meta.Title, id, insertErr)
+				}
+				logging.Info("[handler] added series %q (id=%d) with %d/%d chapters", meta.Title, id, inserted, len(chapters))
+			}
+		}()
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
