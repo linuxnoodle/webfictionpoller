@@ -10,7 +10,6 @@ package api
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -19,6 +18,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/linuxnoodle/webfictionpoller/internal/db"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 )
 
@@ -44,13 +44,13 @@ type APIToken struct {
 	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
 }
 
-// TokenStore manages api_tokens rows. It is a thin layer over *sql.DB so it
+// TokenStore manages api_tokens rows. It is a thin layer over *db.DB so it
 // composes cleanly with the eventual Store refactor (Phase 2 remainder).
 type TokenStore struct {
-	db *sql.DB
+	db *db.DB
 }
 
-func NewTokenStore(db *sql.DB) *TokenStore { return &TokenStore{db: db} }
+func NewTokenStore(database *db.DB) *TokenStore { return &TokenStore{db: database} }
 
 // IssueToken creates a new token for userID with the given label, persists
 // the bcrypt hash, and returns the plaintext token exactly once. Callers

@@ -1,30 +1,27 @@
 package auth
 
 import (
-	"database/sql"
 	"fmt"
 
+	"github.com/linuxnoodle/webfictionpoller/internal/db"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func CreateUser(db *sql.DB, username, password string) error {
+func CreateUser(database *db.DB, username, password string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hashing password: %w", err)
 	}
-	_, err = db.Exec("INSERT INTO users (username, password_hash) VALUES (?, ?)", username, string(hash))
+	_, err = database.Exec("INSERT INTO users (username, password_hash) VALUES (?, ?)", username, string(hash))
 	return err
 }
 
-func Authenticate(db *sql.DB, username, password string) (int64, error) {
+func Authenticate(database *db.DB, username, password string) (int64, error) {
 	var id int64
 	var hash string
-	err := db.QueryRow("SELECT id, password_hash FROM users WHERE username = ?", username).Scan(&id, &hash)
-	if err == sql.ErrNoRows {
-		return 0, fmt.Errorf("invalid credentials")
-	}
+	err := database.QueryRow("SELECT id, password_hash FROM users WHERE username = ?", username).Scan(&id, &hash)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid credentials")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
 		return 0, fmt.Errorf("invalid credentials")
@@ -32,8 +29,8 @@ func Authenticate(db *sql.DB, username, password string) (int64, error) {
 	return id, nil
 }
 
-func HasUsers(db *sql.DB) (bool, error) {
+func HasUsers(database *db.DB) (bool, error) {
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+	err := database.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 	return count > 0, err
 }

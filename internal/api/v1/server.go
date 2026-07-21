@@ -3,7 +3,6 @@ package v1
 import (
 	"archive/zip"
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
 	"github.com/linuxnoodle/webfictionpoller/internal/blob"
 	"github.com/linuxnoodle/webfictionpoller/internal/comics"
+	"github.com/linuxnoodle/webfictionpoller/internal/db"
 	"github.com/linuxnoodle/webfictionpoller/internal/download"
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
@@ -27,16 +27,16 @@ import (
 // Server bundles the dependencies every v1 handler needs. Construct once at
 // startup; the router methods close over it.
 type Server struct {
-	db       *sql.DB
-	tokens   *api.TokenStore
-	store    Store
-	pool     *worker.WorkerPool
+	db        *db.DB
+	tokens    *api.TokenStore
+	store     Store
+	pool      *worker.WorkerPool
 	downloads *download.Tracker
-	blob     blob.Store
+	blob      blob.Store
 }
 
-func NewServer(db *sql.DB, tokens *api.TokenStore, store Store) *Server {
-	return &Server{db: db, tokens: tokens, store: store, downloads: download.NewTracker()}
+func NewServer(database *db.DB, tokens *api.TokenStore, store Store) *Server {
+	return &Server{db: database, tokens: tokens, store: store, downloads: download.NewTracker()}
 }
 
 // SetPool wires the worker pool. Optional; if unset, /poll/* and /metrics

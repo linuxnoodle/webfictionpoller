@@ -29,12 +29,12 @@ func setupTestDB(t *testing.T) *db.DB {
 func TestCreateUser(t *testing.T) {
 	db := setupTestDB(t)
 
-	err := CreateUser(db.SQL(), "testuser", "password123")
+	err := CreateUser(db, "testuser", "password123")
 	if err != nil {
 		t.Fatalf("CreateUser failed: %v", err)
 	}
 
-	err = CreateUser(db.SQL(), "testuser", "password123")
+	err = CreateUser(db, "testuser", "password123")
 	if err == nil {
 		t.Fatal("expected error for duplicate username")
 	}
@@ -43,7 +43,7 @@ func TestCreateUser(t *testing.T) {
 func TestAuthenticate(t *testing.T) {
 	db := setupTestDB(t)
 
-	err := CreateUser(db.SQL(), "testuser", "password123")
+	err := CreateUser(db, "testuser", "password123")
 	if err != nil {
 		t.Fatalf("CreateUser failed: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestAuthenticate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Authenticate(db.SQL(), tt.username, tt.password)
+			_, err := Authenticate(db, tt.username, tt.password)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Authenticate(%q, %q) error = %v, wantErr %v", tt.username, tt.password, err, tt.wantErr)
 			}

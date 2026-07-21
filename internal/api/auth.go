@@ -2,13 +2,13 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/linuxnoodle/webfictionpoller/internal/db"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 )
 
@@ -115,11 +115,11 @@ func TokenIDFromContext(ctx context.Context) (int64, bool) {
 // HasUsersGate passes requests through when no users exist (first-run setup),
 // otherwise applies requireAuth. Useful for the /auth/login endpoint that must
 // be reachable before any account exists.
-func (a *Authenticator) HasUsersGate(db *sql.DB) func(http.Handler) http.Handler {
+func (a *Authenticator) HasUsersGate(database *db.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var n int
-			err := db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM users`).Scan(&n)
+			err := database.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM users`).Scan(&n)
 			if err != nil {
 				writeAPIError(w, http.StatusInternalServerError, "db_error", err.Error())
 				return

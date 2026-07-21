@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -27,6 +26,7 @@ import (
 	"github.com/linuxnoodle/webfictionpoller/internal/comics"
 	"github.com/linuxnoodle/webfictionpoller/internal/crypto"
 	"github.com/linuxnoodle/webfictionpoller/internal/database"
+	"github.com/linuxnoodle/webfictionpoller/internal/db"
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 	"github.com/linuxnoodle/webfictionpoller/internal/logging"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
@@ -133,9 +133,9 @@ func main() {
 
 	// v1 API (mobile / iOS). Authenticator falls back to browser sessions so
 	// the web UI can call /api/v1/* during the transition.
-	apiTokens := api.NewTokenStore(db.SQL())
+	apiTokens := api.NewTokenStore(db)
 	apiAuth := api.NewAuthenticator(apiTokens, sessionManager)
-	v1Server := apiv1.NewServer(db.SQL(), apiTokens, store)
+	v1Server := apiv1.NewServer(db, apiTokens, store)
 	v1Server.SetPool(pool)
 	v1Server.SetBlobStore(blobStore)
 
@@ -185,10 +185,10 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	r.Mount("/api/v1", v1Server.Routes(apiAuth.Middleware(true), apiAuth.HasUsersGate(db.SQL())))
+	r.Mount("/api/v1", v1Server.Routes(apiAuth.Middleware(true), apiAuth.HasUsersGate(db)))
 
 	r.Group(func(r chi.Router) {
-		r.Use(opdsAuth(db.SQL(), apiTokens))
+		r.Use(opdsAuth(db, apiTokens))
 		r.Get("/opds", h.OPDSRoot)
 		r.Get("/opds/cover/{id}", h.OPDSCover)
 		r.Get("/opds/epub/{id}", h.OPDSEpub)
@@ -204,9 +204,9 @@ func main() {
 			http.Redirect(w, r, "/static/favicons/royalroad.ico", http.StatusFound)
 		})
 		r.Get("/login", loginPage)
-		r.Post("/login", loginBanMiddleware(loginHandler(db.SQL(), sessionManager)))
-		r.Get("/setup", setupPage(db.SQL()))
-		r.Post("/setup", setupHandler(db.SQL(), sessionManager))
+		r.Post("/login", loginBanMiddleware(loginHandler(db, sessionManager)))
+		r.Get("/setup", setupPage(db))
+		r.Post("/setup", setupHandler(db, sessionManager))
 
 		r.Get("/static/app.css", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/css; charset=utf-8")
@@ -231,7 +231,7 @@ func main() {
 		r.Post("/logout", logoutHandler(sessionManager))
 
 		r.Group(func(r chi.Router) {
-			r.Use(authMiddleware(sessionManager, db.SQL()))
+			r.Use(authMiddleware(sessionManager, db))
 
 			r.Get("/", h.Dashboard)
 			r.Get("/series/add", h.AddSeriesPage)
@@ -551,7 +551,7 @@ func loadProviderCredentials(store *handlers.Store, pool *worker.WorkerPool, vau
 	}
 }
 
-func authMiddleware(sm *scs.SessionManager, db *sql.DB) func(http.Handler) http.Handler {
+func authMiddleware(sm *scs.SessionManager, db *db.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			hasUsers, err := auth.HasUsers(db)
@@ -573,7 +573,7 @@ func authMiddleware(sm *scs.SessionManager, db *sql.DB) func(http.Handler) http.
 // /api/v1 client). Basic auth checks the users table directly; bearer
 // auth consults the api.TokenStore. Both forms return 401 with a Basic
 // challenge on failure so OPDS readers that only speak Basic still work.
-func opdsAuth(db *sql.DB, tokens *api.TokenStore) func(http.Handler) http.Handler {
+func opdsAuth(db *db.DB, tokens *api.TokenStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			hasUsers, err := auth.HasUsers(db)
@@ -607,7 +607,7 @@ func loginPage(w http.ResponseWriter, r *http.Request) {
 	handlers.RenderLoginPage(w, r, nil)
 }
 
-func loginHandler(db *sql.DB, sm *scs.SessionManager) http.HandlerFunc {
+func loginHandler(db *db.DB, sm *scs.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
@@ -623,7 +623,7 @@ func loginHandler(db *sql.DB, sm *scs.SessionManager) http.HandlerFunc {
 	}
 }
 
-func setupPage(db *sql.DB) http.HandlerFunc {
+func setupPage(db *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hasUsers, err := auth.HasUsers(db)
 		if err == nil && hasUsers {
@@ -634,7 +634,7 @@ func setupPage(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func setupHandler(db *sql.DB, sm *scs.SessionManager) http.HandlerFunc {
+func setupHandler(db *db.DB, sm *scs.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hasUsers, err := auth.HasUsers(db)
 		if err == nil && hasUsers {

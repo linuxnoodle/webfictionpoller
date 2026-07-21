@@ -3,7 +3,6 @@ package v1_test
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -15,10 +14,11 @@ import (
 	v1 "github.com/linuxnoodle/webfictionpoller/internal/api/v1"
 	"github.com/linuxnoodle/webfictionpoller/internal/auth"
 	"github.com/linuxnoodle/webfictionpoller/internal/database"
+	database2 "github.com/linuxnoodle/webfictionpoller/internal/db"
 	"github.com/linuxnoodle/webfictionpoller/internal/handlers"
 )
 
-func setupServer(t *testing.T) (*v1.Server, *api.TokenStore, *sql.DB, string, string) {
+func setupServer(t *testing.T) (*v1.Server, *api.TokenStore, *database2.DB, string, string) {
 	srv, tokens, db, store, user, pass := setupServerWithStore(t)
 	_ = store
 	return srv, tokens, db, user, pass
@@ -26,7 +26,7 @@ func setupServer(t *testing.T) (*v1.Server, *api.TokenStore, *sql.DB, string, st
 
 // setupServerWithStore is the full-fidelity fixture: returns the store too,
 // for tests that need to seed comic/series data.
-func setupServerWithStore(t *testing.T) (*v1.Server, *api.TokenStore, *sql.DB, *handlers.Store, string, string) {
+func setupServerWithStore(t *testing.T) (*v1.Server, *api.TokenStore, *database2.DB, *handlers.Store, string, string) {
 	t.Helper()
 	tmp, err := os.CreateTemp("", "api-v1-*.db")
 	if err != nil {
@@ -43,22 +43,22 @@ func setupServerWithStore(t *testing.T) (*v1.Server, *api.TokenStore, *sql.DB, *
 
 	username := "alice"
 	password := "correct-horse-battery-staple"
-	if err := auth.CreateUser(db.SQL(), username, password); err != nil {
+	if err := auth.CreateUser(db, username, password); err != nil {
 		t.Fatal(err)
 	}
 
-	tokens := api.NewTokenStore(db.SQL())
+	tokens := api.NewTokenStore(db)
 	store := handlers.NewStore(db)
-	srv := v1.NewServer(db.SQL(), tokens, store)
-	return srv, tokens, db.SQL(), store, username, password
+	srv := v1.NewServer(db, tokens, store)
+	return srv, tokens, db, store, username, password
 }
 
-func newAuthenticatedMux(t *testing.T, srv *v1.Server, db *sql.DB) *http.ServeMux {
+func newAuthenticatedMux(t *testing.T, srv *v1.Server, database *database2.DB) *http.ServeMux {
 	t.Helper()
-	tokens := api.NewTokenStore(db)
+	tokens := api.NewTokenStore(database)
 	authz := api.NewAuthenticator(tokens, nil)
 	mux := http.NewServeMux()
-	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", srv.Routes(authz.Middleware(true), authz.HasUsersGate(db))))
+	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", srv.Routes(authz.Middleware(true), authz.HasUsersGate(database))))
 	return mux
 }
 
