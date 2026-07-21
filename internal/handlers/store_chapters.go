@@ -17,7 +17,7 @@ func (s *Store) GetTimeView(page, pageSize int, sortBy string, unreadOnly bool) 
 
 	whereClause := "s.status IN ('active', 'binge')"
 	if unreadOnly {
-		whereClause += " AND c.is_read = 0"
+		whereClause += " AND c.is_read = FALSE"
 	}
 	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT c.id, c.series_id, c.title, c.url, c.published_at, c.is_read, c.created_at,
@@ -98,7 +98,7 @@ func (s *Store) SavePreviewHTML(chapterID int64, html string) error {
 
 func (s *Store) MarkChapterRead(chapterID int64) (string, error) {
 	var url string
-	err := s.db.QueryRow("UPDATE chapters SET is_read = 1 WHERE id = ? RETURNING url", chapterID).Scan(&url)
+	err := s.db.QueryRow("UPDATE chapters SET is_read = TRUE WHERE id = ? RETURNING url", chapterID).Scan(&url)
 	if err == sql.ErrNoRows {
 		return "", fmt.Errorf("chapter not found")
 	}
@@ -157,11 +157,11 @@ func (s *Store) AddSeries(series models.Series) (int64, error) {
 }
 
 func (s *Store) MarkAllSeriesRead(seriesID int64) error {
-	_, err := s.db.Exec("UPDATE chapters SET is_read = 1 WHERE series_id = ?", seriesID)
+	_, err := s.db.Exec("UPDATE chapters SET is_read = TRUE WHERE series_id = ?", seriesID)
 	return err
 }
 
 func (s *Store) MarkAllChaptersRead() error {
-	_, err := s.db.Exec("UPDATE chapters SET is_read = 1 WHERE is_read = 0")
+	_, err := s.db.Exec("UPDATE chapters SET is_read = TRUE WHERE is_read = FALSE")
 	return err
 }

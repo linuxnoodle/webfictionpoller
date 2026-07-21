@@ -17,7 +17,7 @@ func (s *Store) UpdateSeriesArchive(id int64, archive bool) error {
 func (s *Store) GetArchivedSeries() ([]models.Series, error) {
 	rows, err := s.db.Query(`
 		SELECT id, title, author, source_url, provider_name, rating, status, summary, image_url, archive, created_at
-		FROM series WHERE archive = 1 AND status IN ('active', 'binge')
+		FROM series WHERE archive = TRUE AND status IN ('active', 'binge')
 	`)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (s *Store) GetArchivedSeries() ([]models.Series, error) {
 
 func (s *Store) GetChaptersForArchive(seriesID int64) ([]models.Chapter, error) {
 	rows, err := s.db.Query(`
-		SELECT id, series_id, title, url, published_at, is_read, content_html, COALESCE(content_compressed, 0), created_at
+		SELECT id, series_id, title, url, published_at, is_read, content_html, COALESCE(content_compressed, FALSE), created_at
 		FROM chapters WHERE series_id = ?
 		ORDER BY published_at ASC
 	`, seriesID)
@@ -68,7 +68,7 @@ func (s *Store) GetChapterArchivedContent(id int64) (string, error) {
 	var contentBytes []byte
 	var compressed bool
 	err := s.db.QueryRow(`
-		SELECT content_html, COALESCE(content_compressed, 0) FROM chapters WHERE id = ?
+		SELECT content_html, COALESCE(content_compressed, FALSE) FROM chapters WHERE id = ?
 	`, id).Scan(&contentBytes, &compressed)
 	if err == sql.ErrNoRows {
 		return "", nil
@@ -90,14 +90,14 @@ func (s *Store) SaveChapterContent(id int64, content string) error {
 	gw := gzip.NewWriter(&buf)
 	gw.Write([]byte(content))
 	gw.Close()
-	_, err := s.db.Exec("UPDATE chapters SET content_html = ?, content_compressed = 1 WHERE id = ?", buf.Bytes(), id)
+	_, err := s.db.Exec("UPDATE chapters SET content_html = ?, content_compressed = TRUE WHERE id = ?", buf.Bytes(), id)
 	return err
 }
 
 // MarkChapterPremium flags a chapter as paywalled so the UI can show a
 // "locked" badge and the scheduler stops retrying the fetch.
 func (s *Store) MarkChapterPremium(id int64) error {
-	_, err := s.db.Exec("UPDATE chapters SET premium = 1 WHERE id = ?", id)
+	_, err := s.db.Exec("UPDATE chapters SET premium = TRUE WHERE id = ?", id)
 	return err
 }
 
@@ -126,7 +126,7 @@ func (s *Store) UpdateChapterTitle(id int64, title string) error {
 func (s *Store) GetChaptersNeedingContent(seriesID int64) ([]models.Chapter, error) {
 	rows, err := s.db.Query(`
 		SELECT id, series_id, title, url, published_at, is_read, content_html, created_at
-		FROM chapters WHERE series_id = ? AND (content_html IS NULL OR content_html = '') AND COALESCE(premium, 0) = 0
+		FROM chapters WHERE series_id = ? AND (content_html IS NULL OR content_html = '') AND COALESCE(premium, FALSE) = FALSE
 		ORDER BY published_at ASC
 	`, seriesID)
 	if err != nil {
@@ -172,7 +172,7 @@ func (s *Store) GetChapterImage(chapterID int64, url string) ([]byte, string, er
 func (s *Store) GetArchiveStats(archiveAll bool) ([]models.ArchiveStat, error) {
 	where := "s.status IN ('active', 'binge')"
 	if !archiveAll {
-		where = "s.archive = 1 AND " + where
+		where = "s.archive = TRUE AND " + where
 	}
 	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT s.id, s.title,
@@ -215,7 +215,7 @@ func (s *Store) DeleteSeriesArchive(seriesID int64) error {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE chapters SET content_html = '', content_compressed = 0, preview_html = '' WHERE series_id = ?`, seriesID)
+	_, err = tx.Exec(`UPDATE chapters SET content_html = '', content_compressed = FALSE, preview_html = '' WHERE series_id = ?`, seriesID)
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func (s *Store) DeleteChapterArchive(chapterID int64) error {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE chapters SET content_html = '', content_compressed = 0, preview_html = '' WHERE id = ?`, chapterID)
+	_, err = tx.Exec(`UPDATE chapters SET content_html = '', content_compressed = FALSE, preview_html = '' WHERE id = ?`, chapterID)
 	if err != nil {
 		return err
 	}
@@ -298,7 +298,7 @@ func (s *Store) GetStorageInfo() (*models.StorageInfo, error) {
 }
 
 func (s *Store) TriggerReArchive(seriesID int64) (int, error) {
-	_, err := s.db.Exec(`UPDATE chapters SET content_html = '', content_compressed = 0 WHERE series_id = ?`, seriesID)
+	_, err := s.db.Exec(`UPDATE chapters SET content_html = '', content_compressed = FALSE WHERE series_id = ?`, seriesID)
 	if err != nil {
 		return 0, err
 	}

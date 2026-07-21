@@ -176,7 +176,7 @@ func (s *Store) GetDashboardStats() (DashboardStats, error) {
 		SELECT
 			(SELECT COUNT(*) FROM series) as total_series,
 			(SELECT COUNT(*) FROM series WHERE status IN ('active', 'binge')) as active_series,
-			(SELECT COUNT(*) FROM chapters WHERE is_read = 0) as unread_chapters
+			(SELECT COUNT(*) FROM chapters WHERE is_read = FALSE) as unread_chapters
 	`).Scan(&stats.TotalSeries, &stats.ActiveSeries, &stats.UnreadChapter)
 	if err != nil {
 		return stats, err

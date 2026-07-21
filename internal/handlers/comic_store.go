@@ -145,12 +145,12 @@ func (s *Store) GetComicChapterByID(id int64) (*comics.ComicChapter, error) {
 }
 
 func (s *Store) MarkComicChapterRead(chapterID int64) error {
-	_, err := s.db.Exec("UPDATE comic_chapters SET is_read = 1 WHERE id = ?", chapterID)
+	_, err := s.db.Exec("UPDATE comic_chapters SET is_read = TRUE WHERE id = ?", chapterID)
 	return err
 }
 
 func (s *Store) MarkComicChapterDownloaded(chapterID int64) error {
-	_, err := s.db.Exec("UPDATE comic_chapters SET downloaded = 1 WHERE id = ?", chapterID)
+	_, err := s.db.Exec("UPDATE comic_chapters SET downloaded = TRUE WHERE id = ?", chapterID)
 	return err
 }
 
@@ -335,7 +335,7 @@ func (s *Store) DeleteComicSeries(id int64) error {
 }
 
 func (s *Store) MarkComicAllRead(seriesID int64) error {
-	_, err := s.db.Exec("UPDATE comic_chapters SET is_read = 1 WHERE series_id = ?", seriesID)
+	_, err := s.db.Exec("UPDATE comic_chapters SET is_read = TRUE WHERE series_id = ?", seriesID)
 	return err
 }
 

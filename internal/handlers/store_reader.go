@@ -88,7 +88,7 @@ func (s *Store) GetReaderChapterContent(id int64) (string, int64, error) {
 	var compressed bool
 	var seriesID int64
 	err := s.db.QueryRow(`
-		SELECT content_html, COALESCE(content_compressed, 0), series_id FROM chapters WHERE id = ?
+		SELECT content_html, COALESCE(content_compressed, FALSE), series_id FROM chapters WHERE id = ?
 	`, id).Scan(&contentBytes, &compressed, &seriesID)
 	if err == sql.ErrNoRows {
 		return "", 0, nil
@@ -128,7 +128,7 @@ func (s *Store) GetChapterForReader(id int64) (*ChapterContentMeta, error) {
 	// migrations). If those columns don't exist yet (migration hasn't run
 	// on an upgraded DB), fall back to the legacy query without them.
 	err := s.db.QueryRow(`
-		SELECT content_html, COALESCE(content_compressed, 0),
+		SELECT content_html, COALESCE(content_compressed, FALSE),
 		       COALESCE(word_count, 0), COALESCE(premium, 0),
 		       title, series_id
 		FROM chapters WHERE id = ?
@@ -138,7 +138,7 @@ func (s *Store) GetChapterForReader(id int64) (*ChapterContentMeta, error) {
 		m.WordCount = 0
 		m.Premium = false
 		err = s.db.QueryRow(`
-			SELECT content_html, COALESCE(content_compressed, 0),
+			SELECT content_html, COALESCE(content_compressed, FALSE),
 			       title, series_id
 			FROM chapters WHERE id = ?
 		`, id).Scan(&contentBytes, &compressed, &m.Title, &m.SeriesID)
