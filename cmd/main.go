@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
@@ -70,7 +71,11 @@ func main() {
 	}
 
 	sessionManager := scs.New()
-	sessionManager.Store = sqlite3store.New(db.SQL())
+	if db.IsPostgres() {
+		sessionManager.Store = postgresstore.New(db.SQL())
+	} else {
+		sessionManager.Store = sqlite3store.New(db.SQL())
+	}
 	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
