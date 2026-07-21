@@ -27,7 +27,7 @@ func (s *Store) AddSource(seriesID int64, providerName, sourceURL string, priori
 
 	// If this is becoming the primary, demote any other primary first.
 	if isPrimary {
-		_, _ = s.db.Exec("UPDATE series_sources SET is_primary = 0 WHERE series_id = ?", seriesID)
+		_, _ = s.db.Exec("UPDATE series_sources SET is_primary = FALSE WHERE series_id = ?", seriesID)
 	}
 
 	res, err := s.db.Exec(`
@@ -78,7 +78,7 @@ func (s *Store) ActiveSourcesForPoll(seriesID int64) ([]models.SeriesSource, err
 		SELECT id, series_id, provider_name, source_url, priority, is_primary,
 		       last_ok, last_fail, last_error, consecutive_fails, disabled, created_at
 		FROM series_sources
-		WHERE series_id = ? AND disabled = 0
+		WHERE series_id = ? AND disabled = FALSE
 		ORDER BY is_primary DESC, priority ASC, id ASC
 	`, seriesID)
 	if err != nil {
@@ -172,7 +172,7 @@ func (s *Store) DeleteSource(id int64) error {
 		var nextID int64
 		err := s.db.QueryRow(`
 			SELECT id FROM series_sources
-			WHERE series_id = ? AND disabled = 0
+			WHERE series_id = ? AND disabled = FALSE
 			ORDER BY priority ASC, id ASC LIMIT 1
 		`, src.SeriesID).Scan(&nextID)
 		if err == nil {
@@ -196,10 +196,10 @@ func (s *Store) PromoteSource(id int64) error {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec("UPDATE series_sources SET is_primary = 0 WHERE series_id = ?", src.SeriesID); err != nil {
+	if _, err := tx.Exec("UPDATE series_sources SET is_primary = FALSE WHERE series_id = ?", src.SeriesID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec("UPDATE series_sources SET is_primary = 1, priority = 0 WHERE id = ?", id); err != nil {
+	if _, err := tx.Exec("UPDATE series_sources SET is_primary = TRUE, priority = 0 WHERE id = ?", id); err != nil {
 		return err
 	}
 	if _, err := tx.Exec("UPDATE series SET provider_name = ?, source_url = ? WHERE id = ?",
@@ -245,7 +245,7 @@ func (s *Store) AutoPromoteIfFailing(seriesID int64, threshold int) (int64, erro
 	var primaryFails int
 	err := s.db.QueryRow(`
 		SELECT id, consecutive_fails FROM series_sources
-		WHERE series_id = ? AND is_primary = 1
+		WHERE series_id = ? AND is_primary = TRUE
 	`, seriesID).Scan(&primaryID, &primaryFails)
 	if err == sql.ErrNoRows {
 		return 0, nil
@@ -261,7 +261,7 @@ func (s *Store) AutoPromoteIfFailing(seriesID int64, threshold int) (int64, erro
 	var nextID int64
 	err = s.db.QueryRow(`
 		SELECT id FROM series_sources
-		WHERE series_id = ? AND id != ? AND disabled = 0
+		WHERE series_id = ? AND id != ? AND disabled = FALSE
 		ORDER BY consecutive_fails ASC, priority ASC, id ASC
 		LIMIT 1
 	`, seriesID, primaryID).Scan(&nextID)
