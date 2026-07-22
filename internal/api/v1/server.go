@@ -78,6 +78,7 @@ func (s *Server) Routes(authz func(http.Handler) http.Handler, hasUsersGate func
 		r.Get("/chapters", s.chapterList)
 		r.Get("/chapters/{id}", s.chapterGet)
 		r.Get("/chapters/{id}/content", s.chapterContent)
+		r.Post("/chapters/{id}/cache", s.cacheChapterContent)
 		r.Post("/chapters/{id}/read", s.chapterMarkRead)
 		r.Get("/unread-count", s.unreadCount)
 
@@ -636,6 +637,51 @@ func (s *Server) chapterMarkRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+}
+
+// cacheChapterContent accepts chapter HTML from the phone (which fetched
+// directly from the source site) and stores it in the server cache. This is
+// the 'push back' half of the bidirectional caching system: phone fetches
+// content on its residential IP (no Cloudflare) → pushes to server → next
+// request hits server cache.
+//
+//	POST /api/v1/chapters/{id}/cache
+//	Body: {"html": "<chapter content>"}
+func (s *Server) cacheChapterContent(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	var req struct {
+		HTML      string `json:"html"`
+		WordCount int    `json:"word_count,omitempty"`
+	}
+	if !api.JSONDecode(w, r, &req) {
+		return
+	}
+	if req.HTML == "" {
+		api.WriteError(w, http.StatusBadRequest, "empty_html", "")
+		return
+	}
+	type saver interface {
+		SaveChapterContent(id int64, content string) error
+		SetChapterWordCount(id int64, n int) error
+	}
+	sv, ok := s.store.(saver)
+	if !ok {
+		api.WriteError(w, http.StatusInternalServerError, "store_incompatible", "")
+		return
+	}
+	if err := sv.SaveChapterContent(id, req.HTML); err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	if req.WordCount > 0 {
+		_ = sv.SetChapterWordCount(id, req.WordCount)
+	}
+	logging.Info("[api/v1] phone-pushed cache for chapter %d (%d chars)", id, len(req.HTML))
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "cached": true})
 }
 
 func (s *Server) unreadCount(w http.ResponseWriter, r *http.Request) {
