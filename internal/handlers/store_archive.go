@@ -126,7 +126,7 @@ func (s *Store) UpdateChapterTitle(id int64, title string) error {
 func (s *Store) GetChaptersNeedingContent(seriesID int64) ([]models.Chapter, error) {
 	rows, err := s.db.Query(`
 		SELECT id, series_id, title, url, published_at, is_read, content_html, created_at
-		FROM chapters WHERE series_id = ? AND (content_html IS NULL OR content_html = '') AND COALESCE(premium, FALSE) = FALSE
+		FROM chapters WHERE series_id = ? AND (OCTET_LENGTH(content_html) = 0) AND COALESCE(premium, FALSE) = FALSE
 		ORDER BY published_at ASC
 	`, seriesID)
 	if err != nil {
@@ -177,8 +177,8 @@ func (s *Store) GetArchiveStats(archiveAll bool) ([]models.ArchiveStat, error) {
 	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT s.id, s.title,
 			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id),
-			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.content_html != ''),
-			COALESCE((SELECT SUM(LENGTH(c.content_html)) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.content_html != ''), 0)
+			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.OCTET_LENGTH(content_html) > 0),
+			COALESCE((SELECT SUM(OCTET_LENGTH(c.content_html)) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.OCTET_LENGTH(content_html) > 0), 0)
 		FROM series s
 		WHERE %s
 		ORDER BY s.title ASC
@@ -215,7 +215,7 @@ func (s *Store) DeleteSeriesArchive(seriesID int64) error {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE chapters SET content_html = '', content_compressed = FALSE, preview_html = '' WHERE series_id = ?`, seriesID)
+	_, err = tx.Exec(`UPDATE chapters SET content_html = NULL, content_compressed = FALSE, preview_html = '' WHERE series_id = ?`, seriesID)
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func (s *Store) DeleteChapterArchive(chapterID int64) error {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE chapters SET content_html = '', content_compressed = FALSE, preview_html = '' WHERE id = ?`, chapterID)
+	_, err = tx.Exec(`UPDATE chapters SET content_html = NULL, content_compressed = FALSE, preview_html = '' WHERE id = ?`, chapterID)
 	if err != nil {
 		return err
 	}
@@ -248,9 +248,9 @@ func (s *Store) GetStorageInfo() (*models.StorageInfo, error) {
 
 	err := s.db.QueryRow(`
 		SELECT
-			COALESCE(SUM(LENGTH(content_html)), 0),
-			COALESCE(SUM(LENGTH(preview_html)), 0),
-			COUNT(CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 END),
+			COALESCE(SUM(OCTET_LENGTH(content_html)), 0),
+			COALESCE(SUM(OCTET_LENGTH(preview_html)), 0),
+			COUNT(CASE WHEN OCTET_LENGTH(content_html) > 0 THEN 1 END),
 			COUNT(CASE WHEN preview_html IS NOT NULL AND preview_html != '' THEN 1 END)
 		FROM chapters
 	`).Scan(&info.ContentBytes, &info.PreviewBytes, &info.ChapterCount, &info.ImageCount)
@@ -259,7 +259,7 @@ func (s *Store) GetStorageInfo() (*models.StorageInfo, error) {
 	}
 
 	err = s.db.QueryRow(`
-		SELECT COALESCE(SUM(LENGTH(data)), 0), COUNT(*)
+		SELECT COALESCE(SUM(OCTET_LENGTH(data)), 0), COUNT(*)
 		FROM chapter_images
 	`).Scan(&info.ImageBytes, &info.ImageCount)
 	if err != nil {
@@ -270,16 +270,16 @@ func (s *Store) GetStorageInfo() (*models.StorageInfo, error) {
 
 	rows, err := s.db.Query(`
 		SELECT s.id, s.title,
-			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.content_html != ''),
+			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.OCTET_LENGTH(content_html) > 0),
 			(SELECT COUNT(*) FROM chapters c WHERE c.series_id = s.id),
-			COALESCE((SELECT SUM(LENGTH(c.content_html)) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.content_html != ''), 0),
+			COALESCE((SELECT SUM(OCTET_LENGTH(c.content_html)) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.OCTET_LENGTH(content_html) > 0), 0),
 			COALESCE((SELECT COUNT(*) FROM chapter_images ci WHERE ci.chapter_id IN (SELECT id FROM chapters WHERE series_id = s.id)), 0),
-			COALESCE((SELECT SUM(LENGTH(ci.data)) FROM chapter_images ci WHERE ci.chapter_id IN (SELECT id FROM chapters WHERE series_id = s.id)), 0)
+			COALESCE((SELECT SUM(OCTET_LENGTH(ci.data)) FROM chapter_images ci WHERE ci.chapter_id IN (SELECT id FROM chapters WHERE series_id = s.id)), 0)
 		FROM series s
 		WHERE s.status IN ('active', 'binge')
-		HAVING COALESCE((SELECT SUM(LENGTH(c.content_html)) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.content_html != ''), 0) > 0
-		OR COALESCE((SELECT SUM(LENGTH(ci.data)) FROM chapter_images ci WHERE ci.chapter_id IN (SELECT id FROM chapters WHERE series_id = s.id)), 0) > 0
-		ORDER BY COALESCE((SELECT SUM(LENGTH(c.content_html)) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.content_html != ''), 0) DESC
+		HAVING COALESCE((SELECT SUM(OCTET_LENGTH(c.content_html)) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.OCTET_LENGTH(content_html) > 0), 0) > 0
+		OR COALESCE((SELECT SUM(OCTET_LENGTH(ci.data)) FROM chapter_images ci WHERE ci.chapter_id IN (SELECT id FROM chapters WHERE series_id = s.id)), 0) > 0
+		ORDER BY COALESCE((SELECT SUM(OCTET_LENGTH(c.content_html)) FROM chapters c WHERE c.series_id = s.id AND c.content_html IS NOT NULL AND c.OCTET_LENGTH(content_html) > 0), 0) DESC
 	`)
 	if err != nil {
 		return nil, err
@@ -298,7 +298,7 @@ func (s *Store) GetStorageInfo() (*models.StorageInfo, error) {
 }
 
 func (s *Store) TriggerReArchive(seriesID int64) (int, error) {
-	_, err := s.db.Exec(`UPDATE chapters SET content_html = '', content_compressed = FALSE WHERE series_id = ?`, seriesID)
+	_, err := s.db.Exec(`UPDATE chapters SET content_html = NULL, content_compressed = FALSE WHERE series_id = ?`, seriesID)
 	if err != nil {
 		return 0, err
 	}

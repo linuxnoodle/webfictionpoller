@@ -96,11 +96,11 @@ func (s *Store) ListSeriesSorted(sortKey string) ([]models.Series, error) {
 
 func (s *Store) GetRatingDistribution() ([]models.RatingBucket, error) {
 	rows, err := s.db.Query(`
-		SELECT ROUND(rating, 1), COUNT(*)
+		SELECT ROUND(CAST(rating AS numeric), 1), COUNT(*)
 		FROM series
 		WHERE rating >= 0
-		GROUP BY ROUND(rating, 1)
-		ORDER BY ROUND(rating, 1) ASC
+		GROUP BY ROUND(CAST(rating AS numeric), 1)
+		ORDER BY ROUND(CAST(rating AS numeric), 1) ASC
 	`)
 	if err != nil {
 		return nil, err

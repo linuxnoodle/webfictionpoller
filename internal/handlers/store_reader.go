@@ -12,15 +12,15 @@ func (s *Store) GetReaderChapters(seriesID int64) ([]models.Chapter, error) {
 	// the legacy query if the columns don't exist yet.
 	rows, err := s.db.Query(`
 		SELECT id, series_id, title, url, published_at, is_read,
-		       CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 ELSE 0 END as has_content,
-		       COALESCE(word_count, 0), COALESCE(premium, 0)
+		       CASE WHEN OCTET_LENGTH(content_html) > 0 THEN 1 ELSE 0 END as has_content,
+		       COALESCE(word_count, 0), COALESCE(premium, FALSE)
 		FROM chapters WHERE series_id = ?
 		ORDER BY published_at ASC
 	`, seriesID)
 	if err != nil {
 		rows, err = s.db.Query(`
 			SELECT id, series_id, title, url, published_at, is_read,
-			       CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 ELSE 0 END as has_content
+			       CASE WHEN OCTET_LENGTH(content_html) > 0 THEN 1 ELSE 0 END as has_content
 			FROM chapters WHERE series_id = ?
 			ORDER BY published_at ASC
 		`, seriesID)
@@ -59,7 +59,7 @@ func (s *Store) GetReaderChapters(seriesID int64) ([]models.Chapter, error) {
 func (s *Store) getReaderChaptersLegacy(seriesID int64) ([]models.Chapter, error) {
 	rows, err := s.db.Query(`
 		SELECT id, series_id, title, url, published_at, is_read,
-		       CASE WHEN content_html IS NOT NULL AND content_html != '' THEN 1 ELSE 0 END as has_content
+		       CASE WHEN OCTET_LENGTH(content_html) > 0 THEN 1 ELSE 0 END as has_content
 		FROM chapters WHERE series_id = ?
 		ORDER BY published_at ASC
 	`, seriesID)
@@ -129,7 +129,7 @@ func (s *Store) GetChapterForReader(id int64) (*ChapterContentMeta, error) {
 	// on an upgraded DB), fall back to the legacy query without them.
 	err := s.db.QueryRow(`
 		SELECT content_html, COALESCE(content_compressed, FALSE),
-		       COALESCE(word_count, 0), COALESCE(premium, 0),
+		       COALESCE(word_count, 0), COALESCE(premium, FALSE),
 		       title, series_id
 		FROM chapters WHERE id = ?
 	`, id).Scan(&contentBytes, &compressed, &m.WordCount, &m.Premium, &m.Title, &m.SeriesID)
