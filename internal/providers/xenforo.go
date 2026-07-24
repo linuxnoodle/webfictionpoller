@@ -901,6 +901,20 @@ func (p *XenForoProvider) buildThreadmarksRSSURL(threadURL string) string {
 	return u.String()
 }
 
+// FullSync implements plugin.FullSyncer. Parses the threadmarks listing
+// page to get the COMPLETE chapter list. Used on initial series add to
+// populate all historical chapters — RSS only returns the 20-50 most
+// recent. This is slow (~15s with FlareSolverr) but only runs once.
+func (p *XenForoProvider) FullSync(series models.Series) ([]models.Chapter, error) {
+	var chapters []models.Chapter
+	err := p.withRelogin(func() error {
+		var innerErr error
+		chapters, innerErr = p.pollThreadmarksFull(series)
+		return innerErr
+	})
+	return chapters, err
+}
+
 func (p *XenForoProvider) PollUpdates(series models.Series) ([]models.Chapter, error) {
 	var chapters []models.Chapter
 	err := p.withRelogin(func() error {

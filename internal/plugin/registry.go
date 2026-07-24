@@ -63,6 +63,15 @@ type CookieAuth interface {
 	SetCookies(cookieStr string) error
 }
 
+// FullSyncer does a complete chapter discovery (as opposed to PollUpdates
+// which returns only recent changes). Used when adding a new series to get
+// the full historical chapter list in one shot. XenForo providers implement
+// this by parsing the threadmarks listing page; other providers fall back to
+// PollUpdates which is sufficient for providers with single-page chapter lists.
+type FullSyncer interface {
+	FullSync(series models.Series) ([]models.Chapter, error)
+}
+
 // LoginAuth performs form-based username/password login.
 type LoginAuth interface {
 	Login(username, password string) error

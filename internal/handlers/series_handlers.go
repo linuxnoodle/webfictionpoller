@@ -235,14 +235,29 @@ func (h *Handler) AddSeries(w http.ResponseWriter, r *http.Request) {
 	meta.ID = id
 
 	var chapterCount int
-	// Kick off the initial poll ASYNCHRONOUSLY — PollUpdates for XenForo can
-	// take 10-30s (FlareSolverr Cloudflare solve). Don't block the HTTP
-	// request on it; the scheduler will also pick it up on the next cycle.
+	// Kick off the initial chapter discovery ASYNCHRONOUSLY. For XenForo
+	// providers, this uses the full threadmarks page parser (via FlareSolverr
+	// if needed) to get the COMPLETE chapter list — not just the 20-50 most
+	// recent that RSS would return. This is a one-time cost on series add;
+	// subsequent polls use RSS (fast, recent-changes-only).
 	if poller, ok := p.(plugin.Poller); ok {
 		go func() {
-			chapters, err := poller.PollUpdates(meta)
+			// Try full sync first (threadmarks page — complete chapter list).
+			// Falls back to PollUpdates (RSS) if the provider doesn't support
+			// full sync or it fails.
+			var chapters []models.Chapter
+			var err error
+			if fullSyncer, ok := poller.(plugin.FullSyncer); ok {
+				chapters, err = fullSyncer.FullSync(meta)
+				if err != nil {
+					logging.Info("[handler] full sync failed for %q, falling back to poll: %v", meta.Title, err)
+					chapters, err = poller.PollUpdates(meta)
+				}
+			} else {
+				chapters, err = poller.PollUpdates(meta)
+			}
 			if err != nil {
-				logging.Error("[handler] async initial poll for %q (id=%d): %v", meta.Title, id, err)
+				logging.Error("[handler] async initial chapter discovery for %q (id=%d): %v", meta.Title, id, err)
 				return
 			}
 			if len(chapters) > 0 {
