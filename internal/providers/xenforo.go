@@ -912,53 +912,59 @@ func (p *XenForoProvider) PollUpdates(series models.Series) ([]models.Chapter, e
 }
 
 func (p *XenForoProvider) pollUpdates(series models.Series) ([]models.Chapter, error) {
-	// PRIMARY: Parse the full threadmarks listing page. RSS only shows
-	// recent threadmark changes (20-50 items), not the full chapter list.
-	// The threadmarks page with min=-1&max=5000 returns ALL threadmarks
-	// in a single request, giving us the complete chapter list.
+	// RSS FIRST for polling: RSS feeds are served from a CDN and are NOT
+	// behind Cloudflare. They return in ~1s. They show the 20-50 most recent
+	// threadmarks — sufficient for polling because ON CONFLICT DO NOTHING
+	// in the store means already-known chapters are skipped silently.
+	//
+	// Threadmarks page parsing (pollThreadmarksFull) is the FALLBACK for when
+	// RSS fails entirely. It goes through FlareSolverr (~15s per series)
+	// because the threadmarks HTML page IS behind Cloudflare. Using it for
+	// every poll made the 15-minute poll cycle impossible to complete.
+
+	rssURL := p.buildThreadmarksRSSURL(series.SourceURL)
+	fp := gofeed.NewParser()
+
+	resp, err := doGet(p.client, rssURL)
+	if err == nil && resp.StatusCode == http.StatusOK {
+		if feed, parseErr := fp.Parse(resp.Body); parseErr == nil && len(feed.Items) > 0 {
+			resp.Body.Close()
+			var chapters []models.Chapter
+			for _, item := range feed.Items {
+				pubAt := time.Now()
+				if item.PublishedParsed != nil {
+					pubAt = *item.PublishedParsed
+				}
+				chapters = append(chapters, models.Chapter{
+					SeriesID:    series.ID,
+					Title:       item.Title,
+					URL:         p.normalizeChapterURL(item.Link),
+					PublishedAt: pubAt,
+				})
+			}
+			logging.Info("[%s] RSS yielded %d chapters", p.name, len(chapters))
+			return chapters, nil
+		}
+		resp.Body.Close()
+	} else if resp != nil {
+		resp.Body.Close()
+	}
+
+	// RSS failed — fall back to threadmarks page.
+	logging.Info("[%s] RSS failed, falling back to threadmarks page", p.name)
 	htmlChapters, htmlErr := p.pollThreadmarksFull(series)
 	if htmlErr == nil && len(htmlChapters) > 0 {
-		logging.Info("[%s] threadmarks page yielded %d chapters", p.name, len(htmlChapters))
+		logging.Info("[%s] threadmarks page yielded %d chapters (fallback)", p.name, len(htmlChapters))
 		return htmlChapters, nil
 	}
 	if htmlErr != nil {
-		logging.Info("[%s] threadmarks page failed (%v), falling back to RSS", p.name, htmlErr)
-		// If the threadmarks page returned errAuthRequired, don't try RSS —
-		// it would also require auth. Propagate immediately.
+		logging.Info("[%s] threadmarks page also failed: %v", p.name, htmlErr)
 		if errors.Is(htmlErr, errAuthRequired) {
 			return nil, htmlErr
 		}
 	}
 
-	// FALLBACK: RSS feed (only shows recent items, but better than nothing).
-	rssURL := p.buildThreadmarksRSSURL(series.SourceURL)
-	fp := gofeed.NewParser()
-	resp, err := doGet(p.client, rssURL)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("rss feed status %d for %s", resp.StatusCode, rssURL)
-	}
-	feed, err := fp.Parse(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("parsing rss: %w", err)
-	}
-	var chapters []models.Chapter
-	for _, item := range feed.Items {
-		pubAt := time.Now()
-		if item.PublishedParsed != nil {
-			pubAt = *item.PublishedParsed
-		}
-		chapters = append(chapters, models.Chapter{
-			SeriesID:    series.ID,
-			Title:       item.Title,
-			URL:         p.normalizeChapterURL(item.Link),
-			PublishedAt: pubAt,
-		})
-	}
-	return chapters, nil
+	return nil, fmt.Errorf("both RSS and threadmarks failed for %s", series.SourceURL)
 }
 
 // pollThreadmarksFull fetches the threadmarks listing page with parameters
