@@ -552,61 +552,27 @@ func (s *Server) chapterContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Not cached: live-fetch via the provider's ContentFetcher.
+	// Not cached: return the chapter URL + provider so the phone can
+	// direct-fetch from the source (residential IP, typically no Cloudflare).
+	// Don't block on FlareSolverr — let the phone do it.
 	ch, _ := s.store.GetChapterWithProvider(id)
 	if ch == nil {
 		api.WriteError(w, http.StatusNotFound, "chapter_not_found", "")
 		return
 	}
-	p, ok := plugin.Default.Get(ch.ProviderName)
-	if !ok {
-		api.WriteError(w, http.StatusServiceUnavailable, "provider_unavailable", "")
-		return
-	}
-	cf := plugin.AsContentFetcher(p)
-	if cf == nil {
-		api.WriteError(w, http.StatusServiceUnavailable, "no_content_capability", "")
-		return
-	}
-
-	content, fetchErr := cf.FetchChapter(ch.URL)
-	if fetchErr != nil {
-		logging.Error("[api/v1] live-fetch chapter %d: %v", id, fetchErr)
-		api.WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"chapter_id": id,
-			"html":       "",
-			"cached":     false,
-			"premium":    false,
-			"error":      fetchErr.Error(),
-			"title":      meta.Title,
-		})
-		return
-	}
-
-	// Best-effort async cache for subsequent reads.
-	go func() {
-		type saver interface {
-			SaveChapterContent(id int64, content string) error
-			SetChapterWordCount(id int64, n int) error
-		}
-		if sv, ok := s.store.(saver); ok {
-			_ = sv.SaveChapterContent(id, content.BodyHTML)
-			if content.WordCount > 0 {
-				_ = sv.SetChapterWordCount(id, content.WordCount)
-			}
-		}
-	}()
-
 	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"chapter_id": id,
-		"html":       content.BodyHTML,
+		"html":       "",
 		"cached":     false,
-		"premium":    content.Premium,
-		"word_count": content.WordCount,
+		"fetching":   false,
+		"premium":    false,
+		"word_count": meta.WordCount,
 		"title":      meta.Title,
+		"url":        ch.URL,
+		"provider":   ch.ProviderName,
 	})
-}
-
+		return
+	}
 // chapterMeta is a small helper that calls GetChapterForReader and handles
 // the nil case. Returns nil when the chapter doesn't exist.
 func (s *Server) chapterMeta(r *http.Request, id int64) *handlers.ChapterContentMeta {

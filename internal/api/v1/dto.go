@@ -100,6 +100,7 @@ type readerChapter struct {
 	WordCount   int       `json:"word_count,omitempty"`
 	Premium     bool      `json:"premium,omitempty"`
 	HasContent  bool      `json:"has_content"`
+	URL         string    `json:"url,omitempty"`
 }
 
 func toReaderChapters(in []models.Chapter) []readerChapter {
@@ -111,6 +112,7 @@ func toReaderChapters(in []models.Chapter) []readerChapter {
 			PublishedAt: c.PublishedAt,
 			IsRead:      c.IsRead,
 			HasContent:  c.ContentHTML != "",
+			URL:         c.URL,
 		})
 	}
 	return out
