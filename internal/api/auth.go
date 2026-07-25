@@ -56,11 +56,15 @@ func (a *Authenticator) Middleware(requireAuth bool) func(http.Handler) http.Han
 				next.ServeHTTP(w, r)
 				return
 			}
-			// Session fallback for browser-based callers.
+			// Session fallback for browser-based callers. Wrapped in recover
+			// because the v1 API routes are mounted outside the
+			// sessionManager.LoadAndSave middleware — calling sm.Get() without
+			// session data in context panics. When the session middleware
+			// hasn't run, we just skip the session check.
 			if a.sm != nil {
-				if v := a.sm.Get(r.Context(), "userID"); v != nil {
+				if v := safeSessionGet(a.sm, r, "userID"); v != nil {
 					ctx := context.WithValue(r.Context(), ctxKeyUserID, v)
-					if uname, ok := a.sm.Get(r.Context(), "username").(string); ok {
+					if uname, ok := safeSessionGet(a.sm, r, "username").(string); ok {
 						ctx = context.WithValue(ctx, ctxKeyUsername, uname)
 					}
 					*r = *r.WithContext(ctx)
@@ -174,4 +178,19 @@ func jsonDecode(w http.ResponseWriter, r *http.Request, dst interface{}) bool {
 		return false
 	}
 	return true
+}
+
+// safeSessionGet wraps sm.Get in a recover. The v1 API routes are mounted
+// outside the sessionManager.LoadAndSave middleware, so calling sm.Get()
+// panics with "scs: no session data in context". This helper catches that
+// panic and returns nil instead, effectively making the session check
+// a no-op when the session middleware hasn't run (API-only callers using
+// bearer tokens).
+func safeSessionGet(sm *scs.SessionManager, r *http.Request, key string) (val interface{}) {
+	defer func() {
+		if r := recover(); r != nil {
+			val = nil
+		}
+	}()
+	return sm.Get(r.Context(), key)
 }
