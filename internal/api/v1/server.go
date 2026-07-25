@@ -517,62 +517,59 @@ func (s *Server) chapterGet(w http.ResponseWriter, r *http.Request) {
 func (s *Server) chapterContent(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
+		logging.Error("[api/v1] chapterContent: invalid id")
 		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
 		return
 	}
+
+	// Get chapter metadata + cached content
 	meta := s.chapterMeta(r, id)
 	if meta == nil {
+		logging.Error("[api/v1] chapterContent: chapter %d not found (meta=nil)", id)
 		api.WriteError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
 
-	// Premium chapters: return locked status without attempting fetch.
+	// Premium
 	if meta.Premium {
 		api.WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"chapter_id": id,
-			"html":       "",
-			"cached":     false,
-			"premium":    true,
-			"word_count": meta.WordCount,
-			"title":      meta.Title,
+			"chapter_id": id, "html": "", "cached": false, "premium": true,
+			"word_count": meta.WordCount, "title": meta.Title,
 		})
 		return
 	}
 
-	// Cached: return immediately.
+	// Cached content
 	if meta.HasContent && meta.HTML != "" {
 		api.WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"chapter_id": id,
-			"html":       meta.HTML,
-			"cached":     true,
-			"premium":    false,
-			"word_count": meta.WordCount,
-			"title":      meta.Title,
+			"chapter_id": id, "html": meta.HTML, "cached": true, "premium": false,
+			"word_count": meta.WordCount, "title": meta.Title,
 		})
 		return
 	}
 
-	// Not cached: return the chapter URL + provider so the phone can
-	// direct-fetch from the source (residential IP, typically no Cloudflare).
-	// Don't block on FlareSolverr — let the phone do it.
-	ch, _ := s.store.GetChapterWithProvider(id)
+	// Not cached: return URL + provider for phone direct-fetch
+	ch, err := s.store.GetChapterWithProvider(id)
+	if err != nil {
+		logging.Error("[api/v1] chapterContent: GetChapterWithProvider(%d): %v", id, err)
+		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
 	if ch == nil {
-		api.WriteError(w, http.StatusNotFound, "chapter_not_found", "")
+		logging.Error("[api/v1] chapterContent: chapter %d returned nil from GetChapterWithProvider", id)
+		api.WriteError(w, http.StatusNotFound, "not_found", "")
 		return
 	}
+
+	logging.Info("[api/v1] chapterContent: returning url+provider for uncached chapter %d (url=%s provider=%s)", id, ch.URL, ch.ProviderName)
+
 	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"chapter_id": id,
-		"html":       "",
-		"cached":     false,
-		"fetching":   false,
-		"premium":    false,
-		"word_count": meta.WordCount,
-		"title":      meta.Title,
-		"url":        ch.URL,
-		"provider":   ch.ProviderName,
+		"chapter_id": id, "html": "", "cached": false, "fetching": false,
+		"premium": false, "word_count": meta.WordCount, "title": meta.Title,
+		"url": ch.URL, "provider": ch.ProviderName,
 	})
-		return
-	}
+}
+
 // chapterMeta is a small helper that calls GetChapterForReader and handles
 // the nil case. Returns nil when the chapter doesn't exist.
 func (s *Server) chapterMeta(r *http.Request, id int64) *handlers.ChapterContentMeta {
