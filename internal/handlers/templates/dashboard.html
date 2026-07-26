@@ -225,17 +225,16 @@
                 </div>
                 <div x-show="view === 'time'" class="flex items-center gap-2 sm:gap-4">
                     <div class="flex glass-panel rounded-lg overflow-hidden border border-white/5">
-                        <button @click="sortBy = 'published'"
-                                :class="sortBy === 'published' ? 'bg-neutral-600 text-neutral-100' : 'glass-panel text-muted/60 hover:text-muted'"
-                                class="px-2 py-1.5 text-xs">published</button>
-                        <button @click="sortBy = 'received'"
-                                :class="sortBy === 'received' ? 'bg-neutral-600 text-neutral-100' : 'glass-panel text-muted/60 hover:text-muted'"
-                                class="px-2 py-1.5 text-xs">received</button>
+                        <a href="/?sort=published&unread={{.UnreadOnly}}"
+                           class="px-2 py-1.5 text-xs {{if eq .SortBy "published"}}bg-neutral-600 text-neutral-100{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">published</a>
+                        <a href="/?sort=received&unread={{.UnreadOnly}}"
+                           class="px-2 py-1.5 text-xs {{if eq .SortBy "received"}}bg-neutral-600 text-neutral-100{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">received</a>
                     </div>
-                    <label class="flex items-center gap-1.5 text-xs text-muted/80 cursor-pointer hover:text-white">
-                        <input type="checkbox" x-model="unreadOnly" class="rounded border-white/5 glass-panel text-primary focus:ring-primary">
+                    <a href="/?sort={{.SortBy}}&unread={{if .UnreadOnly}}false{{else}}true{{end}}"
+                       class="flex items-center gap-1.5 text-xs text-muted/80 cursor-pointer hover:text-white">
+                        <input type="checkbox" {{if .UnreadOnly}}checked{{end}} onclick="this.disabled=true;window.location.href=this.closest('a').href" class="rounded border-white/5 glass-panel text-primary focus:ring-primary">
                         Unread
-                    </label>
+                    </a>
                 </div>
                 <div x-show="view === 'series'" class="flex glass-panel rounded-lg overflow-hidden border border-white/5">
                     <button onclick="sortSeriesBy('title')" class="px-2 py-1.5 text-xs {{if eq .SeriesSort "title"}}bg-neutral-600 text-neutral-100{{else}}glass-panel text-muted/60 hover:text-muted{{end}}">title</button>
