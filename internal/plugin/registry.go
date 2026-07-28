@@ -63,6 +63,33 @@ type SeriesSearcher interface {
 	Search(query string, page int) ([]SeriesSearchResult, error)
 }
 
+// SeriesBrowseResult is a single item in a browse/listing page.
+type SeriesBrowseResult struct {
+	Title     string   `json:"title"`
+	SourceURL string   `json:"source_url"`
+	Author    string   `json:"author"`
+	Summary   string   `json:"summary"`
+	ImageURL  string   `json:"image_url"`
+	Rating    float64  `json:"rating"`
+	Status    string   `json:"status"`
+	Tags      []string `json:"tags"`
+}
+
+// BrowseCategory is a named listing section.
+type BrowseCategory struct {
+	Key   string `json:"key"`   // "popular", "trending", "latest", "rated"
+	Label string `json:"label"` // "Popular Today", "Trending", etc.
+}
+
+// SeriesBrowser fetches browse/listing pages (popular, trending, etc.)
+// without requiring a search query. Returns categories available + results.
+type SeriesBrowser interface {
+	// BrowseCategories lists the available browse sections for this provider.
+	BrowseCategories() []BrowseCategory
+	// Browse fetches a category page (1-indexed).
+	Browse(category string, page int) ([]SeriesBrowseResult, error)
+}
+
 // ComicDetailsFetcher fetches full metadata for a single comic by source ID.
 type ComicDetailsFetcher interface {
 	MangaDetails(sourceID string) (*models.ComicSeries, error)

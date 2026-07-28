@@ -8,6 +8,7 @@ import (
 	// Side-effect imports: trigger init() self-registration.
 	_ "github.com/linuxnoodle/webfictionpoller/internal/comics"
 	_ "github.com/linuxnoodle/webfictionpoller/internal/provider/text/dreamy"
+	_ "github.com/linuxnoodle/webfictionpoller/internal/provider/text/noveldex"
 	_ "github.com/linuxnoodle/webfictionpoller/internal/providers"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/plugin"
@@ -27,6 +28,7 @@ var expectedRegistered = map[string]struct {
 	"ao3":           {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.HTMLFetcher)(nil), (*plugin.ContentFetcher)(nil)}},
 	"mangadex":      {Kind: plugin.KindComic, Capabilities: []interface{}{(*plugin.Searcher)(nil), (*plugin.ComicDetailsFetcher)(nil), (*plugin.ChapterLister)(nil), (*plugin.PageLister)(nil)}},
 	"dreamytranslations": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.ContentFetcher)(nil), (*plugin.CommentFetcher)(nil)}},
+	"noveldex": {Kind: plugin.KindText, Capabilities: []interface{}{(*plugin.Poller)(nil), (*plugin.SeriesLister)(nil), (*plugin.ContentFetcher)(nil), (*plugin.SeriesSearcher)(nil), (*plugin.SeriesBrowser)(nil)}},
 }
 
 func TestDefaultRegistryContainsAllBuiltins(t *testing.T) {
@@ -74,6 +76,7 @@ func TestDefaultRegistryByURL(t *testing.T) {
 		"https://www.fanfiction.net/s/123/1/x":               "fanfictionnet",
 		"https://archiveofourown.org/works/123":              "ao3",
 		"https://mangadex.org/title/abc/title":               "mangadex",
+		"https://noveldex.io/series/novel/some-slug":         "noveldex",
 	}
 	for url, wantName := range cases {
 		p, ok := plugin.Default.ByURL(url)

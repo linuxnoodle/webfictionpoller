@@ -367,6 +367,82 @@ func (p *XenForoProvider) Search(query string, page int) ([]plugin.SeriesSearchR
 	return results, nil
 }
 
+// BrowseCategories implements plugin.SeriesBrowser. SpaceBattles/SV/QQ share
+// the same forum IDs (User Fiction, Creative Writing, Index) so the same
+// listing works for every XenForo instance.
+func (p *XenForoProvider) BrowseCategories() []plugin.BrowseCategory {
+	return []plugin.BrowseCategory{
+		{Key: "user-fiction", Label: "User Fiction"},
+		{Key: "creative-writing", Label: "Creative Writing"},
+		{Key: "index", Label: "Index"},
+	}
+}
+
+// Browse implements plugin.SeriesBrowser. It scrapes a forum listing page
+// and returns the threads visible there. Threads without threadmarks will
+// fail later in FetchSeriesMetadata, but the listing itself is useful for
+// discovery.
+func (p *XenForoProvider) Browse(category string, page int) ([]plugin.SeriesBrowseResult, error) {
+	if page < 1 {
+		page = 1
+	}
+	// Map category to forum ID. These are the SpaceBattles forum IDs; SV/QQ
+	// share the same numeric IDs for the primary fiction forums.
+	var forumID string
+	switch category {
+	case "user-fiction":
+		forumID = "18"
+	case "creative-writing":
+		forumID = "20"
+	default:
+		forumID = "18"
+	}
+	browseURL := fmt.Sprintf("%s/forums/%s/page-%d", p.baseURL, forumID, page)
+
+	var doc *goquery.Document
+	err := p.withRelogin(func() error {
+		resp, innerErr := doGet(p.client, browseURL)
+		if innerErr != nil {
+			return fmt.Errorf("fetching browse: %w", innerErr)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		}
+		doc, innerErr = goquery.NewDocumentFromReader(resp.Body)
+		if innerErr != nil {
+			return fmt.Errorf("parsing html: %w", innerErr)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if doc == nil {
+		return nil, fmt.Errorf("no document returned for %s", browseURL)
+	}
+
+	var results []plugin.SeriesBrowseResult
+	doc.Find(".structItem--thread").Each(func(i int, s *goquery.Selection) {
+		titleSel := s.Find(".structItem-title a").First()
+		title := strings.TrimSpace(titleSel.Text())
+		if title == "" {
+			return
+		}
+		href, _ := titleSel.Attr("href")
+		if href != "" && !strings.HasPrefix(href, "http") {
+			href = p.baseURL + href
+		}
+		href = p.normalizeThreadURL(href)
+		author := strings.TrimSpace(s.Find(".username").First().Text())
+		snippet := strings.TrimSpace(s.Find(".structItem-minor").Text())
+		results = append(results, plugin.SeriesBrowseResult{
+			Title: title, SourceURL: href, Author: author, Summary: snippet,
+		})
+	})
+	return results, nil
+}
+
 func (p *XenForoProvider) fetchMetadataFromRSS(rssURL, threadURL string) (models.Series, error) {
 	var series models.Series
 

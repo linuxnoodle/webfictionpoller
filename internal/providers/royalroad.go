@@ -351,3 +351,77 @@ func (p *RoyalRoadProvider) Search(query string, page int) ([]plugin.SeriesSearc
 	})
 	return results, nil
 }
+
+// BrowseCategories implements plugin.SeriesBrowser. Royal Road exposes a
+// fixed set of "best of" listing pages under /fictions/<key>.
+func (p *RoyalRoadProvider) BrowseCategories() []plugin.BrowseCategory {
+	return []plugin.BrowseCategory{
+		{Key: "trending", Label: "Trending"},
+		{Key: "best-rated", Label: "Best Rated"},
+		{Key: "popular", Label: "Popular"},
+		{Key: "latest-updates", Label: "Latest Updates"},
+	}
+}
+
+// Browse implements plugin.SeriesBrowser. It scrapes a Royal Road listing
+// page (trending, best-rated, etc.) using the same selectors as Search.
+func (p *RoyalRoadProvider) Browse(category string, page int) ([]plugin.SeriesBrowseResult, error) {
+	if page < 1 {
+		page = 1
+	}
+	browseURL := fmt.Sprintf("https://www.royalroad.com/fictions/%s?page=%d", category, page)
+	resp, err := doGet(p.client, browseURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetching browse: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("parsing html: %w", err)
+	}
+	var results []plugin.SeriesBrowseResult
+	doc.Find(".fiction-list-item, .fiction-list .fiction").Each(func(i int, s *goquery.Selection) {
+		titleSel := s.Find("h2 a, .fiction-title a").First()
+		title := strings.TrimSpace(titleSel.Text())
+		if title == "" {
+			return
+		}
+		href, _ := titleSel.Attr("href")
+		if href != "" && !strings.HasPrefix(href, "http") {
+			href = "https://www.royalroad.com" + href
+		}
+		author := strings.TrimSpace(s.Find(".author a").First().Text())
+		summary := strings.TrimSpace(s.Find(".fiction-description, .text").First().Text())
+		if len(summary) > 300 {
+			summary = summary[:300] + "…"
+		}
+		img, _ := s.Find("img").First().Attr("src")
+		if img != "" && strings.HasPrefix(img, "//") {
+			img = "https:" + img
+		}
+		var rating float64
+		if rText, ok := s.Find(".star").First().Attr("data-rating"); ok && rText != "" {
+			fmt.Sscanf(rText, "%f", &rating)
+		}
+		if rating == 0 {
+			if metaText := s.Find(".fiction-meta .stars").Text(); metaText != "" {
+				fmt.Sscanf(metaText, "%f", &rating)
+			}
+		}
+		var tags []string
+		s.Find(".tags .tag, .fiction-tags .tag").Each(func(j int, t *goquery.Selection) {
+			if tag := strings.TrimSpace(t.Text()); tag != "" {
+				tags = append(tags, tag)
+			}
+		})
+		status := strings.TrimSpace(s.Find(".fiction-meta .status").Text())
+		results = append(results, plugin.SeriesBrowseResult{
+			Title: title, SourceURL: href, Author: author, Summary: summary,
+			ImageURL: img, Rating: rating, Status: status, Tags: tags,
+		})
+	})
+	return results, nil
+}

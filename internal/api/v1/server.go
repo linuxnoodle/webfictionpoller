@@ -108,6 +108,8 @@ func (s *Server) Routes(authz func(http.Handler) http.Handler, hasUsersGate func
 		// Discovery (text-series search).
 		r.Get("/discover/providers", s.discoverProviders)
 		r.Get("/discover/search", s.discoverSearch)
+		r.Get("/discover/browse", s.discoverBrowse)
+		r.Get("/discover/categories", s.discoverCategories)
 	})
 	return r
 }
@@ -1210,6 +1212,98 @@ func (s *Server) discoverSearch(w http.ResponseWriter, r *http.Request) {
 		Page:     page,
 		HasNext:  len(dtos) >= 10, // heuristic
 	})
+}
+
+// discoverBrowse fetches a browse/listing page (popular, trending, etc.)
+// from a provider that implements plugin.SeriesBrowser. Category defaults to
+// the provider's first category; page is 1-indexed.
+func (s *Server) discoverBrowse(w http.ResponseWriter, r *http.Request) {
+	providerName := r.URL.Query().Get("provider")
+	category := r.URL.Query().Get("category")
+	page, _ := parseIntParam(r.URL.Query().Get("page"))
+	if page == 0 {
+		page = 1
+	}
+
+	if providerName == "" {
+		api.WriteError(w, http.StatusBadRequest, "missing_provider", "provider required")
+		return
+	}
+
+	p, ok := plugin.Default.Get(providerName)
+	if !ok {
+		api.WriteError(w, http.StatusBadRequest, "unknown_provider", "no provider named "+providerName+" registered")
+		return
+	}
+
+	browser, ok := p.(plugin.SeriesBrowser)
+	if !ok {
+		api.WriteError(w, http.StatusBadRequest, "unsupported_capability", "provider does not support browsing")
+		return
+	}
+
+	categories := browser.BrowseCategories()
+	if category == "" {
+		if len(categories) > 0 {
+			category = categories[0].Key
+		}
+	}
+
+	results, err := browser.Browse(category, page)
+	if err != nil {
+		logging.Error("[api/v1] discover browse error: %v", err)
+		api.WriteError(w, http.StatusInternalServerError, "browse_failed", err.Error())
+		return
+	}
+
+	var dtos []discoverResult
+	for _, r := range results {
+		dtos = append(dtos, discoverResult{
+			Title:     r.Title,
+			SourceURL: r.SourceURL,
+			Author:    r.Author,
+			Summary:   r.Summary,
+			ImageURL:  r.ImageURL,
+			Rating:    r.Rating,
+			Status:    r.Status,
+			Tags:      r.Tags,
+		})
+	}
+	if dtos == nil {
+		dtos = []discoverResult{}
+	}
+
+	api.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"results":    dtos,
+		"has_next":   len(dtos) >= 10,
+		"provider":   providerName,
+		"category":   category,
+		"page":       page,
+		"categories": categories,
+	})
+}
+
+// discoverCategories lists the browse sections a provider exposes. Returns an
+// empty array for providers that don't implement plugin.SeriesBrowser.
+func (s *Server) discoverCategories(w http.ResponseWriter, r *http.Request) {
+	providerName := r.URL.Query().Get("provider")
+	p, ok := plugin.Default.Get(providerName)
+	if !ok {
+		api.WriteError(w, http.StatusBadRequest, "unknown_provider", "no provider named "+providerName+" registered")
+		return
+	}
+
+	browser, ok := p.(plugin.SeriesBrowser)
+	if !ok {
+		api.WriteJSON(w, http.StatusOK, []interface{}{})
+		return
+	}
+
+	cats := browser.BrowseCategories()
+	if cats == nil {
+		cats = []plugin.BrowseCategory{}
+	}
+	api.WriteJSON(w, http.StatusOK, cats)
 }
 
 // ---------------------------------------------------------------------------
