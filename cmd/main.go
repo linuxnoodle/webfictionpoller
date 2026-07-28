@@ -298,6 +298,8 @@ func main() {
 			r.Put("/api/reader/settings", h.ReaderSettingsAPI)
 
 			r.Get("/comics", h.ComicBrowsePage)
+			r.Get("/discover", h.DiscoverPage)
+			r.Get("/api/discover/search", h.DiscoverSearchAPI)
 			r.Get("/comics/read/{id}", h.ComicReaderPage)
 			r.Get("/api/comics/search", h.ComicSearchAPI)
 			r.Post("/api/comics/series", h.ComicAddSeriesAPI)

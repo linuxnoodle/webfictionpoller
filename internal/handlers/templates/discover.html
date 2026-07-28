@@ -1,0 +1,158 @@
+{{define "discover.html"}}
+<!DOCTYPE html>
+<html lang="en" class="bg-background text-white">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discover — WebFiction</title>
+    <script>var _csrf="{{.CSRFToken}}";</script>
+    <script src="/static/alpine.min.js" defer></script>
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="min-h-screen">
+{{template "nav.html" .}}
+<main class="max-w-4xl mx-auto px-4 py-8">
+    <a href="/" class="text-sm text-muted/60 hover:text-primary">← back</a>
+    <h1 class="text-2xl font-bold mt-2 mb-1">Discover</h1>
+    <p class="text-sm text-muted/70 mb-6">
+        Search supported text providers and add new series straight to your library.
+    </p>
+
+    {{if not .Providers}}
+    <div class="bg-surface rounded-lg border border-white/10 px-4 py-8 text-center text-sm text-muted/60">
+        No text providers with search capability are registered.
+    </div>
+    {{else}}
+    <!-- Provider badges -->
+    <div class="flex flex-wrap gap-2 mb-5" id="provider-badges">
+        {{range .Providers}}
+        <button type="button"
+                class="provider-badge px-3 py-1.5 rounded-full text-sm border transition-colors {{if eq .Name $.ActiveProvider}}bg-primary/30 border-primary text-primary font-semibold{{else}}bg-surface border-white/10 text-muted/80 hover:text-white hover:border-white/30{{end}}"
+                data-name="{{.Name}}"
+                data-display="{{.DisplayName}}"
+                onclick="selectProvider(this)">
+            {{.DisplayName}}
+        </button>
+        {{end}}
+    </div>
+
+    <!-- Search bar -->
+    <form id="discover-search-form" onsubmit="return discoverSearch(event)" class="flex gap-2 mb-6">
+        <input type="text" id="discover-query"
+               placeholder="Search {{.ActiveProviderName}}..."
+               class="flex-1 px-3 py-2 bg-background border border-white/10 rounded text-sm focus:border-primary outline-none"
+               autocomplete="off">
+        <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary/80 rounded text-sm font-semibold">Search</button>
+    </form>
+
+    <!-- Results -->
+    <div id="discover-results"></div>
+    {{end}}
+</main>
+
+<style>
+.discover-card{display:flex;gap:1rem;padding:1rem;background:var(--surface,#1f1f23);border:1px solid rgba(255,255,255,.1);border-radius:.5rem;margin-bottom:.75rem;cursor:pointer;transition:border-color .15s}
+.discover-card:hover{border-color:rgba(255,255,255,.3)}
+.discover-cover{width:64px;height:96px;object-fit:cover;border-radius:.25rem;flex-shrink:0;background:rgba(255,255,255,.05)}
+.discover-info{flex:1;min-width:0}
+.discover-info h3{font-weight:600;font-size:.95rem;margin-bottom:.25rem}
+.discover-info .author{font-size:.8rem;color:rgba(255,255,255,.6);margin-bottom:.25rem}
+.discover-info .rating{font-size:.8rem;color:#fbbf24;margin-bottom:.25rem}
+.discover-info .summary{font-size:.8rem;color:rgba(255,255,255,.7);margin-bottom:.5rem;line-height:1.4}
+.discover-info .tags{display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.5rem}
+.discover-info .tag{font-size:.7rem;padding:.1rem .4rem;background:rgba(255,255,255,.08);border-radius:.25rem;color:rgba(255,255,255,.75)}
+.discover-info .btn-add{font-size:.75rem;padding:.25rem .6rem;background:rgba(16,185,129,.25);border:1px solid rgba(16,185,129,.4);color:#6ee7b7;border-radius:.25rem;cursor:pointer}
+.discover-info .btn-add:hover{background:rgba(16,185,129,.4)}
+</style>
+
+<script>
+let activeProvider = {{jsstr .ActiveProvider}};
+
+function selectProvider(btn) {
+    activeProvider = btn.dataset.name;
+    document.querySelectorAll('.provider-badge').forEach(function(b){
+        b.classList.remove('bg-primary/30','border-primary','text-primary','font-semibold');
+        b.classList.add('bg-surface','border-white/10','text-muted/80');
+    });
+    btn.classList.add('bg-primary/30','border-primary','text-primary','font-semibold');
+    btn.classList.remove('bg-surface','border-white/10','text-muted/80');
+    document.getElementById('discover-query').placeholder = 'Search ' + btn.dataset.display + '...';
+    document.getElementById('discover-results').innerHTML = '';
+    document.getElementById('discover-query').focus();
+}
+
+function discoverSearch(e) {
+    e.preventDefault();
+    var q = document.getElementById('discover-query').value.trim();
+    if (!q) return false;
+    var results = document.getElementById('discover-results');
+    results.innerHTML = '<p class="text-sm text-muted/60">Searching...</p>';
+
+    fetch('/api/discover/search?provider=' + encodeURIComponent(activeProvider) + '&q=' + encodeURIComponent(q))
+        .then(function(r){return r.json()})
+        .then(function(data){
+            if (!data.results || data.results.length === 0) {
+                results.innerHTML = '<p class="text-sm text-muted/60">No results found.</p>';
+                return;
+            }
+            results.innerHTML = data.results.map(function(r){
+                var card = '<div class="discover-card" onclick="addSeries(this, \'' + jsEscape(r.source_url) + '\')">';
+                if (r.image_url) {
+                    card += '<img src="' + escAttr(r.image_url) + '" class="discover-cover" loading="lazy" onerror="this.style.display=\'none\'">';
+                }
+                card += '<div class="discover-info">';
+                card += '<h3>' + escHtml(r.title) + '</h3>';
+                if (r.author) card += '<p class="author">by ' + escHtml(r.author) + '</p>';
+                if (r.rating > 0) card += '<p class="rating">\u2B50 ' + Number(r.rating).toFixed(1) + '</p>';
+                if (r.summary) card += '<p class="summary">' + escHtml(r.summary.substring(0,300)) + '</p>';
+                if (r.tags && r.tags.length) {
+                    card += '<div class="tags">';
+                    r.tags.slice(0,8).forEach(function(t){
+                        card += '<span class="tag">' + escHtml(t) + '</span>';
+                    });
+                    card += '</div>';
+                }
+                card += '<button class="btn-add" onclick="event.stopPropagation(); addSeries(this, \'' + jsEscape(r.source_url) + '\')">Add to Library</button>';
+                card += '</div></div>';
+                return card;
+            }).join('');
+        })
+        .catch(function(err){
+            results.innerHTML = '<p class="text-sm text-red-400">Error: ' + escHtml(err.message) + '</p>';
+        });
+    return false;
+}
+
+function addSeries(btn, url) {
+    if (!url) return;
+    var label = btn;
+    var orig = label ? label.textContent : '';
+    if (label) { label.disabled = true; label.textContent = 'Adding...'; }
+    fetch('/series/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': _csrf},
+        body: 'url=' + encodeURIComponent(url)
+    })
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if (data.success) {
+            if (label) { label.textContent = 'Added'; label.style.opacity = '.6'; }
+            alert('Added: ' + data.title + (data.chapters ? ' (' + data.chapters + ' chapters)' : ''));
+        } else {
+            if (label) { label.disabled = false; label.textContent = orig; }
+            alert('Error: ' + (data.error || 'Failed to add'));
+        }
+    })
+    .catch(function(err){
+        if (label) { label.disabled = false; label.textContent = orig; }
+        alert('Error: ' + err.message);
+    });
+}
+
+function escHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function escAttr(s){return escHtml(s)}
+function jsEscape(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
+</script>
+</body>
+</html>
+{{end}}

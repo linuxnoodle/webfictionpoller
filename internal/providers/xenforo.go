@@ -302,6 +302,71 @@ func (p *XenForoProvider) FetchSeriesMetadata(rawURL string) (models.Series, err
 	return series, nil
 }
 
+// Search implements plugin.SeriesSearcher. Scrapes a XenForo forum's thread
+// search. Results are threads; the returned SourceURL is the canonical thread
+// URL and can be fed directly to FetchSeriesMetadata.
+func (p *XenForoProvider) Search(query string, page int) ([]plugin.SeriesSearchResult, error) {
+	if page < 1 {
+		page = 1
+	}
+	params := url.Values{}
+	params.Set("keywords", query)
+	params.Set("type", "thread")
+	params.Set("order", "relevance")
+	params.Set("page", strconv.Itoa(page))
+	searchURL := p.baseURL + "/search/search?" + params.Encode()
+
+	resp, err := doGet(p.client, searchURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetching search: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("parsing html: %w", err)
+	}
+
+	var results []plugin.SeriesSearchResult
+	doc.Find(".contentRow, .searchResult").Each(func(i int, s *goquery.Selection) {
+		titleSel := s.Find(".contentRow-title a").First()
+		if titleSel.Length() == 0 {
+			titleSel = s.Find("h3 a, h2 a").First()
+		}
+		href, _ := titleSel.Attr("href")
+		title := strings.TrimSpace(titleSel.Text())
+		if title == "" || href == "" {
+			return
+		}
+		sourceURL := href
+		if !strings.HasPrefix(sourceURL, "http") {
+			sourceURL = p.baseURL + sourceURL
+		}
+		// Normalize: strip page/post fragments so URL can be fed to FetchSeriesMetadata.
+		sourceURL = p.normalizeThreadURL(sourceURL)
+
+		author := strings.TrimSpace(s.Find(".contentRow .username, .username").First().Text())
+		snippet := strings.TrimSpace(s.Find(".contentRow-snippet").First().Text())
+		if len(snippet) > 300 {
+			snippet = snippet[:300] + "…"
+		}
+		updatedAt := strings.TrimSpace(s.Find(".contentRow .datetime, .datetime").First().Text())
+
+		results = append(results, plugin.SeriesSearchResult{
+			Title:     title,
+			SourceURL: sourceURL,
+			Author:    author,
+			Summary:   snippet,
+			UpdatedAt: updatedAt,
+		})
+	})
+
+	return results, nil
+}
+
 func (p *XenForoProvider) fetchMetadataFromRSS(rssURL, threadURL string) (models.Series, error) {
 	var series models.Series
 

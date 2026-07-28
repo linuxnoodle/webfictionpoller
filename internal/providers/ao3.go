@@ -489,3 +489,84 @@ func (p *AO3Provider) extractTitleFromURL(rawURL string) string {
 	}
 	return rawURL
 }
+
+// Search implements plugin.SeriesSearcher. Scrapes AO3's work search.
+func (p *AO3Provider) Search(query string, page int) ([]plugin.SeriesSearchResult, error) {
+	if page < 1 {
+		page = 1
+	}
+	params := url.Values{}
+	params.Set("commit", "Search")
+	params.Set("page", strconv.Itoa(page))
+	params.Set("work_search[query]", query)
+	searchURL := "https://archiveofourown.org/works/search?" + params.Encode()
+
+	resp, err := p.ao3Get(searchURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetching search: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("parsing html: %w", err)
+	}
+
+	var results []plugin.SeriesSearchResult
+	doc.Find("li.work.blurb, .search-blurb-result").Each(func(i int, s *goquery.Selection) {
+		titleSel := s.Find(".heading a").First()
+		href, _ := titleSel.Attr("href")
+		// AO3 work links look like /works/ID; skip non-work links.
+		if href == "" || !strings.Contains(href, "/works/") {
+			titleSel = s.Find("a[href*='/works/']").First()
+			href, _ = titleSel.Attr("href")
+		}
+		title := strings.TrimSpace(titleSel.Text())
+		if title == "" || href == "" {
+			return
+		}
+		sourceURL := href
+		if !strings.HasPrefix(sourceURL, "http") {
+			sourceURL = "https://archiveofourown.org" + sourceURL
+		}
+		// Strip query string for canonical URL.
+		if idx := strings.Index(sourceURL, "?"); idx >= 0 {
+			sourceURL = sourceURL[:idx]
+		}
+
+		author := strings.TrimSpace(s.Find("a[rel='author'], .author a").First().Text())
+		summary := strings.TrimSpace(s.Find(".summary blockquote, .summary").First().Text())
+		if len(summary) > 300 {
+			summary = summary[:300] + "…"
+		}
+
+		var tags []string
+		s.Find(".tags .tag, .freeforms .tag, .warnings .tag").Each(func(j int, t *goquery.Selection) {
+			if tag := strings.TrimSpace(t.Text()); tag != "" {
+				tags = append(tags, tag)
+			}
+		})
+
+		var rating float64
+		if rText := strings.TrimSpace(s.Find(".rating-tags .tag").First().Text()); rText != "" {
+			fmt.Sscanf(rText, "%f", &rating)
+		}
+
+		updatedAt := strings.TrimSpace(s.Find(".datetime").First().Text())
+
+		results = append(results, plugin.SeriesSearchResult{
+			Title:     title,
+			SourceURL: sourceURL,
+			Author:    author,
+			Summary:   summary,
+			Rating:    rating,
+			Tags:      tags,
+			UpdatedAt: updatedAt,
+		})
+	})
+
+	return results, nil
+}

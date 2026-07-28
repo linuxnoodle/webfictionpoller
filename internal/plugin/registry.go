@@ -43,6 +43,26 @@ type Searcher interface {
 	Search(query string, page int) (*models.MangasPage, error)
 }
 
+// SeriesSearchResult is a single text-series discovery hit. URLs are absolute
+// and canonical so they can be fed directly to SeriesLister.FetchSeriesMetadata.
+type SeriesSearchResult struct {
+	Title     string   `json:"title"`
+	SourceURL string   `json:"source_url"`
+	Author    string   `json:"author"`
+	Summary   string   `json:"summary"`
+	ImageURL  string   `json:"image_url"`
+	Rating    float64  `json:"rating"`
+	Status    string   `json:"status"`
+	Tags      []string `json:"tags"`
+	UpdatedAt string   `json:"updated_at"`
+}
+
+// SeriesSearcher runs a free-text query against a text provider's search
+// (discovery flow). Returns results for the given page (1-indexed).
+type SeriesSearcher interface {
+	Search(query string, page int) ([]SeriesSearchResult, error)
+}
+
 // ComicDetailsFetcher fetches full metadata for a single comic by source ID.
 type ComicDetailsFetcher interface {
 	MangaDetails(sourceID string) (*models.ComicSeries, error)

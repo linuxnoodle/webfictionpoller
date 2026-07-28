@@ -152,6 +152,28 @@ func toComicChapters(in []models.ComicChapter) []comicChapter {
 	return out
 }
 
+// --- Discovery (text-series search) ---
+
+type discoverResult struct {
+	Title     string   `json:"title"`
+	SourceURL string   `json:"source_url"`
+	Author    string   `json:"author"`
+	Summary   string   `json:"summary"`
+	ImageURL  string   `json:"image_url"`
+	Rating    float64  `json:"rating"`
+	Status    string   `json:"status"`
+	Tags      []string `json:"tags"`
+	UpdatedAt string   `json:"updated_at"`
+}
+
+type discoverSearchResponse struct {
+	Results  []discoverResult `json:"results"`
+	HasNext  bool             `json:"has_next"`
+	Provider string           `json:"provider"`
+	Query    string           `json:"query"`
+	Page     int              `json:"page"`
+}
+
 // providerInfo is the wire representation of plugin.Meta. Exposed via the
 // /providers endpoint so mobile clients can render provider pickers and
 // capability/auth badges without hardcoding the catalog.

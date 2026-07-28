@@ -97,8 +97,17 @@ func (s *Server) Routes(authz func(http.Handler) http.Handler, hasUsersGate func
 		// Text chapter downloads (for iOS offline reading).
 		r.Get("/downloads/chapters/{chapterID}", s.downloadTextChapter)
 
+		// Series archive — bulk-fetch + cache every chapter's content so the
+		// phone can pull a series offline in one shot.
+		r.Post("/library/{id}/archive", s.archiveSeries)
+		r.Get("/library/{id}/archive/status", s.archiveSeriesStatus)
+
 		// Provider introspection.
 		r.Get("/providers", s.providersList)
+
+		// Discovery (text-series search).
+		r.Get("/discover/providers", s.discoverProviders)
+		r.Get("/discover/search", s.discoverSearch)
 	})
 	return r
 }
@@ -933,6 +942,102 @@ func (s *Server) downloadTextChapter(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// archiveSeriesDownloadKey namespaces tracker keys for series archive jobs.
+func archiveSeriesDownloadKey(id int64) string {
+	return fmt.Sprintf("archive-series-%d", id)
+}
+
+// archiveSeries triggers a background bulk-fetch of every chapter in a text
+// series. Content already cached on the server is skipped; the rest is
+// fetched via each provider's ContentFetcher and stored for offline reads.
+// Returns 202 with the tracker status; clients poll /archive/status.
+//
+//	POST /api/v1/library/{id}/archive
+func (s *Server) archiveSeries(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	series, err := s.store.GetSeriesByID(id)
+	if err != nil || series == nil {
+		api.WriteError(w, http.StatusNotFound, "series_not_found", "")
+		return
+	}
+	chapters, err := s.store.GetReaderChapters(id)
+	if err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+
+	type contentSaver interface {
+		SaveChapterContent(id int64, content string) error
+		SetChapterWordCount(id int64, n int) error
+	}
+	saver, ok := s.store.(contentSaver)
+	if !ok {
+		api.WriteError(w, http.StatusInternalServerError, "store_incompatible", "")
+		return
+	}
+
+	store := s.store
+	providerName := series.ProviderName
+	status := s.downloads.Start(archiveSeriesDownloadKey(id), len(chapters), func(ctx context.Context, rep download.Reporter) error {
+		for _, ch := range chapters {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			// Skip chapters that already have archived content.
+			if existing, _ := store.GetChapterArchivedContent(ch.ID); existing != "" {
+				rep.Inc()
+				continue
+			}
+
+			// Resolve the provider for this chapter's URL. We look up by the
+			// series provider; providers without a ContentFetcher capability
+			// (image-only sites) are skipped silently.
+			if p, ok := plugin.Default.Get(providerName); ok {
+				if cf := plugin.AsContentFetcher(p); cf != nil && ch.URL != "" {
+					content, err := cf.FetchChapter(ch.URL)
+					if err == nil && content.BodyHTML != "" {
+						_ = saver.SaveChapterContent(ch.ID, content.BodyHTML)
+						if content.WordCount > 0 {
+							_ = saver.SetChapterWordCount(ch.ID, content.WordCount)
+						}
+					}
+				}
+			}
+			rep.Inc()
+		}
+		return nil
+	})
+
+	api.WriteJSON(w, http.StatusAccepted, map[string]interface{}{
+		"ok":     true,
+		"key":    archiveSeriesDownloadKey(id),
+		"status": status,
+	})
+}
+
+// archiveSeriesStatus returns the current progress of a series archive job.
+// If no job has been recorded, returns an idle status so clients can render
+// a consistent shape.
+//
+//	GET /api/v1/library/{id}/archive/status
+func (s *Server) archiveSeriesStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_id", "")
+		return
+	}
+	status, ok := s.downloads.Status(archiveSeriesDownloadKey(id))
+	if !ok {
+		status = download.Status{Key: archiveSeriesDownloadKey(id), State: download.StateRunning}
+	}
+	api.WriteJSON(w, http.StatusOK, status)
+}
+
 // lookupComicProvider resolves a comic provider by name via plugin.Default.
 // Returns the legacy comics.ComicProvider interface.
 func lookupComicProvider(series *models.ComicSeries) (comics.ComicProvider, error) {
@@ -1016,6 +1121,95 @@ func (s *Server) providersList(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	api.WriteJSON(w, http.StatusOK, map[string]interface{}{"providers": out})
+}
+
+// ---------------------------------------------------------------------------
+// Discovery (text-series search)
+// ---------------------------------------------------------------------------
+
+// discoverProviders lists every text provider that implements SeriesSearcher,
+// so clients can render a provider picker for the discovery flow.
+func (s *Server) discoverProviders(w http.ResponseWriter, r *http.Request) {
+	searchers := plugin.Default.WithCapability((*plugin.SeriesSearcher)(nil))
+	var providers []providerInfo
+	for _, p := range searchers {
+		if p.Meta().Kind != plugin.KindText {
+			continue
+		}
+		pi := providerInfo{
+			Name:        p.Meta().Name,
+			DisplayName: p.Meta().DisplayName,
+			Kind:        string(p.Meta().Kind),
+			Homepage:    p.Meta().Homepage,
+		}
+		providers = append(providers, pi)
+	}
+	if providers == nil {
+		providers = []providerInfo{}
+	}
+	api.WriteJSON(w, http.StatusOK, providers)
+}
+
+// discoverSearch runs a free-text query against a single provider's search
+// and returns discovery hits as DTOs. Page is 1-indexed.
+func (s *Server) discoverSearch(w http.ResponseWriter, r *http.Request) {
+	providerName := r.URL.Query().Get("provider")
+	query := r.URL.Query().Get("q")
+	page, _ := parseIntParam(r.URL.Query().Get("page"))
+	if page == 0 {
+		page = 1
+	}
+
+	if providerName == "" || query == "" {
+		http.Error(w, "provider and q parameters required", http.StatusBadRequest)
+		return
+	}
+
+	p, ok := plugin.Default.Get(providerName)
+	if !ok {
+		http.Error(w, "unknown provider", http.StatusBadRequest)
+		return
+	}
+
+	searcher, ok := p.(plugin.SeriesSearcher)
+	if !ok {
+		http.Error(w, "provider does not support search", http.StatusBadRequest)
+		return
+	}
+
+	results, err := searcher.Search(query, page)
+	if err != nil {
+		logging.Error("[api/v1] discover search error: %v", err)
+		http.Error(w, "search failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to DTOs.
+	var dtos []discoverResult
+	for _, r := range results {
+		dtos = append(dtos, discoverResult{
+			Title:     r.Title,
+			SourceURL: r.SourceURL,
+			Author:    r.Author,
+			Summary:   r.Summary,
+			ImageURL:  r.ImageURL,
+			Rating:    r.Rating,
+			Status:    r.Status,
+			Tags:      r.Tags,
+			UpdatedAt: r.UpdatedAt,
+		})
+	}
+	if dtos == nil {
+		dtos = []discoverResult{}
+	}
+
+	api.WriteJSON(w, http.StatusOK, discoverSearchResponse{
+		Results:  dtos,
+		Provider: providerName,
+		Query:    query,
+		Page:     page,
+		HasNext:  len(dtos) >= 10, // heuristic
+	})
 }
 
 // ---------------------------------------------------------------------------
