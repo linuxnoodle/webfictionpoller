@@ -1,7 +1,11 @@
 -- Postgres schema for webfictionpoller.
--- Ports the SQLite schema in internal/database/db.go one-to-one.
--- Migrations applied incrementally via the schema_migrations table; the
--- bootstrap schema below is the union of all current SQLite migrations.
+-- This is the bootstrap union of all historical SQLite migrations: it creates
+-- every table/column currently in use on a FRESH database. INCREMENTAL changes
+-- are owned by EnsurePostgresSchema in internal/database/db.go, which runs the
+-- shared `migrations` ledger against schema_migrations so existing databases
+-- receive new ALTERs. When adding a schema change, append to `migrations`
+-- (SQLite SQL) + `pgMigrations` (Postgres SQL); only touch this file when a
+-- brand-new table needs bootstrapping for fresh databases.
 
 CREATE TABLE IF NOT EXISTS users (
     id            BIGSERIAL PRIMARY KEY,
@@ -181,10 +185,6 @@ WHERE NOT EXISTS (
     SELECT 1 FROM series_sources ss WHERE ss.series_id = s.id
 );
 
--- Mirror the SQLite _migrations ledger so both dialects report the same
--- applied state.
-INSERT INTO schema_migrations (name) VALUES
-    ('series_sources'),
-    ('series_sources_idx'),
-    ('series_sources_seed')
-ON CONFLICT (name) DO NOTHING;
+-- schema_migrations is populated by the incremental runner in
+-- internal/database/db.go (EnsurePostgresSchema), which records every name
+-- from the shared `migrations` list. Do NOT hand-insert rows here.

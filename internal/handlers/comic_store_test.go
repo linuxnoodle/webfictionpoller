@@ -7,26 +7,15 @@ import (
 	"testing"
 
 	"github.com/linuxnoodle/webfictionpoller/internal/blob"
-	"github.com/linuxnoodle/webfictionpoller/internal/database"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 )
 
-// newTestStoreWithBlob builds a Store backed by both a temp SQLite DB and a
-// temp filesystem blob store, mirroring production wiring.
+// newTestStoreWithBlob builds a Store backed by both a test DB (Postgres when
+// WFP_TEST_PG is set, else a temp SQLite file) and a temp filesystem blob
+// store, mirroring production wiring.
 func newTestStoreWithBlob(t *testing.T) (*Store, *blob.FilesystemStore) {
 	t.Helper()
-	tmp, err := os.CreateTemp("", "test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmp.Close()
-	t.Cleanup(func() { os.Remove(tmp.Name()) })
-
-	db, err := database.Open(tmp.Name() + "?_foreign_keys=1&_journal_mode=WAL")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
+	db := openTestDB(t)
 
 	blobRoot, err := os.MkdirTemp("", "test-blob-*")
 	if err != nil {
@@ -195,17 +184,7 @@ func TestDeleteComicChapterBlobsClearsBlobStore(t *testing.T) {
 func TestLegacyPathStoresInDBWhenNoBlob(t *testing.T) {
 	// Construct a Store with NO blob store set. SaveComicPage must fall back
 	// to the comic_pages.data BLOB column so existing installs keep working.
-	tmp, err := os.CreateTemp("", "test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmp.Close()
-	t.Cleanup(func() { os.Remove(tmp.Name()) })
-	db, err := database.Open(tmp.Name() + "?_foreign_keys=1&_journal_mode=WAL")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
+	db := openTestDB(t)
 	s := &Store{db: db, blob: nil} // explicitly no blob store
 
 	_, chapterID := addComicSeriesForTest(t, s, "Legacy")

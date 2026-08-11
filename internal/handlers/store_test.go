@@ -1,28 +1,14 @@
 package handlers
 
 import (
-	"os"
 	"testing"
 
-	"github.com/linuxnoodle/webfictionpoller/internal/database"
 	"github.com/linuxnoodle/webfictionpoller/internal/models"
 )
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	tmp, err := os.CreateTemp("", "test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmp.Close()
-	t.Cleanup(func() { os.Remove(tmp.Name()) })
-
-	db, err := database.Open(tmp.Name() + "?_foreign_keys=1&_journal_mode=WAL")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return NewStore(db)
+	return NewStore(openTestDB(t))
 }
 
 func TestAddAndGetSeries(t *testing.T) {

@@ -26,13 +26,13 @@ func (s *Store) GetProviderConfig(name string) (*models.ProviderConfig, error) {
 func (s *Store) UpsertProviderConfig(name, cookieData, username, encryptedPassword string) error {
 	_, err := s.db.Exec(`
 		INSERT INTO provider_configs (provider_name, cookie_data, last_polled, username, encrypted_password, login_tested)
-		VALUES (?, ?, ?, ?, ?, 0)
+		VALUES (?, ?, ?, ?, ?, FALSE)
 		ON CONFLICT(provider_name) DO UPDATE SET
 			cookie_data = excluded.cookie_data,
 			last_polled = excluded.last_polled,
 			username = excluded.username,
 			encrypted_password = excluded.encrypted_password,
-			login_tested = CASE WHEN provider_configs.encrypted_password IS NOT excluded.encrypted_password THEN 0 ELSE provider_configs.login_tested END
+			login_tested = CASE WHEN provider_configs.encrypted_password <> excluded.encrypted_password THEN FALSE ELSE provider_configs.login_tested END
 	`, name, cookieData, time.Now(), username, encryptedPassword)
 	return err
 }

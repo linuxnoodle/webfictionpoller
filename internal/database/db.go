@@ -188,6 +188,20 @@ var migrations = []migration{
 	{"chapter_premium", "ALTER TABLE chapters ADD COLUMN premium BOOLEAN NOT NULL DEFAULT 0"},
 }
 
+// pgMigrations maps a migration `name` (from the shared `migrations` list)
+// to its Postgres SQL. The Postgres runner (EnsurePostgresSchema) executes
+// this SQL and records the name in schema_migrations. Names NOT present here
+// are treated as baseline-covered by pgschema.sql and are recorded without
+// execution. Every historical migration is baseline-covered (pgschema.sql is
+// their union), so this map starts empty. When adding a NEW migration, add
+// the SQLite SQL to `migrations` above AND a matching Postgres entry here —
+// prefer idempotent statements (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF
+// NOT EXISTS`). The parity test in db_test.go asserts both ledgers agree.
+var pgMigrations = map[string]string{
+	// Example for the next schema change:
+	// "my_new_column": "ALTER TABLE chapters ADD COLUMN IF NOT EXISTS foo TEXT DEFAULT ''",
+}
+
 //go:embed pgschema.sql
 var pgSchema string
 
@@ -249,12 +263,38 @@ func applyPostgresSchema(d *db.DB) error {
 	return EnsurePostgresSchema(d)
 }
 
-// EnsurePostgresSchema applies the embedded pgschema.sql to the given Postgres
-// connection. Exported for the migrate tool. Safe to call multiple times —
-// every statement uses IF NOT EXISTS.
+// EnsurePostgresSchema applies pgschema.sql (the bootstrap union of all
+// historical migrations) to a fresh or existing Postgres database, then runs
+// the incremental migration ledger so that NEW schema changes reach EXISTING
+// Postgres databases too. This mirrors applySQLiteSchema and keeps both
+// dialects in lockstep.
+//
+// Every migration name in the shared `migrations` list is recorded in
+// schema_migrations; if the name also appears in pgMigrations its SQL is
+// executed first. Names absent from pgMigrations are baseline-covered by
+// pgschema.sql and are recorded without execution. Safe to call repeatedly.
 func EnsurePostgresSchema(d *db.DB) error {
 	if _, err := d.Exec(pgSchema); err != nil {
 		return fmt.Errorf("postgres schema: %w", err)
+	}
+	for _, m := range migrations {
+		var count int
+		if err := d.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name = $1", m.name).Scan(&count); err != nil {
+			fmt.Printf("[database] WARNING: pg migration ledger check failed for %q: %v\n", m.name, err)
+			continue
+		}
+		if count > 0 {
+			continue
+		}
+		if pgSQL, ok := pgMigrations[m.name]; ok && pgSQL != "" {
+			if _, err := d.Exec(pgSQL); err != nil {
+				fmt.Printf("[database] WARNING: pg migration %q failed: %v\n", m.name, err)
+				continue // don't mark as applied if it errored
+			}
+		}
+		if _, err := d.Exec("INSERT INTO schema_migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", m.name); err != nil {
+			fmt.Printf("[database] WARNING: failed to record pg migration %q: %v\n", m.name, err)
+		}
 	}
 	return nil
 }

@@ -38,20 +38,22 @@ func (s *Store) AddSource(seriesID int64, providerName, sourceURL string, priori
 	if err != nil {
 		return nil, fmt.Errorf("insert source: %w", err)
 	}
+	// source_url is unique per series, so fetch the row back by URL on both
+	// dialects — this avoids LastInsertId() entirely (unsupported on pgx).
+	inserted := true
 	if n, _ := res.RowsAffected(); n == 0 {
-		// Already exists; return the existing row.
-		return s.GetSourceByURL(seriesID, sourceURL)
+		inserted = false
 	}
-	id, _ := res.LastInsertId()
 
-	// If this became primary, mirror into the denormalized series columns
-	// (back-compat for existing queries / OPDS).
-	if isPrimary {
+	// If this became the primary, mirror into the denormalized series columns
+	// (back-compat for existing queries / OPDS). Only on a real new insert;
+	// a no-op conflict means the source pre-existed and is already reflected.
+	if inserted && isPrimary {
 		_, _ = s.db.Exec("UPDATE series SET provider_name = ?, source_url = ? WHERE id = ?",
 			providerName, sourceURL, seriesID)
 	}
 
-	return s.GetSourceByID(id)
+	return s.GetSourceByURL(seriesID, sourceURL)
 }
 
 // ListSources returns every source for a series ordered by priority asc, then

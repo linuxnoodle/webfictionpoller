@@ -65,14 +65,26 @@ func (s *TokenStore) IssueToken(ctx context.Context, userID int64, label, device
 		return "", nil, fmt.Errorf("api: hashing token: %w", err)
 	}
 	expires := time.Now().Add(TokenLifetime)
-	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO api_tokens (user_id, token_hash, label, device_id, expires_at)
-		VALUES (?, ?, ?, ?, ?)
-	`, userID, string(hash), label, deviceID, expires)
-	if err != nil {
-		return "", nil, fmt.Errorf("api: inserting token: %w", err)
+	var id int64
+	if s.db.IsPostgres() {
+		// pgx/stdlib does not implement LastInsertId(); use RETURNING id.
+		if err := s.db.QueryRowContext(ctx, `
+			INSERT INTO api_tokens (user_id, token_hash, label, device_id, expires_at)
+			VALUES ($1, $2, $3, $4, $5)
+			RETURNING id
+		`, userID, string(hash), label, deviceID, expires).Scan(&id); err != nil {
+			return "", nil, fmt.Errorf("api: inserting token: %w", err)
+		}
+	} else {
+		res, err := s.db.ExecContext(ctx, `
+			INSERT INTO api_tokens (user_id, token_hash, label, device_id, expires_at)
+			VALUES (?, ?, ?, ?, ?)
+		`, userID, string(hash), label, deviceID, expires)
+		if err != nil {
+			return "", nil, fmt.Errorf("api: inserting token: %w", err)
+		}
+		id, _ = res.LastInsertId()
 	}
-	id, _ := res.LastInsertId()
 	tok := &APIToken{
 		ID:        id,
 		UserID:    userID,

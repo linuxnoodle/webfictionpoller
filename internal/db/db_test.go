@@ -93,3 +93,71 @@ func itoa(n int) string {
 	}
 	return string(buf[i:])
 }
+
+// TestTxRebind asserts that transactions rebind placeholders exactly like
+// DB does. This is the regression guard for the bug where raw *sql.Tx (used
+// directly) skipped rebinding and broke Postgres. Begin/BeginTx on *DB must
+// return a *Tx whose Exec/Query rebind.
+func TestTxRebindSQLitePassesThrough(t *testing.T) {
+	tx := &Tx{dialect: DialectSQLite}
+	in := "UPDATE series_sources SET is_primary = FALSE WHERE series_id = ?"
+	if got := tx.rebind(in); got != in {
+		t.Errorf("sqlite tx should pass through: got %q", got)
+	}
+}
+
+func TestTxRebindPostgresNumbered(t *testing.T) {
+	tx := &Tx{dialect: DialectPostgres}
+	cases := []struct{ in, want string }{
+		{
+			"UPDATE series_sources SET is_primary = FALSE WHERE series_id = ?",
+			"UPDATE series_sources SET is_primary = FALSE WHERE series_id = $1",
+		},
+		{
+			"UPDATE series SET provider_name = ?, source_url = ? WHERE id = ?",
+			"UPDATE series SET provider_name = $1, source_url = $2 WHERE id = $3",
+		},
+	}
+	for _, c := range cases {
+		if got := tx.rebind(c.in); got != c.want {
+			t.Errorf("tx.rebind(%q)\n got %q\nwant %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestBeginReturnsDialectAwareTx opens a real SQLite database, begins a
+// transaction, and verifies the returned *Tx type executes `?`-placeholder
+// SQL without error (proving the wiring from DB.Begin through *Tx.Exec).
+func TestBeginReturnsDialectAwareTx(t *testing.T) {
+	d, err := Open("file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer d.Close()
+	if _, err := d.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	tx, err := d.Begin()
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	// tx must be *Tx (not *sql.Tx) so rebinding applies.
+	if _, ok := interface{}(tx).(*Tx); !ok {
+		tx.Rollback()
+		t.Fatalf("Begin returned %T, want *Tx", tx)
+	}
+	if _, err := tx.Exec("INSERT INTO t (v) VALUES (?)", "hello"); err != nil {
+		tx.Rollback()
+		t.Fatalf("tx exec with ?: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	var got string
+	if err := d.QueryRow("SELECT v FROM t WHERE id = ?", 1).Scan(&got); err != nil {
+		t.Fatalf("select: %v", err)
+	}
+	if got != "hello" {
+		t.Errorf("v = %q, want hello", got)
+	}
+}

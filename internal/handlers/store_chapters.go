@@ -166,7 +166,7 @@ func (s *Store) AddSeries(series models.Series) (int64, error) {
 	if id > 0 && series.SourceURL != "" {
 		_, _ = s.db.Exec(`
 			INSERT INTO series_sources (series_id, provider_name, source_url, priority, is_primary)
-			VALUES (?, ?, ?, 0, 1)
+			VALUES (?, ?, ?, 0, TRUE)
 			ON CONFLICT DO NOTHING
 		`, id, series.ProviderName, series.SourceURL)
 	}
