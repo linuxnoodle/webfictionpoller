@@ -130,17 +130,34 @@ func (s *Store) InsertChapters(seriesID int64, chapters []models.Chapter) (int, 
 }
 
 func (s *Store) AddSeries(series models.Series) (int64, error) {
-	result, err := s.db.Exec(`
-		INSERT INTO series (title, author, source_url, provider_name, rating, status, summary, image_url, archive)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT DO NOTHING
-	`, series.Title, series.Author, series.SourceURL, series.ProviderName, series.Rating, series.Status, series.Summary, series.ImageURL, series.Archive)
-	if err != nil {
-		return 0, err
-	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		return id, err
+	var id int64
+	if s.db.IsPostgres() {
+		// pgx/stdlib does not implement LastInsertId(); use RETURNING id.
+		// ON CONFLICT DO NOTHING means no row is returned on a duplicate —
+		// translate sql.ErrNoRows into id=0 (the "already tracked" signal
+		// the handler expects) instead of an error.
+		err := s.db.QueryRow(`
+			INSERT INTO series (title, author, source_url, provider_name, rating, status, summary, image_url, archive)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			ON CONFLICT (source_url) DO NOTHING
+			RETURNING id
+		`, series.Title, series.Author, series.SourceURL, series.ProviderName, series.Rating, series.Status, series.Summary, series.ImageURL, series.Archive).Scan(&id)
+		if err != nil && err != sql.ErrNoRows {
+			return 0, err
+		}
+	} else {
+		result, err := s.db.Exec(`
+			INSERT INTO series (title, author, source_url, provider_name, rating, status, summary, image_url, archive)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT DO NOTHING
+		`, series.Title, series.Author, series.SourceURL, series.ProviderName, series.Rating, series.Status, series.Summary, series.ImageURL, series.Archive)
+		if err != nil {
+			return 0, err
+		}
+		id, err = result.LastInsertId()
+		if err != nil {
+			return id, err
+		}
 	}
 	// Maintain the series_sources invariant: every series has >=1 source,
 	// the first one being the primary. When AddSeries is a no-op due to an

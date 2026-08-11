@@ -16,6 +16,26 @@ import (
 )
 
 func (s *Store) AddComicSeries(series comics.ComicSeries) (int64, error) {
+	var id int64
+	if s.db.IsPostgres() {
+		// pgx/stdlib does not implement LastInsertId(); use RETURNING id.
+		// ON CONFLICT DO NOTHING returns no row on a duplicate — treat that
+		// as "already exists" and fall back to a source_url lookup.
+		err := s.db.QueryRow(`
+			INSERT INTO comic_series (source_id, title, author, artist, description, cover_url, source_url, provider_name, status, genres, rating)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			ON CONFLICT (source_url) DO NOTHING
+			RETURNING id
+		`, series.SourceID, series.Title, series.Author, series.Artist, series.Description, series.CoverURL, series.SourceURL, series.ProviderName, series.Status, series.Genres, series.Rating).Scan(&id)
+		if err == sql.ErrNoRows {
+			s.db.QueryRow("SELECT id FROM comic_series WHERE source_url = $1", series.SourceURL).Scan(&id)
+			return id, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
 	result, err := s.db.Exec(`
 		INSERT INTO comic_series (source_id, title, author, artist, description, cover_url, source_url, provider_name, status, genres, rating)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
