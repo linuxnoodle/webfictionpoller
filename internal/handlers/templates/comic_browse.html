@@ -1,14 +1,11 @@
 {{define "comic_browse.html"}}
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="bg-background text-white">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comics - WebFiction Poller</title>
-    <meta name="csrf-token" content="{{.CSRFToken}}">
-    <script src="/static/htmx.min.js"></script>
-    <script src="/static/alpine.min.js" defer></script>
-    <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
+    {{template "head_assets" .}}
     <style>
         .grid-covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
     </style>

@@ -5,11 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebFiction Tracker</title>
-    <meta name="csrf-token" content="{{.CSRFToken}}">
-    <script src="/static/htmx.min.js"></script>
-    <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
-    <script src="/static/alpine.min.js" defer></script>
-    <link rel="stylesheet" href="/static/app.css">
+    {{template "head_assets" .}}
     <script>
     function togglePassword(btn, name) {
         var input = btn.closest('form').querySelector('input[name="password"]');

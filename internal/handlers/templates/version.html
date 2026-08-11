@@ -1,15 +1,11 @@
 {{define "version.html"}}
 <!DOCTYPE html>
-<html lang="en" class="bg-neutral-950 text-neutral-200">
+<html lang="en" class="bg-background text-white">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Version - WebFiction Tracker</title>
-    <meta name="csrf-token" content="{{.CSRFToken}}">
-    <script src="/static/htmx.min.js"></script>
-    <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
-    <script src="/static/alpine.min.js" defer></script>
-    <link rel="stylesheet" href="/static/app.css">
+    {{template "head_assets" .}}
     <style>
         .update-log { font-family: monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
         @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -18,7 +14,7 @@
         .spinner { animation: spin 1s linear infinite; display: inline-block; }
     </style>
 </head>
-<body class="min-h-screen bg-neutral-950">
+<body class="min-h-screen">
     {{template "nav" .}}
     <main class="max-w-xl mx-auto px-4 py-6"
           x-data="{ checking: false, updating: false, data: null, logPoll: null, serverUp: true, updateLog: null, updateDone: false, needsRestart: false }"

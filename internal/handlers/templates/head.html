@@ -1,0 +1,6 @@
+{{define "head_assets"}}
+    <script src="/static/htmx.min.js"></script>
+    <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
+    <script src="/static/alpine.min.js" defer></script>
+    <link rel="stylesheet" href="/static/app.css">
+{{end}}

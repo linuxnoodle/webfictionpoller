@@ -91,7 +91,7 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, name string, data in
 
 func withCSRF(r *http.Request, data interface{}) map[string]interface{} {
 	token := nosurf.Token(r)
-	if m, ok := data.(map[string]interface{}); ok {
+	if m, ok := data.(map[string]interface{}); ok && m != nil {
 		m["CSRFToken"] = token
 		return m
 	}

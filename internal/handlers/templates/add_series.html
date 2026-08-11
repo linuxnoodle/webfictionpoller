@@ -5,11 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebFiction Tracker</title>
-    <meta name="csrf-token" content="{{.CSRFToken}}">
-    <script src="/static/htmx.min.js"></script>
-    <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
-    <script src="/static/alpine.min.js" defer></script>
-    <link rel="stylesheet" href="/static/app.css">
+    {{template "head_assets" .}}
     <style>@keyframes fadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}.result-dialog{animation:fadeIn .15s ease-out}</style>
 </head>
 <body class="min-h-screen bg-background">

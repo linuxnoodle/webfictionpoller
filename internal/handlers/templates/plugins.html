@@ -5,12 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plugins — WebFiction Tracker</title>
-    <script>var _csrf="{{.CSRFToken}}";</script>
-    <script src="/static/alpine.min.js" defer></script>
-    <link rel="stylesheet" href="/static/app.css">
+    {{template "head_assets" .}}
 </head>
 <body class="min-h-screen">
-{{template "nav.html" .}}
+{{template "nav" .}}
 <main class="max-w-5xl mx-auto px-4 py-8">
     <div class="flex items-baseline justify-between mb-6">
         <h1 class="text-2xl font-bold">Plugins</h1>

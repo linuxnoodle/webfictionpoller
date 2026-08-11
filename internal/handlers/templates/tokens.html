@@ -5,13 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>API Tokens — WebFiction Tracker</title>
-    <meta name="csrf-token" content="{{.CSRFToken}}">
-    <script>var _csrf="{{.CSRFToken}}";</script>
-    <script src="/static/alpine.min.js" defer></script>
-    <link rel="stylesheet" href="/static/app.css">
+    {{template "head_assets" .}}
 </head>
 <body class="min-h-screen">
-{{template "nav.html" .}}
+{{template "nav" .}}
 <main class="max-w-3xl mx-auto px-4 py-8" x-data="tokensApp()">
     <h1 class="text-2xl font-bold mb-2">API Tokens</h1>
     <p class="text-sm text-muted/70 mb-6">

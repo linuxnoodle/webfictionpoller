@@ -5,12 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Discover — WebFiction</title>
-    <script>var _csrf="{{.CSRFToken}}";</script>
-    <script src="/static/alpine.min.js" defer></script>
-    <link rel="stylesheet" href="/static/app.css">
+    {{template "head_assets" .}}
 </head>
 <body class="min-h-screen">
-{{template "nav.html" .}}
+{{template "nav" .}}
 <main class="max-w-4xl mx-auto px-4 py-8">
     <a href="/" class="text-sm text-muted/60 hover:text-primary">← back</a>
     <h1 class="text-2xl font-bold mt-2 mb-1">Discover</h1>
@@ -96,7 +94,8 @@ function discoverSearch(e) {
                 return;
             }
             results.innerHTML = data.results.map(function(r){
-                var card = '<div class="discover-card" onclick="addSeries(this, \'' + jsEscape(r.source_url) + '\')">';
+                var url = escHtml(r.source_url);
+                var card = '<div class="discover-card" data-url="' + url + '" onclick="addSeries(this)">';
                 if (r.image_url) {
                     card += '<img src="' + escAttr(r.image_url) + '" class="discover-cover" loading="lazy" onerror="this.style.display=\'none\'">';
                 }
@@ -112,7 +111,7 @@ function discoverSearch(e) {
                     });
                     card += '</div>';
                 }
-                card += '<button class="btn-add" onclick="event.stopPropagation(); addSeries(this, \'' + jsEscape(r.source_url) + '\')">Add to Library</button>';
+                card += '<button class="btn-add" onclick="event.stopPropagation(); addSeries(this)">Add to Library</button>';
                 card += '</div></div>';
                 return card;
             }).join('');
@@ -123,7 +122,9 @@ function discoverSearch(e) {
     return false;
 }
 
-function addSeries(btn, url) {
+function addSeries(btn) {
+    var card = btn && btn.closest ? btn.closest('.discover-card') : null;
+    var url = card ? card.dataset.url : '';
     if (!url) return;
     var label = btn;
     var orig = label ? label.textContent : '';
@@ -151,7 +152,6 @@ function addSeries(btn, url) {
 
 function escHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function escAttr(s){return escHtml(s)}
-function jsEscape(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
 </script>
 </body>
 </html>

@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Series.Title}} - Reader</title>
-    <meta name="csrf-token" content="{{.CSRFToken}}">
     <script>var _csrf="{{.CSRFToken}}";document.addEventListener('htmx:configRequest',function(e){e.detail.headers['X-CSRF-Token']=_csrf})</script>
     <script>
     // Build an HTML element string without using < or > in source (Go template safe).
