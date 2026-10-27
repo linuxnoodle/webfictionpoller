@@ -1,0 +1,12 @@
+{
+	"name": "webfictionpoller",
+	"version": "1.0.0",
+	"private": true,
+	"dependencies": {
+		"tailwindcss": "^3.4.19",
+		"@tailwindcss/typography": "^0.5.19"
+	},
+	"overrides": {
+		"postcss-selector-parser": "^6.1.5"
+	}
+}

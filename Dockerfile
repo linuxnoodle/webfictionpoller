@@ -4,9 +4,9 @@ WORKDIR /app
 
 COPY tailwind.config.js input.css ./
 COPY internal/handlers/templates/ ./internal/handlers/templates/
+COPY package.json package-lock.json ./
 
-RUN npm init -y && npm install tailwindcss@3 @tailwindcss/typography && \
-    npx tailwindcss -i input.css -o app.css --minify
+RUN npm ci && npx tailwindcss -i input.css -o app.css --minify
 
 FROM golang:alpine AS builder
 
